@@ -1,0 +1,97 @@
+#!/usr/bin/python
+
+# Copyright (C) 2012 Allis Tauri <allista@gmail.com>
+# 
+# indicator_gddccontrol is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+'''
+Created on Jun 23, 2012
+
+parse_blast — which parses previously saved blast xml output and produses human 
+readable report. The original NCBI BLAST txt reports are more informative though
+
+@author: Allis Tauri <allista@gmail.com>
+'''    
+
+
+#utility functions
+def print_exception(e):
+    print "Exception occurred: " + str(type(e)) + " : " + e.__str__()
+
+#imports
+import sys
+import argparse
+try:
+    from Bio.Blast import NCBIXML
+except:
+    print "The BioPython must be installed in your system for this script to work."
+    sys.exit(1)
+
+from Blast import write_blast_report
+
+#parse command line arguments
+parser = argparse.ArgumentParser(description='Parse blast results in xml format and write human readable report.')
+parser.add_argument('-b --blast-results', dest='blast_results', metavar='filename.xml',
+                    required=True, type=str, nargs=1,
+                    help='File with blast results in xml format.')
+parser.add_argument('-o --output-basename', dest='output', metavar='name',
+                    required=False, type=str, nargs=1,
+                    help='Base of the filename for output. \
+                    The \'-blast_report.txt\' will be appended.')
+args = parser.parse_args()
+
+#set filenames
+xml_filename    = args.blast_results[0]
+if args.output:
+    report_filename = args.output[0] + '-blast_report.txt'
+elif xml_filename.rfind('-blast.xml'): 
+    report_filename = xml_filename[0:xml_filename.rfind('-blast.xml')] + '-blast_report.txt'
+elif xml_filename.rfind('.xml'): 
+    report_filename = xml_filename[0:xml_filename.rfind('.xml')] + '-blast_report.txt'
+else: report_filename = xml_filename + '-blast_report.txt'
+
+#parse results
+try:
+    results_file = open(xml_filename, 'r')
+    blast_results = list(NCBIXML.parse(results_file))
+except Exception, e:
+    print_exception(e)
+    sys.exit(1)
+results_file.close()
+
+#report results in human readable form
+write_blast_report(blast_results, report_filename)
+
+sys.exit(0)
+
+#for testing
+#test_rec1 = SeqRecord(Seq("AAGCATCCGGGAGCAAACTGGATGCAGAG", IUPAC.unambiguous_dna), id='TEST_RECORD1')
+#test_rec2 = SeqRecord(Seq("AAGCATCCGGGAGCAAACTGGTACGAGAG", IUPAC.unambiguous_dna), id='TEST_RECORD2')
+#structs = SecStructures(test_rec1, test_rec2, seed_len=1)
+#test_rec3 = SeqRecord(Seq("CTAATCTACTAGTGCACTAGTAGATTAG", IUPAC.unambiguous_dna), id='TEST_RECORD3')
+#test_rec4 = SeqRecord(Seq("CGATAGAGGAGCATTAGAACAATGACCT", IUPAC.unambiguous_dna), id='TEST_RECORD4')
+#structs.recalculateFull()
+#print structs.formatFull()
+#
+#print 'Tm1   =', calculate_Tm(test_rec1)
+#print 'Tm1p3 =', calculate_Tm(test_rec1, p3_Tm)
+#print ''
+#print 'Tm2   =', calculate_Tm(test_rec2)
+#print 'Tm2p3 =', calculate_Tm(test_rec2, p3_Tm)
+#print ''
+#print 'Tm3   =', calculate_Tm(test_rec3)
+#print 'Tm3p3 =', calculate_Tm(test_rec3, p3_Tm)
+#print ''
+#print 'Tm4   =', calculate_Tm(test_rec4)
+#print 'Tm4p3 =', calculate_Tm(test_rec4, p3_Tm)

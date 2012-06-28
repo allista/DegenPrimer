@@ -1,0 +1,340 @@
+#!/usr/bin/python
+
+# Copyright (C) 2012 Allis Tauri <allista@gmail.com>
+# 
+# indicator_gddccontrol is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+'''
+Created on Jun 19, 2012
+
+Tool to compute degenerate primer parameters using BioPython
+
+@author: Allis Tauri <allista@gmail.com>
+'''
+
+
+#utility functions
+def print_exception(e):
+    print "Exception occurred: " + str(type(e)) + " : " + e.__str__()
+
+#imports
+import sys
+import argparse
+from time import ctime
+try:
+    from Bio import SeqIO
+    from Bio.Alphabet import IUPAC
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
+except:
+    print "The BioPython must be installed in your system for this script to work."
+    sys.exit(1)
+
+import TD_Functions    
+from TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
+from Blast import write_blast_report, blast_short
+from SecStructures import SecStructures, hr
+###############################################################################    
+
+#parse command line arguments
+parser = argparse.ArgumentParser(description='This is a tool to compute degenerate \
+primer parameters. At least one primer (sense or antisense) should be provided.')
+#primers with ids
+prim_group = parser.add_argument_group('Primers with IDs')
+prim_group.add_argument('-s', '--sense', '-f', '--forwad', dest='sense_primer', metavar='SEQUENCE', 
+                    required=False, type=str,
+                    help='A sense primer sequence (5\'->3\') composed of capital \
+                    letters of extended IUPAC DNA alphabet')
+prim_group.add_argument('--sense-id', '--fwd-id', dest='sense_primer_id', metavar='ID', 
+                    required=False, type=str,
+                    help='A sense primer identification string')
+prim_group.add_argument('-a', '--antisense', '-r', '--reverse', dest='antisense_primer', metavar='SEQUENCE',
+                    required=False, type=str,  
+                    help='An antisense primer sequence (5\'->3\') composed of \
+                    capital letters of extended IUPAC DNA alphabet')
+prim_group.add_argument('--antisense-id', '--rev-id', dest='antisense_primer_id', metavar='ID', 
+                    required=False, type=str,
+                    help='An antisense primer identification string')
+#Tm and dG calculations
+TmdG_group = parser.add_argument_group('PCR conditions for Tm and dG calculation')
+TmdG_group.add_argument('--Na', metavar='C(Na) mM', 
+                    required=False, default=50, type=float,
+                    help='Concentration of monovalent ions in mM for Tm and dG correction (def=50)')
+TmdG_group.add_argument('--Mg', metavar='C(Mg) mM', 
+                    required=False, default=1.5, type=float,
+                    help='Concentration of divalent ions in mM for Tm and dG correction (def=1.5)')
+TmdG_group.add_argument('--dNTP', metavar='C(Mg) mM', 
+                    required=False, default=0, type=float,
+                    help='Concentration of dNTP in mM for Tm and dG correction (def=0)')
+TmdG_group.add_argument('--DNA', metavar='C(DNA) nM', 
+                    required=False, default=50, type=float,
+                    help='Concentration of target DNA in nM for Tm and dG correction (def=50)')
+TmdG_group.add_argument('--Primer', metavar='C(Primer) uM', 
+                    required=False, default=0.25, type=float,
+                    help='Concentration of primer (assume C(sense)=C(antisense)) \
+                    in uM for Tm and dG correction (def=0.25)')
+#in silica PCR
+iPCR_group = parser.add_argument_group('In silica PCR parameters')
+iPCR_group.add_argument('--min-amplicon', metavar='bp', 
+                    required=False, default=50, type=int,
+                    help='Minimum amplicone size fo ipcress simulation')
+iPCR_group.add_argument('--max-amplicon', metavar='bp', 
+                    required=False, default=3000, type=int,
+                    help='Maximum amplicone size fo ipcress simulation')
+#BLAST
+BLAST_group = parser.add_argument_group('BLAST parameters')
+BLAST_group.add_argument('--do-blast', 
+                    required=False, default=False, action='store_true', 
+                    help='Do blast search for specificity of primers/primer-pairs')
+BLAST_group.add_argument('--organisms', metavar='name', 
+                    required=False, type=str, nargs='+',
+                    help='List of organisms or higher taxons to be used in Entrez \
+                    query in blast searches')
+args = parser.parse_args()
+#-----------------------------------------------------------------------------#
+
+
+#parse concentrations
+TD_Functions.C_Na   = args.Na
+TD_Functions.C_Mg   = args.Mg
+TD_Functions.C_dNTP = args.dNTP
+TD_Functions.C_DNA  = args.DNA
+TD_Functions.C_Prim = args.Primer
+#-----------------------------------------------------------------------------#
+
+
+#parse primers
+primers = dict()
+if not args.sense_primer and not args.antisense_primer:
+    print 'At least one primer (sense or antisense) should be provided.'
+    sys.exit(1)
+else:
+    if args.sense_primer:
+        desc = 'sense'
+        if args.sense_primer_id:
+            p_id = args.sense_primer_id
+        else: p_id = desc 
+        primers[desc] = [SeqRecord(Seq(args.sense_primer, IUPAC.ambiguous_dna), 
+                                   id=p_id, description=desc), []]
+    if args.antisense_primer:
+        desc = 'antisense'
+        if args.antisense_primer_id:
+            p_id = args.antisense_primer_id
+        else: p_id = desc 
+        primers[desc] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna), 
+                                   id=p_id, description=desc), []]
+#-----------------------------------------------------------------------------#
+
+
+#set job_id
+job_id = ''
+if args.sense_primer:
+    job_id  = primers['sense'][0].id
+if args.antisense_primer:
+    if job_id != '': job_id += '-'
+    job_id += primers['antisense'][0].id
+#-----------------------------------------------------------------------------#
+
+
+#generate unambiguous primer sets
+IUPAC_ambiguous={'R': ['A', 'G'],
+                 'Y': ['C', 'T'],
+                 'S': ['G', 'C'],
+                 'W': ['A', 'T'],
+                 'K': ['G', 'T'],
+                 'M': ['A', 'C'],
+                 'B': ['C', 'G', 'T'],
+                 'D': ['A', 'G', 'T'],
+                 'H': ['A', 'C', 'T'],
+                 'V': ['A', 'C', 'G'],
+                 'N': ['A', 'T', 'C', 'G']}
+
+def generate_unambiguous(seq_rec):
+    """generate a list of all possible combinations from an ambiguous sequence"""
+    global IUPAC_ambiguous
+    unambiguous_strings = ['']
+    #generate list of sequence strings
+    for letter in seq_rec.seq:
+        n_sequences = len(unambiguous_strings)
+        if letter in ['A', 'T', 'G', 'C']:
+            for s in range(n_sequences):
+                unambiguous_strings[s] += letter
+        elif letter in IUPAC_ambiguous:
+            replacements = IUPAC_ambiguous[letter]
+            n_replacements = len(replacements) 
+            unambiguous_strings *= n_replacements
+            for r in range(n_replacements):
+                for s in range(n_sequences):
+                    unambiguous_strings[s+n_sequences*r] += replacements[r]
+    #make a list of SeqRecords
+    unambiguous_seq_list = list()
+    if len(unambiguous_strings) < 2: return unambiguous_seq_list
+    for s in range(len(unambiguous_strings)):
+        un_seq = Seq(unambiguous_strings[s], IUPAC.unambiguous_dna)
+        unambiguous_seq_list.append(SeqRecord(un_seq, description=seq_rec.description, 
+                                              id=seq_rec.id+"_"+str(s)))
+    return unambiguous_seq_list
+#end def
+
+#unambiguous primers
+for pfam in primers:
+    primers[pfam][1] = generate_unambiguous(primers[pfam][0])
+#-----------------------------------------------------------------------------#
+
+
+#calculate melting temperatures for primers
+for pfam in primers:
+    #if original primer is not a degenerate
+    if not primers[pfam][1]: 
+        calculate_Tm(primers[pfam][0])
+        continue
+    #else...
+    n_primers = len(primers[pfam][1])
+    mean_Tm, min_Tm, max_Tm = 0, 10000, 0 
+    for p in range(n_primers):
+        primer_Tm = calculate_Tm(primers[pfam][1][p])
+        if primer_Tm != "unknown":
+            primer_Tm = float(primer_Tm)
+            mean_Tm += primer_Tm
+            if min_Tm >= primer_Tm: min_Tm = primer_Tm
+            if max_Tm < primer_Tm: max_Tm = primer_Tm
+        else: n_primers -= 1
+    feature = source_feature(primers[pfam][0])
+    add_PCR_conditions(feature)
+    feature.qualifiers['Tm_min'] = str(min_Tm)
+    feature.qualifiers['Tm_max'] = str(max_Tm)
+    feature.qualifiers['Tm_mean'] = str(mean_Tm/n_primers)
+#-----------------------------------------------------------------------------#
+
+
+#output to GenBank and ipcress files
+def pfam_primers(pfam):
+    global primers
+    if pfam not in primers: return [] 
+    if not primers[pfam][1]:
+        return [primers[pfam][0]]
+    else: return primers[pfam][1]
+#end def
+
+def all_primers():
+    global primers
+    return pfam_primers('sense') + pfam_primers('antisense')
+#end def
+
+def primer_pair_id(seq_rec1, seq_rec2):
+    return seq_rec1.id+'-'+seq_rec2.id
+
+#set filenames 
+fmt = 'gb'
+fmt_filename  = job_id+'.'+fmt
+ipcr_filename = job_id+'.ipcr'
+
+#GenBank file with primers
+print 'Output unambiguous primers to:',fmt_filename
+primers_list = list()
+for pfam in sorted(primers):
+    primers_list.append(primers[pfam][0])
+    primers_list += primers[pfam][1]
+SeqIO.write(primers_list, fmt_filename, fmt)
+
+#ipcress config file
+#this is only available for pairs of primers
+if args.sense_primer and args.antisense_primer:
+    print 'Output ipcress programm to:',ipcr_filename
+    fwd_primers = pfam_primers('sense')
+    rev_primers = pfam_primers('antisense')
+    ipcr_file = open(ipcr_filename, 'w')
+    for fwd_primer in fwd_primers:
+        for rev_primer in rev_primers:
+            pcr_string  = primer_pair_id(fwd_primer, rev_primer)
+            pcr_string += ' '+str(fwd_primer.seq)
+            pcr_string += ' '+str(rev_primer.seq)
+            pcr_string += ' '+str(args.min_amplicon)
+            pcr_string += ' '+str(args.max_amplicon)
+            pcr_string += '\n'
+            ipcr_file.write(pcr_string)
+    ipcr_file.close()
+#-----------------------------------------------------------------------------#
+
+
+#test for primers specificity by BLAST
+if args.do_blast:
+    #generate Entrez query
+    entrez_query = ''
+    if args.organisms:
+        for organism in args.organisms:
+            if entrez_query: entrez_query += ' OR '
+            entrez_query += organism+'[organism]'
+
+    #if both primers are provided, do a concatenated blast search:
+    #PRIMER1-NNNNNNNNNN-PRIMER2
+    print 'Starting a BLAST search. This may take awhile...' 
+    blast_query = ''
+    blast_results  = None
+    if args.sense_primer and args.antisense_primer:
+        fwd_primers = pfam_primers('sense')
+        rev_primers = pfam_primers('antisense')
+        for fwd_primer in fwd_primers:
+            for rev_primer in rev_primers:
+                blast_query_str  = str(fwd_primer.seq)
+                blast_query_str += 'N'*10 #spacer of 10 N
+                blast_query_str += str(rev_primer.seq)
+                blast_query += SeqRecord(Seq(blast_query_str, IUPAC.ambiguous_dna), 
+                                         id=primer_pair_id(fwd_primer, rev_primer)).format('fasta')
+        blast_results  = blast_short(blast_query, job_id, entrez_query) 
+    else:
+    #else just blast all primers in a single query 
+        all_primers = all_primers()
+        for primer in all_primers:
+            blast_query += primer.format('fasta')
+        blast_results  = blast_short(blast_query, job_id, entrez_query)
+    #report results in human readable form
+    blast_report_filename = job_id+'-blast_report.txt' 
+    write_blast_report(blast_results, blast_report_filename)
+#-----------------------------------------------------------------------------#
+
+
+#check for hairpins, dimers and cross-dimers
+#check for self-dimers and hairpins
+structures_full_report_filename  = job_id+'-full-structures.txt'
+structures_short_report_filename = job_id+'-short-structures.txt'
+print 'Output all secondary structures to:',structures_full_report_filename
+print 'Output summary of secondary structures to:',structures_short_report_filename
+full_structures_file  = open(structures_full_report_filename, 'w')
+short_structures_file = open(structures_short_report_filename, 'w')
+for f in (full_structures_file, short_structures_file):
+    f.write(hr(' %s ' % ctime()))
+    f.write(hr(' PCR conditions '))
+    f.write(format_PCR_conditions()+'\n')
+    f.write(hr(' stable secondary structures '))
+all_primers = all_primers()
+for primer in all_primers:
+    structs = SecStructures(primer)
+    full_structures_file.write(str(structs))
+    short_structures_file.write(structs.formatShort())
+#check for ALL cross-dimers
+num_primers = len(all_primers)
+if num_primers > 1:
+    for f in (full_structures_file, short_structures_file):
+        f.write('\n'+hr(' stable cross dimers '))
+    for i in range(num_primers):
+        for j in range(i+1,num_primers):
+            structs = SecStructures(all_primers[i],all_primers[j])
+            full_structures_file.write(str(structs))
+            short_structures_file.write(structs.formatShort())
+full_structures_file.close()
+short_structures_file.close()
+#-----------------------------------------------------------------------------#
+
+sys.exit(0)
