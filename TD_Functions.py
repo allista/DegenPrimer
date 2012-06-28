@@ -33,7 +33,6 @@ comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-6
 '''
 
 from math import sqrt, log
-from subprocess import check_output
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from UnifiedNN import *
 
@@ -53,20 +52,6 @@ def C_Na_eq():
     """divalent cation correction (Ahsen et al., 2001)"""
     global C_Na, C_Mg, C_dNTP
     return C_Na + 120*sqrt(C_Mg - C_dNTP)
-#end def
-
-
-#calculate melting temperatures for primers
-def p3_Tm(seq):
-    """Calculate Tm using oligotm program from primer3 package"""
-    return float(check_output(['oligotm', 
-                               '-dv,', str(C_Mg), #consentration in mM of Mg2+
-                               '-mv,', str(C_Na),
-                               '-n,',  str(C_dNTP),
-                               '-d,',  str(C_DNA), 
-                               '-sc', '1', 
-                               '-tp', '1', 
-                               str(seq)]))
 #end def
 
 
@@ -182,9 +167,9 @@ def calculate_Tr(seq_rec, r):
 #end def
 
 
-def calculate_Tm(seq_rec, calc_Tm_method=NN_Tm):
+def calculate_Tm(seq_rec):
     try:
-        primer_Tm = calc_Tm_method(seq_rec.seq)
+        primer_Tm = NN_Tm(seq_rec.seq)
         feature = source_feature(seq_rec)
         add_PCR_conditions(feature)
         feature.qualifiers['Tm'] = str(primer_Tm)

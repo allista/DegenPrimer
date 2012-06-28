@@ -46,7 +46,7 @@ class SecStructures(object):
     >>> print str(MySecStructs)
     '''
 
-    def __init__(self, seq_rec1, seq_rec2=None, seed_len=1):
+    def __init__(self, seq_rec1, seq_rec2=None, dG_threshold=0):
         """Constructor"""
         self._seq_rec1 = seq_rec1
         self._seq1 = seq_rec1.seq
@@ -56,7 +56,8 @@ class SecStructures(object):
         else: 
             self._seq_rec2 = None
             self._seq2 = None
-        self.setSeedLength(seed_len)
+        self._dG_threshold = dG_threshold
+        self._recalculate()
     #end def
     
     def isSingle(self):
@@ -64,15 +65,22 @@ class SecStructures(object):
         return True
     #end def
     
-    def setSeedLength(self, seed_len):
-        if seed_len > len(self._seq1):
-            seed_len = len(self._seq1)
-        if self._seq2 and seed_len > len(self._seq2):
-            seed_len = len(self._seq2)
-        self._seed_length = seed_len
-        self._recalculate()
+    def dimerMin_dG(self):
+        pass
     #end def
-
+    
+    def mostStableDimer(self):
+        pass
+    #end def
+    
+    def hairpinMin_dG(self):
+        pass
+    #end def
+    
+    def mostStableHairpin(self):
+        pass
+    #end def
+    
     def __str__(self):
         """For single sequence output self-dimers and hairpins.
         For two sequences output only cross-dimers"""
@@ -163,33 +171,9 @@ class SecStructures(object):
             self._cross_dimers   = None
     #end def
     
-    def _find_matches(self, l, seq):
-        matches = []
-        position = seq.find(l)
-        last = 0
-        while position != -1:
-            matches.append(last + position)
-            last += position + 1
-            position = seq[last:].find(l)
-        return matches
-    #end def
-
-    def _find_seeds(self, seq_str1, seq_str2):
-        """Search for all occurrences of all seq_str1 substrings of seed_length in seq_str2"""
-        seeds = []
-        scanned_patches = []
-        for i in range(len(seq_str1) - self._seed_length):
-            patch = seq_str1[i:i + self._seed_length]
-            if patch not in scanned_patches:
-                scanned_patches.append(patch)
-                matches = self._find_matches(patch, seq_str2)
-                if matches:
-                    for position in matches:
-                        seeds.append((i, position))
-        return seeds
-    #end def
-    
     def _remove_loops(self, structure):
+        """remove terminal internal loops one by one in all possible combinations
+        to produce a bunch of new structures"""
         structures  = [structure]
         fwd_matches = list(structure[0])
         rev_matches = list(structure[1])
@@ -230,7 +214,7 @@ class SecStructures(object):
         return structures
     #end def
     
-    def _find_dimers_by_slide(self, seq1, seq2):
+    def _find_dimers(self, seq1, seq2):
         """Search for all secondary structures"""
         all_structures = {'dimers': [], 'hairpins': []}
         self_dimers = str(seq1) == str(seq2)
@@ -285,56 +269,6 @@ class SecStructures(object):
         dimers.sort(key=lambda x: x[2][0])
         return all_structures
     #end def
-
-    def _find_dimers_by_seed(self, seq1, seq2):
-        """Search for all secondary structures containing at least one complementary 
-        patch of given length"""
-        structures, unique_structures, = [], []
-        seq_str1 = str(seq1)
-        seq_str2 = str(seq2.reverse_complement())
-        seeds = self._find_seeds(seq_str1, seq_str2)
-        if not seeds: return unique_structures
-        for seed in seeds:
-            pos1, pos2 = seed
-            matches = (set(range(pos1, pos1+self._seed_length)), 
-                       set(range(pos2, pos2+self._seed_length)),
-                       [])
-            #moving upstream
-            up_pos1 = pos1-1
-            up_pos2 = pos2-1
-            while up_pos1 >= 0 and up_pos2 >= 0:
-                if seq_str1[up_pos1] == seq_str2[up_pos2]:
-                    matches[0].add(up_pos1)
-                    matches[1].add(up_pos2)
-                up_pos1 -= 1
-                up_pos2 -= 1
-            #moving downstream
-            ds_pos1 = pos1+self._seed_length
-            ds_pos2 = pos2+self._seed_length
-            while ds_pos1 < len(seq_str1) and ds_pos2 < len(seq_str2):
-                if seq_str1[ds_pos1] == seq_str2[ds_pos2]:
-                    matches[0].add(ds_pos1)
-                    matches[1].add(ds_pos2)
-                ds_pos1 += 1
-                ds_pos2 += 1
-            #append structure
-            structures.append(matches)
-        #report only unique structures
-        for struc in structures:
-            if struc not in unique_structures:
-                unique_structures.append(struc)
-        #calculate dG
-        for struc in unique_structures:
-            struc[2].append(dimer_dG(struc, seq1, seq2))
-        #sort structures by dG
-        unique_structures.sort(key=lambda x: x[2][0])
-        return unique_structures
-    #end def
-    
-    def _find_dimers(self, seq1, seq2):
-        if self._seed_length > 1:
-            return self._find_dimers_by_seed(seq1, seq2)
-        else: return self._find_dimers_by_slide(seq1, seq2)
 
     def _find_hairpins(self, dimers, seq):
         """Find stable hairpins in given set of SYMMETRIC SELF-dimers"""
@@ -440,8 +374,7 @@ class SecStructures(object):
     #end def
 
     def _format_dimers_short(self, structures, seq1, seq2):
-        """short plain text representation of dimers containing at least one complementary 
-        patch spanning seed_length"""
+        """short plain text representation of dimers"""
         structures_string  = ''
         if not structures: return 'No dimers found.\n\n'
         #print header
@@ -453,8 +386,7 @@ class SecStructures(object):
     #end def
 
     def _format_dimers(self, structures, seq1, seq2):
-        """plain text representation of dimers containing at least one complementary 
-        patch spanning seed_length"""
+        """plain text representation of dimers"""
         structures_string  = ''
         if not structures: return 'No dimers found.\n\n'
         #print header
