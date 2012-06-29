@@ -197,12 +197,13 @@ def generate_unambiguous(seq_rec):
 
 #unambiguous primers
 for primer in primers:
-    primer[1] = generate_unambiguous(primer[0])
+    if primer: primer[1] = generate_unambiguous(primer[0])
 #-----------------------------------------------------------------------------#
 
 
 #calculate melting temperatures for primers
 for primer in primers:
+    if not primer: continue
     #if original primer is not a degenerate
     if not primer[1]: 
         primer_Tm = calculate_Tm(primer[0])
@@ -240,9 +241,7 @@ def pfam_primers(pfam):
 #end def
 
 def all_primers():
-    global primers
     return pfam_primers(0) + pfam_primers(1)
-#end def
 
 def primer_pair_id(seq_rec1, seq_rec2):
     return seq_rec1.id+'-'+seq_rec2.id
@@ -256,6 +255,7 @@ ipcr_filename = job_id+'.ipcr'
 print 'Output unambiguous primers to:',fmt_filename
 primers_list = list()
 for primer in primers:
+    if not primer: continue
     primers_list.append(primer[0])
     primers_list += primer[1]
 SeqIO.write(primers_list, fmt_filename, fmt)
@@ -327,19 +327,25 @@ full_structures_file  = open(structures_full_report_filename, 'w')
 short_structures_file = open(structures_short_report_filename, 'w')
 #write header
 for f in (full_structures_file, short_structures_file):
-    f.write(hr(' %s ' % ctime()))
+    f.write(hr(' %s ' % ctime(), symbol='#'))
     f.write(hr(' PCR conditions '))
     f.write(format_PCR_conditions()+'\n')
     f.write(hr(' melting temperatures '))
     #temperatures
-    temps = []
+    temps  = []
+    
+    if primers[0] and primers[1]:
+        max_id = max(len(primers[0][0].id), len(primers[1][0].id))
+    else: max_id = 0
     for primer in primers:
+        if not primer: continue
+        spacer = max_id-len(primer[0].id)
         if not primer[1]: #not degenerate
-            f.write('%s\n' % primer[0].id +\
+            f.write('%s:%s   %s\n' % (primer[0].id, ' '*spacer, str(primer[0].seq)) +\
                     '   Tm:      %.1f C\n' % primer[2]['Tm'])
             temps.append(primer[2]['Tm'])
         else:
-            f.write('%s\n' % primer[0].id +\
+            f.write('%s:%s   %s\n' % (primer[0].id, ' '*spacer, str(primer[0].seq)) +\
                     '   Tm max:  %.1f C\n' % primer[2]['Tm_max'] +\
                     '   Tm mean: %.1f C\n' % primer[2]['Tm_mean'] +\
                     '   Tm min:  %.1f C\n' % primer[2]['Tm_min'])
@@ -349,8 +355,8 @@ for f in (full_structures_file, short_structures_file):
         if temps[0]-temps[1] >= 5:
             f.write('\nWarning: lowest melting temperatures of sense and antisense primes \n'
                     '         differ more then by 5C\n')
-    f.write('\n')
-    f.write(hr(' stable secondary structures '))
+    f.write('\n\n')
+    f.write(hr(' stable secondary structures ', symbol='#'))
 #short report thresholds
 short_structures_file.write(hr(' only following structures are reported '))
 short_structures_file.write("   dimers with free energy below %.2f kcal/mol are reported\n" \
@@ -361,6 +367,7 @@ short_structures_file.write("   hairpins with free energy below %.2f kcal/mol ar
                             % (args.dG_threshold+2 if args.dG_threshold<=-2 else 0))
 short_structures_file.write("3'-hairpins with free energy below %.2f kcal/mol are reported\n" \
                             % (args.dG_threshold+3 if args.dG_threshold<=-3 else 0))
+short_structures_file.write('\n')
 #check all self-dimers and hairpins
 all_primers = all_primers()
 for primer in all_primers:
@@ -372,7 +379,7 @@ for primer in all_primers:
 num_primers = len(all_primers)
 if num_primers > 1:
     for f in (full_structures_file, short_structures_file):
-        f.write('\n'+hr(' stable cross dimers '))
+        f.write('\n'+hr(' stable cross dimers ', symbol='#'))
     for i in range(num_primers):
         for j in range(i+1,num_primers):
             structs = SecStructures(all_primers[i],all_primers[j], 

@@ -21,10 +21,10 @@ Created on Jun 23, 2012
 from copy import deepcopy
 from TD_Functions import dimer_dG, hairpin_dG
 
-def hr(string, width=80):
+def hr(string, width=80, symbol='-'):
         left_hr  = (width - len(string))/2
         right_hr = (width - len(string) - left_hr)
-        return '-'*left_hr + string + '-'*right_hr + '\n\n'
+        return symbol*left_hr + string + symbol*right_hr + '\n\n'
 #end def
     
 def all_combinations(lst):
@@ -106,15 +106,15 @@ class SecStructures(object):
             format_hairpins = self._format_hairpins_short
         string  = '\n'
         if self._seq2:
-            string += hr(' %s vs %s cross-dimers ' % (self._seq_rec1.id, self._seq_rec2.id))
+            string += hr(' %s vs %s cross-dimers ' % (self._seq_rec1.id, self._seq_rec2.id), symbol='=')
             string += format_dimers(self._cross_dimers, self._seq1, self._seq2)
         else:
-            string += hr(' %s: %s ' % (self._seq_rec1.id, str(self._seq1)))
+            string += hr(' %s: %s ' % (self._seq_rec1.id, str(self._seq1)), symbol='=')
             string += hr(' self-dimers ')
             string += format_dimers(self._seq1_dimers, self._seq1, self._seq1)
             string += hr(' hairpins ')
             string += format_hairpins(self._seq1_hairpins, self._seq1)
-        string += '-'*80+'\n\n'
+        string += hr('',symbol='=')
         return string
     
     def formatFull(self):
