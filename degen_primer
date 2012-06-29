@@ -31,6 +31,7 @@ def print_exception(e):
 #imports
 import sys
 import argparse
+import subprocess 
 from time import ctime
 try:
     from Bio import SeqIO
@@ -85,13 +86,20 @@ TmdG_group.add_argument('--Primer', metavar='C(Primer) uM',
                     help='Concentration of primer (assume C(sense)=C(antisense)) \
                     in uM for Tm and dG correction (def=0.25)')
 #in silica PCR
-iPCR_group = parser.add_argument_group('In silica PCR parameters')
+iPCR_group = parser.add_argument_group('In silica PCR simulation parameters')
 iPCR_group.add_argument('--min-amplicon', metavar='bp', 
                     required=False, default=50, type=int,
-                    help='Minimum amplicone size fo ipcress simulation (default 50)')
+                    help='Minimum amplicon size for ipcress simulation (default 50)')
 iPCR_group.add_argument('--max-amplicon', metavar='bp', 
                     required=False, default=3000, type=int,
-                    help='Maximum amplicone size fo ipcress simulation (default 3000)')
+                    help='Maximum amplicon size for ipcress simulation (default 3000)')
+iPCR_group.add_argument('--fasta-files', metavar='path', 
+                    required=False, nargs='+', type=str,
+                    help='Path(s) to fasta files containing target sequences for ipcress simulation. '
+                    'If fasta files are provided, ipcress simulation will be launched automatically.')
+iPCR_group.add_argument('--max-mismatches', metavar='b', 
+                    required=False, default=1, type=int,
+                    help='Maximum mismatches for ipcress simulation (default 1)')
 #BLAST
 BLAST_group = parser.add_argument_group('BLAST parameters')
 BLAST_group.add_argument('--do-blast', 
@@ -246,12 +254,9 @@ def all_primers():
 def primer_pair_id(seq_rec1, seq_rec2):
     return seq_rec1.id+'-'+seq_rec2.id
 
-#set filenames 
-fmt = 'gb'
-fmt_filename  = job_id+'.'+fmt
-ipcr_filename = job_id+'.ipcr'
-
 #GenBank file with primers
+fmt = 'gb'
+fmt_filename = job_id+'.'+fmt
 print 'Output unambiguous primers to:',fmt_filename
 primers_list = list()
 for primer in primers:
@@ -263,10 +268,12 @@ SeqIO.write(primers_list, fmt_filename, fmt)
 #ipcress config file
 #this is only available for pairs of primers
 if args.sense_primer and args.antisense_primer:
-    print 'Output ipcress programm to:',ipcr_filename
-    fwd_primers = pfam_primers(0)
-    rev_primers = pfam_primers(1)
-    ipcr_file = open(ipcr_filename, 'w')
+    ipcr_program_filename = job_id+'.ipcr'
+    ipcr_report_filename  = job_id+'-ipcr-report.txt'
+    print 'Output ipcress program to:',ipcr_program_filename
+    fwd_primers  = pfam_primers(0)
+    rev_primers  = pfam_primers(1)
+    ipcr_program = open(ipcr_program_filename, 'w')
     for fwd_primer in fwd_primers:
         for rev_primer in rev_primers:
             pcr_string  = primer_pair_id(fwd_primer, rev_primer)
@@ -275,8 +282,21 @@ if args.sense_primer and args.antisense_primer:
             pcr_string += ' '+str(args.min_amplicon)
             pcr_string += ' '+str(args.max_amplicon)
             pcr_string += '\n'
-            ipcr_file.write(pcr_string)
-    ipcr_file.close()
+            ipcr_program.write(pcr_string)
+    ipcr_program.close()
+    if args.fasta_files:
+        print 'Output ipcress report to:',ipcr_report_filename
+        ipcr_cli = 'ipcress %s -m %d -s' % (ipcr_program_filename, args.max_mismatches)
+        for fasta_file in args.fasta_files:
+            ipcr_cli += ' "'+fasta_file+'"'
+        child = subprocess.Popen(ipcr_cli,
+                                 stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 shell=(sys.platform!="win32"))
+        ipcr_report = open(ipcr_report_filename, 'w')
+        ipcr_report.write(child.stdout.read())
+        ipcr_report.close()
 #-----------------------------------------------------------------------------#
 
 
@@ -341,11 +361,11 @@ for f in (full_structures_file, short_structures_file):
         if not primer: continue
         spacer = max_id-len(primer[0].id)
         if not primer[1]: #not degenerate
-            f.write('%s:%s   %s\n' % (primer[0].id, ' '*spacer, str(primer[0].seq)) +\
+            f.write('%s:%s  %02db  %s\n' % (primer[0].id, ' '*spacer, len(primer[0].seq), str(primer[0].seq)) +\
                     '   Tm:      %.1f C\n' % primer[2]['Tm'])
             temps.append(primer[2]['Tm'])
         else:
-            f.write('%s:%s   %s\n' % (primer[0].id, ' '*spacer, str(primer[0].seq)) +\
+            f.write('%s:%s  %02db  %s\n' % (primer[0].id, ' '*spacer, len(primer[0].seq), str(primer[0].seq)) +\
                     '   Tm max:  %.1f C\n' % primer[2]['Tm_max'] +\
                     '   Tm mean: %.1f C\n' % primer[2]['Tm_mean'] +\
                     '   Tm min:  %.1f C\n' % primer[2]['Tm_min'])
