@@ -7,7 +7,6 @@ Created on Jun 26, 2012
 from time import ctime
 from Bio.Blast import NCBIWWW, NCBIXML
 from SecStructures import hr
-from numpy.lib.function_base import histogram
 
 def blast_short(query, blast_id='blast_short', entrez_query=''):
     #values adjusted for short sequences
