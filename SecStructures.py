@@ -60,6 +60,13 @@ class SecStructures(object):
         self._recalculate()
     #end def
     
+    def belowThreshold(self):
+        return self.dimerMin_dG() and self.dimerMin_dG() <= self._dG_threshold \
+            or self.dimerMin_3prim_dG() and self.dimerMin_3prim_dG() <= self._dG_threshold+1 \
+            or self.hairpinMin_dG() and self.hairpinMin_dG() <= self._dG_threshold+2 \
+            or self.hairpinMin_3prim_dG() and self.hairpinMin_3prim_dG() <= self._dG_threshold+3
+    #end def
+    
     def dimerMin_dG(self):
         if self._seq2 and self._cross_dimers:
             return self._cross_dimers[0][2][0]
@@ -68,10 +75,22 @@ class SecStructures(object):
         else: return None
     #end def
     
+    def dimerMin_3prim_dG(self):
+        if self._min_3prim_dimer_dG:
+            return self._min_3prim_dimer_dG
+        else: return None
+    #end def
+    
     def hairpinMin_dG(self):
         if self._seq2 or not self._seq1_hairpins: 
             return None
         else: return self._seq1_hairpins[0][2][0]
+    #end def
+    
+    def hairpinMin_3prim_dG(self):
+        if self._min_3prim_hairpin_dG:
+            return self._min_3prim_hairpin_dG
+        else: return None
     #end def
     
     def _format_str(self, full=True):
@@ -110,6 +129,12 @@ class SecStructures(object):
     def _recalculate(self):
         """For single sequence calculate self-dimers and hairpins.
         For two sequences calculate only cross-dimers"""
+        self._3prim_dimers         = 0
+        self._min_3prim_dimer_dG   = 0
+        self._min_3prim_dimer      = None
+        self._3prim_hairpins       = 0
+        self._min_3prim_hairpin_dG = 0
+        self._min_3prim_hairpin    = None 
         if self._seq2:
             self._seq1_dimers    = None
             self._seq1_hairpins  = None
@@ -219,6 +244,13 @@ class SecStructures(object):
                 #if there is a stable structure, append it
                 if min_dG_structure and min_dG_structure not in dimers:
                     dimers.append(min_dG_structure)
+                    #check for 3' structure
+                    if max(min_dG_structure[0]) > len(seq1)-4 \
+                    or min(min_dG_structure[1]) < 3:
+                        self._3prim_dimers += 1
+                        if self._min_3prim_dimer_dG > min_dG:
+                            self._min_3prim_dimer_dG = min_dG
+                            self._min_3prim_dimer    = min_dG_structure 
         #sort by dG
         dimers.sort(key=lambda x: x[2][0])
         return all_structures
@@ -251,7 +283,13 @@ class SecStructures(object):
                         min_dG_hairpin = hairpin
                 #if there is a stable structure, append it
                 if min_dG_hairpin and min_dG_hairpin not in hairpins:
-                    hairpins.append(min_dG_hairpin)   
+                    hairpins.append(min_dG_hairpin) 
+                    #check for 3' structure
+                    if min(min_dG_hairpin[0]) < 3:
+                        self._3prim_hairpins += 1
+                        if self._min_3prim_hairpin_dG > min_dG:
+                            self._min_3prim_hairpin_dG = min_dG
+                            self._min_3prim_hairpin    = min_dG_hairpin 
         hairpins.sort(key=lambda x: x[2][0])
         return hairpins
     #end def
@@ -298,31 +336,16 @@ class SecStructures(object):
 
     def _format_dimers_header(self, structures, seq1, seq2):
         header_string  = ''
-        #count stable dimers
-        num_stable  = 0
-        three_prim  = 0
-        tp_stable   = 0
-        for struct in structures: 
-            if struct[2][0] < 0:
-                num_stable += 1
-                #find 3' dimers
-                fwd_matches = list(struct[0])
-                rev_matches = list(struct[1])
-                fwd_matches.sort()
-                rev_matches.sort()
-                if fwd_matches[-1] > len(seq1)-4 or \
-                   rev_matches[0]  < 3:
-                    three_prim += 1
-                    if tp_stable > struct[2][0]:
-                        tp_stable = struct[2][0]
-        if not num_stable: return 'No dimers found.\n\n'
+        if not structures: return 'No dimers found.\n\n'
         #dimers count
-        header_string += 'Dimers count: %d\n' % num_stable
+        header_string += 'Dimers count: %d\n' % len(structures)
         #3'-count
-        if three_prim: header_string += '3\'-dimers count: %d\n' % three_prim
+        if self._3prim_dimers: 
+            header_string += '3\'-dimers count: %d\n' % self._3prim_dimers
         #minimum dG
         header_string += 'Most stable: %.2f kcal/mol\n' % structures[0][2][0]
-        if three_prim: header_string += 'Most stable 3\' dimer: %.2f kcal/mol\n' % tp_stable
+        if self._3prim_dimers: 
+            header_string += 'Most stable 3\' dimer: %.2f kcal/mol\n' % self._min_3prim_dimer_dG
         header_string += '\n'
         return header_string
     #end def
@@ -334,7 +357,12 @@ class SecStructures(object):
         #print header
         structures_string += self._format_dimers_header(structures, seq1, seq2)
         #print the most stable dimer
-        structures_string += self._format_dimer(structures[0], seq1, seq2)
+        if self.dimerMin_dG() and self.dimerMin_dG() < self._dG_threshold:
+            if structures[0] != self._min_3prim_dimer: #if it is the 3' the next block will print it
+                structures_string += self._format_dimer(structures[0], seq1, seq2)
+        #print the most stable 3'-dimer
+        if self.dimerMin_3prim_dG() and self.dimerMin_3prim_dG() < self._dG_threshold+1:
+            structures_string += self._format_dimer(self._min_3prim_dimer, seq1, seq2)
         return structures_string
     #end def
 
@@ -400,22 +428,14 @@ class SecStructures(object):
 
     def _format_hairpins_header(self, hairpins, seq):
         header_string  = ''
-        three_prim = 0
-        tp_stable  = 0
-        for hairpin in hairpins:
-            rev_matches = list(hairpin[1])
-            rev_matches.sort()
-            #check for 3' hairpin
-            if rev_matches[-1] > len(seq)-4:
-                three_prim += 1
-                if tp_stable > hairpin[2][0]:
-                    tp_stable = hairpin[2][0]
         #hairpins count
         header_string += 'Hairpins count: %d\n' % len(hairpins)
-        if three_prim: header_string += '3\'-hairpins count: %d\n' % three_prim
+        if self._3prim_hairpins: 
+            header_string += '3\'-hairpins count: %d\n' % self._3prim_hairpins
         #minimum dG
         header_string += 'Most stable: %.2f kcal/mol\n' % hairpins[0][2][0]
-        if three_prim: header_string += 'Most stable 3\' hairpin: %.2f kcal/mol\n' % tp_stable
+        if self._3prim_hairpins: 
+            header_string += 'Most stable 3\' hairpin: %.2f kcal/mol\n' % self._min_3prim_hairpin_dG
         header_string += '\n'
         return header_string
     #end def
@@ -424,9 +444,12 @@ class SecStructures(object):
         hairpins_string  = ''
         if not hairpins: return 'No hairpins found\n\n'
         #print header
-        hairpins_string += self._format_hairpins_header(hairpins, seq)
+        if self.hairpinMin_dG() and self.hairpinMin_dG() < self._dG_threshold+2:
+            if hairpins[0] != self._min_3prim_hairpin: #if it is the 3' the next block will print it
+                hairpins_string += self._format_hairpins_header(hairpins, seq)
         #print the most stable hairpin
-        hairpins_string += self._format_hairpin(hairpins[0], seq)
+        if self.hairpinMin_3prim_dG() and self.hairpinMin_3prim_dG() < self._dG_threshold+3:
+            hairpins_string += self._format_hairpin(hairpins[0], seq)
         return hairpins_string
     #end def
 
@@ -441,6 +464,3 @@ class SecStructures(object):
         return hairpins_string
     #end def
 #end class
-
-if __name__ == '__main__':
-    print all_combinations([(1,5),(2,6),(3,7),(4,8)])

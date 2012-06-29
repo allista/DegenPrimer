@@ -103,9 +103,12 @@ BLAST_group.add_argument('--organisms', metavar='name',
                     query in blast searches (e.g. bacteria)')
 output_group= parser.add_argument_group('Output parameters')
 output_group.add_argument('--dG-threshold', metavar='kcal/mol', 
-                    required=False, default=-3.0, type=float,
-                    help='Secondary structures with free energy ABOVE this threshold \
-                    will not be reported in SHORT report (default -3 kcal/mol')
+                    required=False, default=-5.0, type=float,
+                    help='Dimers with free energy ABOVE this threshold will not '
+                    'be reported in SHORT report (default is -5 kcal/mol. '
+                    'For hairpins the threshold is grater by 2 kcal/mol. '
+                    'For 3\' structures corresponding thresholds are grater by '
+                    'another 1 kcal/mol' )
 args = parser.parse_args()
 #-----------------------------------------------------------------------------#
 
@@ -120,7 +123,7 @@ TD_Functions.C_Prim = args.Primer
 
 
 #parse primers
-primers = dict()
+primers = [[],[]]
 if not args.sense_primer and not args.antisense_primer:
     print 'At least one primer (sense or antisense) should be provided.'
     sys.exit(1)
@@ -130,25 +133,25 @@ else:
         if args.sense_primer_id:
             p_id = args.sense_primer_id
         else: p_id = desc 
-        primers[desc] = [SeqRecord(Seq(args.sense_primer, IUPAC.ambiguous_dna), 
-                                   id=p_id, description=desc), []]
+        primers[0] = [SeqRecord(Seq(args.sense_primer, IUPAC.ambiguous_dna), 
+                                   id=p_id, description=desc), [], dict()]
     if args.antisense_primer:
         desc = 'antisense'
         if args.antisense_primer_id:
             p_id = args.antisense_primer_id
         else: p_id = desc 
-        primers[desc] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna), 
-                                   id=p_id, description=desc), []]
+        primers[1] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna), 
+                                   id=p_id, description=desc), [], dict()]
 #-----------------------------------------------------------------------------#
 
 
 #set job_id
 job_id = ''
 if args.sense_primer:
-    job_id  = primers['sense'][0].id
+    job_id  = primers[0][0].id
 if args.antisense_primer:
     if job_id != '': job_id += '-'
-    job_id += primers['antisense'][0].id
+    job_id += primers[1][0].id
 #-----------------------------------------------------------------------------#
 
 
@@ -193,40 +196,44 @@ def generate_unambiguous(seq_rec):
 #end def
 
 #unambiguous primers
-for pfam in primers:
-    primers[pfam][1] = generate_unambiguous(primers[pfam][0])
+for primer in primers:
+    primer[1] = generate_unambiguous(primer[0])
 #-----------------------------------------------------------------------------#
 
 
 #calculate melting temperatures for primers
-for pfam in primers:
+for primer in primers:
     #if original primer is not a degenerate
-    if not primers[pfam][1]: 
-        calculate_Tm(primers[pfam][0])
+    if not primer[1]: 
+        primer_Tm = calculate_Tm(primer[0])
+        primer[2]['Tm'] = primer_Tm
         continue
     #else...
-    n_primers = len(primers[pfam][1])
+    n_primers = len(primer[1])
     mean_Tm, min_Tm, max_Tm = 0, 10000, 0 
     for p in range(n_primers):
-        primer_Tm = calculate_Tm(primers[pfam][1][p])
-        if primer_Tm != "unknown":
-            primer_Tm = float(primer_Tm)
-            mean_Tm += primer_Tm
+        primer_Tm = calculate_Tm(primer[1][p])
+        if primer_Tm:
+            primer_Tm = primer_Tm
+            mean_Tm  += primer_Tm
             if min_Tm >= primer_Tm: min_Tm = primer_Tm
-            if max_Tm < primer_Tm: max_Tm = primer_Tm
+            if max_Tm <  primer_Tm: max_Tm = primer_Tm
         else: n_primers -= 1
-    feature = source_feature(primers[pfam][0])
+    feature = source_feature(primer[0])
     add_PCR_conditions(feature)
-    feature.qualifiers['Tm_min'] = str(min_Tm)
-    feature.qualifiers['Tm_max'] = str(max_Tm)
+    feature.qualifiers['Tm_min']  = str(min_Tm)
+    feature.qualifiers['Tm_max']  = str(max_Tm)
     feature.qualifiers['Tm_mean'] = str(mean_Tm/n_primers)
+    primer[2]['Tm_min']  = min_Tm
+    primer[2]['Tm_max']  = max_Tm
+    primer[2]['Tm_mean'] = mean_Tm/n_primers
 #-----------------------------------------------------------------------------#
 
 
 #output to GenBank and ipcress files
 def pfam_primers(pfam):
     global primers
-    if pfam not in primers: return [] 
+    if not primers[pfam]: return [] 
     if not primers[pfam][1]:
         return [primers[pfam][0]]
     else: return primers[pfam][1]
@@ -234,7 +241,7 @@ def pfam_primers(pfam):
 
 def all_primers():
     global primers
-    return pfam_primers('sense') + pfam_primers('antisense')
+    return pfam_primers(0) + pfam_primers(1)
 #end def
 
 def primer_pair_id(seq_rec1, seq_rec2):
@@ -248,17 +255,17 @@ ipcr_filename = job_id+'.ipcr'
 #GenBank file with primers
 print 'Output unambiguous primers to:',fmt_filename
 primers_list = list()
-for pfam in sorted(primers):
-    primers_list.append(primers[pfam][0])
-    primers_list += primers[pfam][1]
+for primer in primers:
+    primers_list.append(primer[0])
+    primers_list += primer[1]
 SeqIO.write(primers_list, fmt_filename, fmt)
 
 #ipcress config file
 #this is only available for pairs of primers
 if args.sense_primer and args.antisense_primer:
     print 'Output ipcress programm to:',ipcr_filename
-    fwd_primers = pfam_primers('sense')
-    rev_primers = pfam_primers('antisense')
+    fwd_primers = pfam_primers(0)
+    rev_primers = pfam_primers(1)
     ipcr_file = open(ipcr_filename, 'w')
     for fwd_primer in fwd_primers:
         for rev_primer in rev_primers:
@@ -288,8 +295,8 @@ if args.do_blast:
     blast_query = ''
     blast_results  = None
     if args.sense_primer and args.antisense_primer:
-        fwd_primers = pfam_primers('sense')
-        rev_primers = pfam_primers('antisense')
+        fwd_primers = pfam_primers(0)
+        rev_primers = pfam_primers(1)
         for fwd_primer in fwd_primers:
             for rev_primer in rev_primers:
                 blast_query_str  = str(fwd_primer.seq)
@@ -312,36 +319,66 @@ if args.do_blast:
 
 #check for hairpins, dimers and cross-dimers
 #check for self-dimers and hairpins
-structures_full_report_filename  = job_id+'-full-structures.txt'
-structures_short_report_filename = job_id+'-short-structures.txt'
-print 'Output all secondary structures to:',structures_full_report_filename
-print 'Output summary of secondary structures to:',structures_short_report_filename
+structures_full_report_filename  = job_id+'-full-report.txt'
+structures_short_report_filename = job_id+'-short-report.txt'
+print 'Output full report with all secondary structures to:',structures_full_report_filename
+print 'Output short report with summary of secondary structures to:',structures_short_report_filename
 full_structures_file  = open(structures_full_report_filename, 'w')
 short_structures_file = open(structures_short_report_filename, 'w')
+#write header
 for f in (full_structures_file, short_structures_file):
     f.write(hr(' %s ' % ctime()))
     f.write(hr(' PCR conditions '))
     f.write(format_PCR_conditions()+'\n')
+    f.write(hr(' melting temperatures '))
+    #temperatures
+    temps = []
+    for primer in primers:
+        if not primer[1]: #not degenerate
+            f.write('%s\n' % primer[0].id +\
+                    '   Tm:      %.1f C\n' % primer[2]['Tm'])
+            temps.append(primer[2]['Tm'])
+        else:
+            f.write('%s\n' % primer[0].id +\
+                    '   Tm max:  %.1f C\n' % primer[2]['Tm_max'] +\
+                    '   Tm mean: %.1f C\n' % primer[2]['Tm_mean'] +\
+                    '   Tm min:  %.1f C\n' % primer[2]['Tm_min'])
+            temps.append(primer[2]['Tm_min'])
+    #warning
+    if len(temps) == 2:
+        if temps[0]-temps[1] >= 5:
+            f.write('\nWarning: lowest melting temperatures of sense and antisense primes \n'
+                    '         differ more then by 5C\n')
+    f.write('\n')
     f.write(hr(' stable secondary structures '))
-short_structures_file.write(hr(' only structures with free energy'
-                               ' below %.2f kcal/mol are reported ' % args.dG_threshold))
+#short report thresholds
+short_structures_file.write(hr(' only following structures are reported '))
+short_structures_file.write("   dimers with free energy below %.2f kcal/mol are reported\n" \
+                            % (args.dG_threshold   if args.dG_threshold<= 0 else 0))
+short_structures_file.write("3'-dimers with free energy below %.2f kcal/mol are reported\n" \
+                            % (args.dG_threshold+1 if args.dG_threshold<=-1 else 0))
+short_structures_file.write("   hairpins with free energy below %.2f kcal/mol are reported\n" \
+                            % (args.dG_threshold+2 if args.dG_threshold<=-2 else 0))
+short_structures_file.write("3'-hairpins with free energy below %.2f kcal/mol are reported\n" \
+                            % (args.dG_threshold+3 if args.dG_threshold<=-3 else 0))
+#check all self-dimers and hairpins
 all_primers = all_primers()
 for primer in all_primers:
-    structs = SecStructures(primer)
+    structs = SecStructures(primer, dG_threshold=args.dG_threshold)
     full_structures_file.write(str(structs))
-    if structs.dimerMin_dG() <= args.dG_threshold \
-    or structs.hairpinMin_dG() <= args.dG_threshold:
+    if structs.belowThreshold():
         short_structures_file.write(structs.formatShort())
-#check for ALL cross-dimers
+#check ALL cross-dimers
 num_primers = len(all_primers)
 if num_primers > 1:
     for f in (full_structures_file, short_structures_file):
         f.write('\n'+hr(' stable cross dimers '))
     for i in range(num_primers):
         for j in range(i+1,num_primers):
-            structs = SecStructures(all_primers[i],all_primers[j])
+            structs = SecStructures(all_primers[i],all_primers[j], 
+                                    dG_threshold=args.dG_threshold)
             full_structures_file.write(str(structs))
-            if structs.dimerMin_dG() <= args.dG_threshold:
+            if structs.belowThreshold():
                 short_structures_file.write(structs.formatShort())
 full_structures_file.close()
 short_structures_file.close()

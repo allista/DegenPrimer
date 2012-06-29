@@ -133,11 +133,16 @@ def source_feature(seq_rec):
 
 def format_PCR_conditions():
     conc_str  = ''
-    conc_str += 'C(Na)     = ' + str(C_Na)+  ' mM\n'
-    conc_str += 'C(Mg)     = ' + str(C_Mg)+  ' mM\n'
-    conc_str += 'C(dNTP)   = ' + str(C_dNTP)+' mM\n'
-    conc_str += 'C(DNA)    = ' + str(C_DNA)+ ' nM\n'
-    conc_str += 'C(Primer) = ' + str(C_Prim)+' uM\n'
+    spacer = max(len(str(C_Na)), 
+                 len(str(C_Mg)), 
+                 len(str(C_dNTP)),
+                 len(str(C_DNA)),
+                 len(str(C_Prim)))
+    conc_str += 'C(Na)     = ' + str(C_Na)  + ' '*(spacer-len(str(C_Na)))   +' mM\n'
+    conc_str += 'C(Mg)     = ' + str(C_Mg)  + ' '*(spacer-len(str(C_Mg)))   +' mM\n'
+    conc_str += 'C(dNTP)   = ' + str(C_dNTP)+ ' '*(spacer-len(str(C_dNTP))) +' mM\n'
+    conc_str += 'C(DNA)    = ' + str(C_DNA) + ' '*(spacer-len(str(C_DNA)))  +' nM\n'
+    conc_str += 'C(Primer) = ' + str(C_Prim)+ ' '*(spacer-len(str(C_Prim))) +' uM\n'
     return conc_str
 #end_def
 
@@ -160,10 +165,10 @@ def calculate_Tr(seq_rec, r):
         feature = source_feature(seq_rec)
         add_PCR_conditions(feature)
         feature.qualifiers['T-'+str(r)] = str(primer_Tr)
-        return str(primer_Tr)
+        return primer_Tr
     except Exception, e:
         print_exception(e)
-        return "unknown"
+        return None
 #end def
 
 
@@ -173,10 +178,10 @@ def calculate_Tm(seq_rec):
         feature = source_feature(seq_rec)
         add_PCR_conditions(feature)
         feature.qualifiers['Tm'] = str(primer_Tm)
-        return str(primer_Tm)
+        return primer_Tm
     except Exception, e:
         print_exception(e)
-        return "unknown"
+        return None
 #end def
 
 
