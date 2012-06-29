@@ -4,8 +4,9 @@ Created on Jun 26, 2012
 @author: allis
 '''
 
+from time import ctime
 from Bio.Blast import NCBIWWW, NCBIXML
-
+from SecStructures import hr
 
 def blast_short(query, blast_id='blast_short', entrez_query=''):
     #values adjusted for short sequences
@@ -37,31 +38,29 @@ def blast_short(query, blast_id='blast_short', entrez_query=''):
     return blast_results
 
 
-def write_blast_report(blast_results, blast_report_filename):
+def write_blast_report(blast_results, blast_report_filename, top_hits=10, top_hsps=4):
     blast_report = open(blast_report_filename, 'w')
+    blast_report.write(hr(' %s ' % ctime(), symbol='#'))
     for blast_record in blast_results:
-        blast_report.write('Query:        %s\n' % blast_record.query)
-        blast_report.write('Query length: %s\n' % blast_record.query_length)
-        blast_report.write('Hits:         %s\n' % len(blast_record.alignments))
-        blast_report.write('-'*80+'\n')
-        for a in range(len(blast_record.alignments)):
+        blast_report.write('\n')
+        blast_report.write(hr(' %s ' % blast_record.query, symbol='#'))
+        blast_report.write('Query length: %s\n'   % blast_record.query_length)
+        blast_report.write('Hits:         %s\n\n' % len(blast_record.alignments))
+        #print top 10? hits
+        top_hits = top_hits if len(blast_record.alignments) > top_hits else len(blast_record.alignments) 
+        blast_report.write(hr(' top %d hits ' % top_hits,  symbol='#'))
+        for a in range(top_hits):
             alignment = blast_record.alignments[a]
-            blast_report.write(('\n'+'*'*15+' Hit #%d '+'*'*15+'\n') % (a+1))
+            blast_report.write(hr(' Hit #%d ' % (a+1), symbol='='))
             blast_report.write(alignment.title+'\n')
             blast_report.write('Length:     %d\n' % alignment.length)
             blast_report.write('Max bits:   %d\n' % blast_record.descriptions[a].bits)
             blast_report.write('Alignments: %d\n' % len(alignment.hsps))
-            for hsp in alignment.hsps:
-                if hsp.align_length < blast_record.query_length/2 \
-                and blast_record.query_length-hsp.query_end > 3:
-                    blast_report.write('\nAlignment is shorter than half of the query and ends far from 3\'.\n')
-                    blast_report.write('Length: %(len)d; End: %(al_end)d; Bits: %(bits)d; Location: [%(start)d, %(end)d]\n' % \
-                                       {'len'   : hsp.align_length, 
-                                        'start' : hsp.sbjct_start, 
-                                        'end'   : hsp.sbjct_end, 
-                                        'bits'  : hsp.bits,
-                                        'al_end': hsp.query_end})
-                    continue
+            #print to 4? hsps
+            top_hsps = top_hsps if len(alignment.hsps) > top_hsps else len(alignment.hsps)  
+            blast_report.write(hr(' top %01d alignments ' % top_hsps))
+            for h in range(top_hsps):
+                hsp = alignment.hsps[h]
                 blast_report.write('\n'+str(hsp)+'\n')
                 blast_report.write('Strand: ')
                 if hsp.frame[0] == 1:
@@ -73,6 +72,6 @@ def write_blast_report(blast_results, blast_report_filename):
                 elif hsp.frame[1] == -1:
                     blast_report.write('Minus\n')
                 blast_report.write('\n')
-        blast_report.write('-'*80+'\n\n')
+        blast_report.write(hr('', symbol='#'))
     blast_report.close()
     print 'Blast report was written to: '+blast_report_filename

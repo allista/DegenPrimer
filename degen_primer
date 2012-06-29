@@ -109,6 +109,13 @@ BLAST_group.add_argument('--organisms', metavar='name',
                     required=False, type=str, nargs='+',
                     help='List of organisms or higher taxons to be used in Entrez \
                     query in blast searches (e.g. bacteria)')
+BLAST_group.add_argument('--top-hits', dest='top_hits', metavar='N',
+                    required=False, type=int, default=10,
+                    help='Number of top hits to include in the report')
+BLAST_group.add_argument('--top-hsps', dest='top_hsps', metavar='N',
+                    required=False, type=int, default=4,
+                    help='Number of top HSPs of each hit to include in the report')
+#output
 output_group= parser.add_argument_group('Output parameters')
 output_group.add_argument('--dG-threshold', metavar='kcal/mol', 
                     required=False, default=-5.0, type=float,
@@ -142,14 +149,14 @@ else:
             p_id = args.sense_primer_id
         else: p_id = desc 
         primers[0] = [SeqRecord(Seq(args.sense_primer, IUPAC.ambiguous_dna), 
-                                   id=p_id, description=desc), [], dict()]
+                                   id=p_id, name=desc, description=desc), [], dict()]
     if args.antisense_primer:
         desc = 'antisense'
         if args.antisense_primer_id:
             p_id = args.antisense_primer_id
         else: p_id = desc 
         primers[1] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna), 
-                                   id=p_id, description=desc), [], dict()]
+                                   id=p_id, name=desc, description=desc), [], dict()]
 #-----------------------------------------------------------------------------#
 
 
@@ -333,7 +340,7 @@ if args.do_blast:
         blast_results  = blast_short(blast_query, job_id, entrez_query)
     #report results in human readable form
     blast_report_filename = job_id+'-blast_report.txt' 
-    write_blast_report(blast_results, blast_report_filename)
+    write_blast_report(blast_results, blast_report_filename, args.top_hits, args.top_hsps)
 #-----------------------------------------------------------------------------#
 
 

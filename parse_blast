@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# coding=utf-8
 
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
@@ -19,7 +20,7 @@
 Created on Jun 23, 2012
 
 parse_blast — which parses previously saved blast xml output and produses human 
-readable report. The original NCBI BLAST txt reports are more informative though
+readable report. The original NCBI BLAST txt reports are more informative though.
 
 @author: Allis Tauri <allista@gmail.com>
 '''    
@@ -42,17 +43,23 @@ from Blast import write_blast_report
 
 #parse command line arguments
 parser = argparse.ArgumentParser(description='Parse blast results in xml format and write human readable report.')
-parser.add_argument('-b --blast-results', dest='blast_results', metavar='filename.xml',
-                    required=True, type=str, nargs=1,
-                    help='File with blast results in xml format.')
+parser.add_argument('blast_results', metavar='filename.xml',
+                    type=str, nargs=1,
+                    help='File with blast results in xml format')
 parser.add_argument('-o --output-basename', dest='output', metavar='name',
                     required=False, type=str, nargs=1,
-                    help='Base of the filename for output. \
-                    The \'-blast_report.txt\' will be appended.')
+                    help='Base of the filename for output. '
+                    'The \'-blast_report.txt\' will be appended')
+parser.add_argument('--top-hits', dest='top_hits', metavar='N',
+                    required=False, type=int, default=10,
+                    help='Number of top hits to include in the report')
+parser.add_argument('--top-hsps', dest='top_hsps', metavar='N',
+                    required=False, type=int, default=4,
+                    help='Number of top HSPs of each hit to include in the report')
 args = parser.parse_args()
 
 #set filenames
-xml_filename    = args.blast_results[0]
+xml_filename = args.blast_results[0]
 if args.output:
     report_filename = args.output[0] + '-blast_report.txt'
 elif xml_filename.rfind('-blast.xml'): 
@@ -71,27 +78,6 @@ except Exception, e:
 results_file.close()
 
 #report results in human readable form
-write_blast_report(blast_results, report_filename)
+write_blast_report(blast_results, report_filename, args.top_hits, args.top_hsps)
 
 sys.exit(0)
-
-#for testing
-#test_rec1 = SeqRecord(Seq("AAGCATCCGGGAGCAAACTGGATGCAGAG", IUPAC.unambiguous_dna), id='TEST_RECORD1')
-#test_rec2 = SeqRecord(Seq("AAGCATCCGGGAGCAAACTGGTACGAGAG", IUPAC.unambiguous_dna), id='TEST_RECORD2')
-#structs = SecStructures(test_rec1, test_rec2, seed_len=1)
-#test_rec3 = SeqRecord(Seq("CTAATCTACTAGTGCACTAGTAGATTAG", IUPAC.unambiguous_dna), id='TEST_RECORD3')
-#test_rec4 = SeqRecord(Seq("CGATAGAGGAGCATTAGAACAATGACCT", IUPAC.unambiguous_dna), id='TEST_RECORD4')
-#structs.recalculateFull()
-#print structs.formatFull()
-#
-#print 'Tm1   =', calculate_Tm(test_rec1)
-#print 'Tm1p3 =', calculate_Tm(test_rec1, p3_Tm)
-#print ''
-#print 'Tm2   =', calculate_Tm(test_rec2)
-#print 'Tm2p3 =', calculate_Tm(test_rec2, p3_Tm)
-#print ''
-#print 'Tm3   =', calculate_Tm(test_rec3)
-#print 'Tm3p3 =', calculate_Tm(test_rec3, p3_Tm)
-#print ''
-#print 'Tm4   =', calculate_Tm(test_rec4)
-#print 'Tm4p3 =', calculate_Tm(test_rec4, p3_Tm)
