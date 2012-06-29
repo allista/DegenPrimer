@@ -444,12 +444,13 @@ class SecStructures(object):
         hairpins_string  = ''
         if not hairpins: return 'No hairpins found\n\n'
         #print header
+        hairpins_string += self._format_hairpins_header(hairpins, seq)
         if self.hairpinMin_dG() and self.hairpinMin_dG() < self._dG_threshold+2:
             if hairpins[0] != self._min_3prim_hairpin: #if it is the 3' the next block will print it
-                hairpins_string += self._format_hairpins_header(hairpins, seq)
+                hairpins_string += self._format_hairpin(hairpins[0], seq)
         #print the most stable hairpin
         if self.hairpinMin_3prim_dG() and self.hairpinMin_3prim_dG() < self._dG_threshold+3:
-            hairpins_string += self._format_hairpin(hairpins[0], seq)
+            hairpins_string += self._format_hairpin(self._min_3prim_hairpin, seq)
         return hairpins_string
     #end def
 
