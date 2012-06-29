@@ -88,10 +88,10 @@ TmdG_group.add_argument('--Primer', metavar='C(Primer) uM',
 iPCR_group = parser.add_argument_group('In silica PCR parameters')
 iPCR_group.add_argument('--min-amplicon', metavar='bp', 
                     required=False, default=50, type=int,
-                    help='Minimum amplicone size fo ipcress simulation')
+                    help='Minimum amplicone size fo ipcress simulation (default 50)')
 iPCR_group.add_argument('--max-amplicon', metavar='bp', 
                     required=False, default=3000, type=int,
-                    help='Maximum amplicone size fo ipcress simulation')
+                    help='Maximum amplicone size fo ipcress simulation (default 3000)')
 #BLAST
 BLAST_group = parser.add_argument_group('BLAST parameters')
 BLAST_group.add_argument('--do-blast', 
@@ -100,7 +100,12 @@ BLAST_group.add_argument('--do-blast',
 BLAST_group.add_argument('--organisms', metavar='name', 
                     required=False, type=str, nargs='+',
                     help='List of organisms or higher taxons to be used in Entrez \
-                    query in blast searches')
+                    query in blast searches (e.g. bacteria)')
+output_group= parser.add_argument_group('Output parameters')
+output_group.add_argument('--dG-threshold', metavar='kcal/mol', 
+                    required=False, default=-3.0, type=float,
+                    help='Secondary structures with free energy ABOVE this threshold \
+                    will not be reported in SHORT report (default -3 kcal/mol')
 args = parser.parse_args()
 #-----------------------------------------------------------------------------#
 
@@ -318,11 +323,15 @@ for f in (full_structures_file, short_structures_file):
     f.write(hr(' PCR conditions '))
     f.write(format_PCR_conditions()+'\n')
     f.write(hr(' stable secondary structures '))
+short_structures_file.write(hr(' only structures with free energy'
+                               ' below %.2f kcal/mol are reported ' % args.dG_threshold))
 all_primers = all_primers()
 for primer in all_primers:
     structs = SecStructures(primer)
     full_structures_file.write(str(structs))
-    short_structures_file.write(structs.formatShort())
+    if structs.dimerMin_dG() <= args.dG_threshold \
+    or structs.hairpinMin_dG() <= args.dG_threshold:
+        short_structures_file.write(structs.formatShort())
 #check for ALL cross-dimers
 num_primers = len(all_primers)
 if num_primers > 1:
@@ -332,7 +341,8 @@ if num_primers > 1:
         for j in range(i+1,num_primers):
             structs = SecStructures(all_primers[i],all_primers[j])
             full_structures_file.write(str(structs))
-            short_structures_file.write(structs.formatShort())
+            if structs.dimerMin_dG() <= args.dG_threshold:
+                short_structures_file.write(structs.formatShort())
 full_structures_file.close()
 short_structures_file.close()
 #-----------------------------------------------------------------------------#

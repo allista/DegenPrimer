@@ -60,82 +60,52 @@ class SecStructures(object):
         self._recalculate()
     #end def
     
-    def isSingle(self):
-        if self._seq2: return False
-        return True
-    #end def
-    
     def dimerMin_dG(self):
-        pass
-    #end def
-    
-    def mostStableDimer(self):
-        pass
+        if self._seq2 and self._cross_dimers:
+            return self._cross_dimers[0][2][0]
+        elif self._seq1_dimers:
+            return self._seq1_dimers[0][2][0]
+        else: return None
     #end def
     
     def hairpinMin_dG(self):
-        pass
+        if self._seq2 or not self._seq1_hairpins: 
+            return None
+        else: return self._seq1_hairpins[0][2][0]
     #end def
     
-    def mostStableHairpin(self):
-        pass
-    #end def
-    
-    def __str__(self):
-        """For single sequence output self-dimers and hairpins.
-        For two sequences output only cross-dimers"""
+    def _format_str(self, full=True):
+        """If 'full', for single sequence output self-dimers and hairpins.
+        For two sequences output only cross-dimers
+        If not 'full', for single sequence output COUNTS and min dG of self-dimers and hairpins.
+        For two sequences output the same only for cross-dimers"""
+        if full:
+            format_dimers = self._format_dimers
+            format_hairpins = self._format_hairpins
+        else:
+            format_dimers = self._format_dimers_short
+            format_hairpins = self._format_hairpins_short
         string  = '\n'
         if self._seq2:
             string += hr(' %s vs %s cross-dimers ' % (self._seq_rec1.id, self._seq_rec2.id))
-            string += self._format_dimers(self._cross_dimers, self._seq1, self._seq2)
+            string += format_dimers(self._cross_dimers, self._seq1, self._seq2)
         else:
             string += hr(' %s: %s ' % (self._seq_rec1.id, str(self._seq1)))
             string += hr(' self-dimers ')
-            string += self._format_dimers(self._seq1_dimers, self._seq1, self._seq1)
+            string += format_dimers(self._seq1_dimers, self._seq1, self._seq1)
             string += hr(' hairpins ')
-            string += self._format_hairpins(self._seq1_hairpins, self._seq1)
+            string += format_hairpins(self._seq1_hairpins, self._seq1)
         string += '-'*80+'\n\n'
         return string
-    #end def
     
     def formatFull(self):
-        """For each sequence output self-dimers and hairpins, then output cross-dimers"""
-        string  = '\n'
-        string += hr(' %s: %s ' % (self._seq_rec1.id, str(self._seq1)))
-        string += hr(' self-dimers ')
-        string += self._format_dimers(self._seq1_dimers, self._seq1, self._seq1)
-        string += hr(' hairpins ')
-        string += self._format_hairpins(self._seq1_hairpins, self._seq1)
-        if self._seq2:
-            string += '\n'
-            string += hr(' %s: %s ' % (self._seq_rec2.id, str(self._seq2)))
-            string += hr(' self-dimers ')
-            string += self._format_dimers(self._seq2_dimers, self._seq2, self._seq2)
-            string += hr(' hairpins ')
-            string += self._format_hairpins(self._seq2_hairpins, self._seq2)
-            string += '\n'
-            string += hr(' %s vs %s cross-dimers ' % (self._seq_rec1.id, self._seq_rec2.id))
-            string += self._format_dimers(self._cross_dimers, self._seq1, self._seq2)
-        string += '-'*80+'\n\n'
-        return string
-    #end def
+        return self._format_str(full=True)
     
     def formatShort(self):
-        """For single sequence output COUNTS and min dG of self-dimers and hairpins.
-        For two sequences output the same only for cross-dimers"""
-        string  = '\n'
-        if self._seq2:
-            string += hr(' %s vs %s cross-dimers ' % (self._seq_rec1.id, self._seq_rec2.id))
-            string += self._format_dimers_short(self._cross_dimers, self._seq1, self._seq2)
-        else:
-            string += hr(' %s: %s ' % (self._seq_rec1.id, str(self._seq1)))
-            string += hr(' self-dimers ')
-            string += self._format_dimers_short(self._seq1_dimers, self._seq1, self._seq1)
-            string += hr(' hairpins ')
-            string += self._format_hairpins_short(self._seq1_hairpins, self._seq1)
-        string += '-'*80+'\n\n'
-        return string
-    #end def
+        return self._format_str(full=False)
+    
+    def __str__(self):
+        return self._format_str()
     
     def _recalculate(self):
         """For single sequence calculate self-dimers and hairpins.
@@ -154,22 +124,6 @@ class SecStructures(object):
             self._seq2_hairpins  = None
             self._cross_dimers   = None
     #end def        
-    
-    def recalculateFull(self):
-        """For each sequence calculate self-dimers and hairpins, then calculate cross-dimers"""
-        all_structures       = self._find_dimers(self._seq1, self._seq1)
-        self._seq1_dimers    = all_structures['dimers']
-        self._seq1_hairpins  = self._find_hairpins(all_structures['hairpins'], self._seq1) 
-        if self._seq2:
-            all_structures       = self._find_dimers(self._seq2, self._seq2)
-            self._seq2_dimers    = all_structures['dimers']
-            self._seq2_hairpins  = self._find_hairpins(all_structures['hairpins'], self._seq2)
-            self._cross_dimers   = self._find_dimers(self._seq1, self._seq2)['dimers']
-        else:
-            self._seq2_dimers    = None
-            self._seq2_hairpins  = None
-            self._cross_dimers   = None
-    #end def
     
     def _remove_loops(self, structure):
         """remove terminal internal loops one by one in all possible combinations
@@ -379,9 +333,8 @@ class SecStructures(object):
         if not structures: return 'No dimers found.\n\n'
         #print header
         structures_string += self._format_dimers_header(structures, seq1, seq2)
-        #if there are stable dimers, print out the most stable
-        if structures[0][2][0] < 0:
-            structures_string += self._format_dimer(structures[0], seq1, seq2)
+        #print the most stable dimer
+        structures_string += self._format_dimer(structures[0], seq1, seq2)
         return structures_string
     #end def
 
@@ -393,8 +346,6 @@ class SecStructures(object):
         structures_string += self._format_dimers_header(structures, seq1, seq2)
         #print dimers
         for struct in structures:
-            #only print stable dimers
-            #if struct[2][0] >= 0: continue
             structures_string += self._format_dimer(struct, seq1, seq2)
         return structures_string
     #end def
