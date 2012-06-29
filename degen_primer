@@ -352,7 +352,7 @@ for f in (full_structures_file, short_structures_file):
             temps.append(primer[2]['Tm_min'])
     #warning
     if len(temps) == 2:
-        if temps[0]-temps[1] >= 5:
+        if abs(temps[0]-temps[1]) >= 5:
             f.write('\nWarning: lowest melting temperatures of sense and antisense primes \n'
                     '         differ more then by 5C\n')
     f.write('\n\n')
