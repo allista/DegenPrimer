@@ -1,12 +1,30 @@
+#!/usr/bin/python
+# coding=utf-8
+
+# Copyright (C) 2012 Allis Tauri <allista@gmail.com>
+# 
+# indicator_gddccontrol is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 '''
 Created on Jun 26, 2012
 
-@author: allis
+@author: Allis Tauri <allista@gmail.com>
 '''
 
 from time import ctime
 from Bio.Blast import NCBIWWW, NCBIXML
-from SecStructures import hr
+from StringTools import hr, text_width, wrap_text
 
 def blast_short(query, blast_id='blast_short', entrez_query=''):
     #values adjusted for short sequences
@@ -40,10 +58,12 @@ def blast_short(query, blast_id='blast_short', entrez_query=''):
 
 def hits_histogram(blast_results, top_hits=10):
     histogram = dict()
+    w = text_width
     for blast_record in blast_results:
         top_hits = top_hits if len(blast_record.alignments) > top_hits else len(blast_record.alignments)
         for a in range(top_hits):
             hit = blast_record.alignments[a].title.split('|')[-1]
+            hit = hit[:w-16]+'...' if len(hit) > w-16 else hit
             if hit in histogram:
                 histogram[hit] += 1
             else: histogram[hit] = 1
@@ -64,9 +84,12 @@ def format_histogram(histogram):
     for col in sorted(zip(histogram, histogram.values()), reverse=True, key=lambda x: x[1]):
         name_spacer = max_col - len(col[0])
         col_spacer  = 10-int(col[1])
-        histogram_string += col[0] + ' '*name_spacer + ' '
+        histogram_string += col[0]  + ' '*name_spacer + ' '
         histogram_string += ':' + '#'*int(col[1]) + ' '*col_spacer + ':' + '\n'
     histogram_string += '\n'
+    histogram_string += wrap_text('The value of a histogram column is a percent of RECORDS '
+    'in which there is an alignment of a query with the named sequence with a score '
+    'within the "top-hits".\n')
     return histogram_string
 #end def
 
@@ -74,14 +97,24 @@ def format_histogram(histogram):
 def write_blast_report(blast_results, blast_report_filename, top_hits=10, top_hsps=4):
     blast_report = open(blast_report_filename, 'w')
     blast_report.write(hr(' %s ' % ctime(), symbol='#'))
+    #header
+    blast_report.write(wrap_text('If both sense and antisense primers are provided, '
+                       'each primer from the sense group is blasted with every primer '
+                       'from the antisense group using a compound query: senseNNNNNNNNNNantisense.\n'
+                       'In that case each RECORD of these blast results corresponds '
+                       'to a particular pair of primers. '
+                       'If only one primer is provided, each RECORD corresponds to a '
+                       'single unambiguous primer.'
+                       '\n\n'))
     #hits histogram
     blast_report.write(hr(' hits histogram ', symbol='#'))
     histogram = hits_histogram(blast_results)
     blast_report.write(format_histogram(histogram))
     blast_report.write('\n')
-    for blast_record in blast_results:
+    for r in range(len(blast_results)):
+        blast_record = blast_results[r]
         blast_report.write('\n')
-        blast_report.write(hr(' %s ' % blast_record.query, symbol='#'))
+        blast_report.write(hr(' RECORD #%d: %s ' % (r+1, blast_record.query), symbol='#'))
         blast_report.write('Query length: %s\n'   % blast_record.query_length)
         blast_report.write('Hits:         %s\n\n' % len(blast_record.alignments))
         #print top 10? hits

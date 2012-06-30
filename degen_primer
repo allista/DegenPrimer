@@ -45,7 +45,8 @@ except:
 import TD_Functions    
 from TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
 from Blast import write_blast_report, blast_short
-from SecStructures import SecStructures, hr
+from SecStructures import SecStructures
+from StringTools import hr, wrap_text
 ###############################################################################    
 
 #parse command line arguments
@@ -355,6 +356,11 @@ short_structures_file = open(structures_short_report_filename, 'w')
 #write header
 for f in (full_structures_file, short_structures_file):
     f.write(hr(' %s ' % ctime(), symbol='#'))
+    f.write(wrap_text('For each degenerate primer provided, a set of unambiguous primers is generated. '
+                      'For each such set the minimum, maximum and mean melting temperatures are calculated. '
+                      'For each primer in each set stable self-dimers and hairpins are predicted. '
+                      'For every possible combination of two unambiguous primers cross-dimers are also predicted. '
+                      'If an unambiguous primer is provided, it is treated as a set with a single element.\n\n'))
     f.write(hr(' PCR conditions '))
     f.write(format_PCR_conditions()+'\n')
     f.write(hr(' melting temperatures '))

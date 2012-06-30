@@ -20,12 +20,7 @@ Created on Jun 23, 2012
 '''
 from copy import deepcopy
 from TD_Functions import dimer_dG, hairpin_dG
-
-def hr(string, width=80, symbol='-'):
-        left_hr  = (width - len(string))/2
-        right_hr = (width - len(string) - left_hr)
-        return symbol*left_hr + string + symbol*right_hr + '\n\n'
-#end def
+from StringTools import hr
     
 def all_combinations(lst):
     if not lst: return []
