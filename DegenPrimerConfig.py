@@ -1,7 +1,6 @@
 #!/usr/bin/python
 # coding=utf-8
-from nose.sphinx.pluginopts import Opt
-
+#
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
 # indicator_gddccontrol is free software: you can redistribute it and/or modify it
@@ -25,7 +24,7 @@ Created on Jul 1, 2012
 
 import argparse
 from ConfigParser import SafeConfigParser
-from StringTools import random_text
+from StringTools import random_text, print_exception
 
 class DegenPrimerConfig(object):
     """
@@ -150,17 +149,28 @@ class DegenPrimerConfig(object):
                        'option' :option[1], 
                        'value'  :option[2], 
                        'type'   :option[3]}
+        #setup class member for the option
         option_line = 'self.%(option)s = %(value)'+('%(type)s\n' % option_dict)
-        lines = (option_line % option_dict,
-                 'if self._args.%(option)s:\n'
-                 '    self.%(option)s = self._args.%(option)s\n'
-                 'elif self._config:\n'
-                 '    if self._config.has_option("%(section)s","%(option)s") '
-                 'and self._config.get("%(section)s","%(option)s") != "None":\n'
-                 '        self.%(option)s = self._config.get("%(section)s","%(option)s")\n' \
-                 % option_dict)
-        for line in lines:
-            exec line
+        exec (option_line % option_dict)
+        #try to read in command line
+        exec_line   = ('if self._args.%(option)s:\n'
+                       '    self.%(option)s = self._args.%(option)s\n')
+        exec (exec_line % option_dict)
+        #if not, try to read in config file
+        exec_line   = ('if not self._args.%(option)s and self._config '
+                       'and self._config.has_option("%(section)s","%(option)s") '
+                       'and self._config.get("%(section)s","%(option)s") != "None":\n')
+        if   option[3] == 's':
+            exec_line += '    self.%(option)s = self._config.get("%(section)s","%(option)s")\n'
+        elif option[3] == 'f':
+            exec_line += '    self.%(option)s = self._config.getfloat("%(section)s","%(option)s")\n'
+        elif option[3] == 'd':
+            exec_line += '    self.%(option)s = self._config.getint("%(section)s","%(option)s")\n'
+        try: 
+            exec (exec_line % option_dict)
+        except Exception, e:
+            print_exception(e) 
+            pass
     #end def
     
     
@@ -181,6 +191,10 @@ class DegenPrimerConfig(object):
             
         #set 'do_blast' explicitly from the command line
         self.do_blast = self._args.do_blast
+        
+        #if fasta_files was read in from the config file, convert it to the list
+        if type(self.fasta_files) == str:
+            self.fasta_files = eval(self.fasta_files)
             
         #set job_id
         self.job_id = ''

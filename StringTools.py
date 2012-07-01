@@ -29,8 +29,8 @@ text_width = 80
 
 
 def print_exception(e):
-    print "Exception occurred: " + str(type(e)) + " : " + e.__str__()
-
+    print "Exception occurred: " + str(type(e)) + " : " + e.message
+    
 
 def hr(string, symbol='-'):
     global text_width
