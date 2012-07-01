@@ -22,7 +22,14 @@ Created on Jun 30, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+import string
+import random
+
 text_width = 80
+
+
+def print_exception(e):
+    print "Exception occurred: " + str(type(e)) + " : " + e.__str__()
 
 
 def hr(string, symbol='-'):
@@ -47,6 +54,16 @@ def wrap_text(text):
     return wrapped_text[:-1]
 #end def
 
+
+def random_text(length):
+    text = ''
+    for x in range(length):
+        text += random.choice(string.ascii_uppercase + string.digits)
+    return text 
+#end def
+
+
+#tests
 if __name__ == '__main__':
     text_width = 40
     text = 'The quick broun fox jumped over a very, very lazy dog forty two times in a row!'

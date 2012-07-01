@@ -25,11 +25,6 @@ readable report. The original NCBI BLAST txt reports are more informative though
 @author: Allis Tauri <allista@gmail.com>
 '''    
 
-
-#utility functions
-def print_exception(e):
-    print "Exception occurred: " + str(type(e)) + " : " + e.__str__()
-
 #imports
 import sys
 import argparse
@@ -40,6 +35,7 @@ except:
     sys.exit(1)
 
 from Blast import write_blast_report
+from StringTools import print_exception
 
 #parse command line arguments
 parser = argparse.ArgumentParser(description='Parse blast results in xml format and write human readable report.')

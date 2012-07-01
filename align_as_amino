@@ -43,11 +43,7 @@ try:
 except:
     print "The BioPython must be installed in your system for this script to work."
     sys.exit(1)
-
-
-#utility functions
-def print_exception(e):
-    print "Exception occurred: " + str(type(e)) + " : " + e.__str__()
+from StringTools import print_exception
 
 
 #parse command line arguments

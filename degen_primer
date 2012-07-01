@@ -24,13 +24,8 @@ Tool to compute degenerate primer parameters using BioPython
 '''
 
 
-#utility functions
-def print_exception(e):
-    print "Exception occurred: " + str(type(e)) + " : " + e.__str__()
-
 #imports
 import sys
-import argparse
 import subprocess 
 from time import ctime
 try:
@@ -47,127 +42,49 @@ from TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, forma
 from Blast import write_blast_report, blast_short
 from SecStructures import SecStructures
 from StringTools import hr, wrap_text
+from DegenPrimerConfig import DegenPrimerConfig
 ###############################################################################    
 
-#parse command line arguments
-parser = argparse.ArgumentParser(description='This is a tool to compute degenerate \
-primer parameters. At least one primer (sense or antisense) should be provided.')
-#primers with ids
-prim_group = parser.add_argument_group('Primers with IDs')
-prim_group.add_argument('-s', '--sense', '-f', '--forwad', dest='sense_primer', metavar='SEQUENCE', 
-                    required=False, type=str,
-                    help='A sense primer sequence (5\'->3\') composed of capital \
-                    letters of extended IUPAC DNA alphabet')
-prim_group.add_argument('--sense-id', '--fwd-id', dest='sense_primer_id', metavar='ID', 
-                    required=False, type=str,
-                    help='A sense primer identification string')
-prim_group.add_argument('-a', '--antisense', '-r', '--reverse', dest='antisense_primer', metavar='SEQUENCE',
-                    required=False, type=str,  
-                    help='An antisense primer sequence (5\'->3\') composed of \
-                    capital letters of extended IUPAC DNA alphabet')
-prim_group.add_argument('--antisense-id', '--rev-id', dest='antisense_primer_id', metavar='ID', 
-                    required=False, type=str,
-                    help='An antisense primer identification string')
-#Tm and dG calculations
-TmdG_group = parser.add_argument_group('PCR conditions for Tm and dG calculation')
-TmdG_group.add_argument('--Na', metavar='C(Na) mM', 
-                    required=False, default=50, type=float,
-                    help='Concentration of monovalent ions in mM for Tm and dG correction (def=50)')
-TmdG_group.add_argument('--Mg', metavar='C(Mg) mM', 
-                    required=False, default=1.5, type=float,
-                    help='Concentration of divalent ions in mM for Tm and dG correction (def=1.5)')
-TmdG_group.add_argument('--dNTP', metavar='C(Mg) mM', 
-                    required=False, default=0, type=float,
-                    help='Concentration of dNTP in mM for Tm and dG correction (def=0)')
-TmdG_group.add_argument('--DNA', metavar='C(DNA) nM', 
-                    required=False, default=50, type=float,
-                    help='Concentration of target DNA in nM for Tm and dG correction (def=50)')
-TmdG_group.add_argument('--Primer', metavar='C(Primer) uM', 
-                    required=False, default=0.25, type=float,
-                    help='Concentration of primer (assume C(sense)=C(antisense)) \
-                    in uM for Tm and dG correction (def=0.25)')
-#in silica PCR
-iPCR_group = parser.add_argument_group('In silica PCR simulation parameters')
-iPCR_group.add_argument('--min-amplicon', metavar='bp', 
-                    required=False, default=50, type=int,
-                    help='Minimum amplicon size for ipcress simulation (default 50)')
-iPCR_group.add_argument('--max-amplicon', metavar='bp', 
-                    required=False, default=3000, type=int,
-                    help='Maximum amplicon size for ipcress simulation (default 3000)')
-iPCR_group.add_argument('--fasta-files', metavar='path', 
-                    required=False, nargs='+', type=str,
-                    help='Path(s) to fasta files containing target sequences for ipcress simulation. '
-                    'If fasta files are provided, ipcress simulation will be launched automatically.')
-iPCR_group.add_argument('--max-mismatches', metavar='b', 
-                    required=False, default=1, type=int,
-                    help='Maximum mismatches for ipcress simulation (default 1)')
-#BLAST
-BLAST_group = parser.add_argument_group('BLAST parameters')
-BLAST_group.add_argument('--do-blast', 
-                    required=False, default=False, action='store_true', 
-                    help='Do blast search for specificity of primers/primer-pairs')
-BLAST_group.add_argument('--organisms', metavar='name', 
-                    required=False, type=str, nargs='+',
-                    help='List of organisms or higher taxons to be used in Entrez \
-                    query in blast searches (e.g. bacteria)')
-BLAST_group.add_argument('--top-hits', dest='top_hits', metavar='N',
-                    required=False, type=int, default=10,
-                    help='Number of top hits to include in the report')
-BLAST_group.add_argument('--top-hsps', dest='top_hsps', metavar='N',
-                    required=False, type=int, default=4,
-                    help='Number of top HSPs of each hit to include in the report')
-#output
-output_group= parser.add_argument_group('Output parameters')
-output_group.add_argument('--dG-threshold', metavar='kcal/mol', 
-                    required=False, default=-5.0, type=float,
-                    help='Dimers with free energy ABOVE this threshold will not '
-                    'be reported in SHORT report (default is -5 kcal/mol. '
-                    'For hairpins the threshold is grater by 2 kcal/mol. '
-                    'For 3\' structures corresponding thresholds are grater by '
-                    'another 1 kcal/mol' )
-args = parser.parse_args()
-#-----------------------------------------------------------------------------#
 
+print ''
+#parse command line arguments and/or configuration file
+args = DegenPrimerConfig()
+args.parse_configuration()
 
-#parse concentrations
+#set job ID
+job_id = args.job_id
+
+#set concentrations
 TD_Functions.C_Na   = args.Na
 TD_Functions.C_Mg   = args.Mg
 TD_Functions.C_dNTP = args.dNTP
 TD_Functions.C_DNA  = args.DNA
 TD_Functions.C_Prim = args.Primer
+
+#save the configuration only after preliminary check
+if not args.sense_primer and not args.antisense_primer:
+    print 'At least one primer (sense or antisense) should be provided.'
+    sys.exit(1)
+else: args.save_configuration()
 #-----------------------------------------------------------------------------#
 
 
 #parse primers
 primers = [[],[]]
-if not args.sense_primer and not args.antisense_primer:
-    print 'At least one primer (sense or antisense) should be provided.'
-    sys.exit(1)
-else:
-    if args.sense_primer:
-        desc = 'sense'
-        if args.sense_primer_id:
-            p_id = args.sense_primer_id
-        else: p_id = desc 
-        primers[0] = [SeqRecord(Seq(args.sense_primer, IUPAC.ambiguous_dna), 
-                                   id=p_id, name=desc, description=desc), [], dict()]
-    if args.antisense_primer:
-        desc = 'antisense'
-        if args.antisense_primer_id:
-            p_id = args.antisense_primer_id
-        else: p_id = desc 
-        primers[1] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna), 
-                                   id=p_id, name=desc, description=desc), [], dict()]
-#-----------------------------------------------------------------------------#
-
-
-#set job_id
-job_id = ''
 if args.sense_primer:
-    job_id  = primers[0][0].id
+    desc = 'sense'
+    if args.sense_primer_id:
+        p_id = args.sense_primer_id
+    else: p_id = desc 
+    primers[0] = [SeqRecord(Seq(args.sense_primer, IUPAC.ambiguous_dna), 
+                               id=p_id, name=desc, description=desc), [], dict()]
 if args.antisense_primer:
-    if job_id != '': job_id += '-'
-    job_id += primers[1][0].id
+    desc = 'antisense'
+    if args.antisense_primer_id:
+        p_id = args.antisense_primer_id
+    else: p_id = desc 
+    primers[1] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna), 
+                               id=p_id, name=desc, description=desc), [], dict()]
 #-----------------------------------------------------------------------------#
 
 
@@ -265,7 +182,7 @@ def primer_pair_id(seq_rec1, seq_rec2):
 #GenBank file with primers
 fmt = 'gb'
 fmt_filename = job_id+'.'+fmt
-print 'Output unambiguous primers to:',fmt_filename
+print '\nWriting unambiguous primers to:\n   ',fmt_filename
 primers_list = list()
 for primer in primers:
     if not primer: continue
@@ -278,7 +195,7 @@ SeqIO.write(primers_list, fmt_filename, fmt)
 if args.sense_primer and args.antisense_primer:
     ipcr_program_filename = job_id+'.ipcr'
     ipcr_report_filename  = job_id+'-ipcr-report.txt'
-    print 'Output ipcress program to:',ipcr_program_filename
+    print '\nWriting ipcress program to:\n   ',ipcr_program_filename
     fwd_primers  = pfam_primers(0)
     rev_primers  = pfam_primers(1)
     ipcr_program = open(ipcr_program_filename, 'w')
@@ -293,7 +210,7 @@ if args.sense_primer and args.antisense_primer:
             ipcr_program.write(pcr_string)
     ipcr_program.close()
     if args.fasta_files:
-        print 'Output ipcress report to:',ipcr_report_filename
+        print '\nWriting ipcress report to:\n   ',ipcr_report_filename
         ipcr_cli = 'ipcress %s -m %d -s' % (ipcr_program_filename, args.max_mismatches)
         for fasta_file in args.fasta_files:
             ipcr_cli += ' "'+fasta_file+'"'
@@ -319,7 +236,7 @@ if args.do_blast:
 
     #if both primers are provided, do a concatenated blast search:
     #PRIMER1-NNNNNNNNNN-PRIMER2
-    print 'Starting a BLAST search. This may take awhile...' 
+    print '\nStarting a BLAST search. This may take awhile...' 
     blast_query = ''
     blast_results  = None
     if args.sense_primer and args.antisense_primer:
@@ -349,8 +266,8 @@ if args.do_blast:
 #check for self-dimers and hairpins
 structures_full_report_filename  = job_id+'-full-report.txt'
 structures_short_report_filename = job_id+'-short-report.txt'
-print 'Output full report with all secondary structures to:',structures_full_report_filename
-print 'Output short report with summary of secondary structures to:',structures_short_report_filename
+print '\nWriting full report with all secondary structures to:\n   ',structures_full_report_filename
+print '\nWriting short report with summary of secondary structures to:\n   ',structures_short_report_filename
 full_structures_file  = open(structures_full_report_filename, 'w')
 short_structures_file = open(structures_short_report_filename, 'w')
 #write header
