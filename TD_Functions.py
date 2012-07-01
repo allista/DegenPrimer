@@ -155,6 +155,7 @@ def add_PCR_conditions(feature):
         feature.qualifiers['C_DNA']     = str(C_DNA)+ ' nM'
         feature.qualifiers['C_Primer']  = str(C_Prim)+' uM'
     except Exception, e:
+        print 'add_PCR_conditions:'
         print_exception(e)
 #end def
 
@@ -167,6 +168,7 @@ def calculate_Tr(seq_rec, r):
         feature.qualifiers['T-'+str(r)] = str(primer_Tr)
         return primer_Tr
     except Exception, e:
+        print 'calculate_Tr:'
         print_exception(e)
         return None
 #end def
@@ -180,6 +182,7 @@ def calculate_Tm(seq_rec):
         feature.qualifiers['Tm'] = str(primer_Tm)
         return primer_Tm
     except Exception, e:
+        print 'calculate_Tm:'
         print_exception(e)
         return None
 #end def

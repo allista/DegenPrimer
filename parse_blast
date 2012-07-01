@@ -65,6 +65,7 @@ for blast_result in args.blast_results:
         results_file = open(xml_filename, 'r')
         blast_results = list(NCBIXML.parse(results_file))
     except Exception, e:
+        print 'parse_blast.parse results:'
         print_exception(e)
         sys.exit(1)
     results_file.close()

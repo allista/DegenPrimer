@@ -169,6 +169,7 @@ class DegenPrimerConfig(object):
         try: 
             exec (exec_line % option_dict)
         except Exception, e:
+            print 'DegenPrimerConfig._fill_option:'
             print_exception(e) 
             pass
     #end def

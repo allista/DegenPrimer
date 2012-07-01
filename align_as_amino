@@ -86,6 +86,7 @@ and FASTA files have .fa or .fasta extension."
         for record in list(SeqIO.parse(filename, filetype)):
             sequences[record.id] = record
     except Exception,e:
+        print 'align_as_amino.parse sequence:'
         print_exception(e)
         sys.exit(1)
     if len(sequences) < 2:
@@ -101,6 +102,7 @@ for record in sequences.values():
         record.seq.alphabet = IUPAC.ambiguous_dna
     except Exception,e:
         #provided sequences SHOULD be DNA ones
+        print 'align_as_amino.translate sequence:'
         print_exception(e)
         print "Unable to set alphabet of the sequence:"
         print record
@@ -177,5 +179,6 @@ try:
     AlignIO.write(MultipleSeqAlignment(rev_sequences), out_clustalw, "clustal")
     print "\nOutput written to "+out_clustalw
 except Exception,e:
+    print 'align_as_amino.output alignment:'
     print_exception(e)
     sys.exit(1)
