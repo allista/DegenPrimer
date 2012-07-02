@@ -28,18 +28,18 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 from distutils.core import setup
-setup(name='DegenPrimer',
+setup(name='degen-primer',
       version='1.0',
       description='Tool to compute degenerate primer parameters using BioPython',
       long_description=read('README'),
       license='GPL-3',
       author='Allis Tauri',
       author_email='allista@gmail.com',
-      url='',
+      url='https://launchpad.net/degenprimer',
       classifiers=[
         'Development Status :: 3 - Alpha',
-        'Topic :: Utilities',
-        #'Intended Audience :: End Users/Desktop',
+        'Topic :: Scientific/Engineering :: Bio-Informatics',
+        'Intended Audience :: Science/Research',
         'Operating System :: POSIX',
         'Programming Language :: Python',
         ],

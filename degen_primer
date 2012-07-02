@@ -41,7 +41,7 @@ import TD_Functions
 from TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
 from Blast import write_blast_report, blast_short
 from SecStructures import SecStructures
-from StringTools import hr, wrap_text
+from StringTools import hr, wrap_text, print_exception
 from DegenPrimerConfig import DegenPrimerConfig
 ###############################################################################    
 
@@ -210,18 +210,27 @@ if args.sense_primer and args.antisense_primer:
             ipcr_program.write(pcr_string)
     ipcr_program.close()
     if args.fasta_files:
-        print '\nWriting ipcress report to:\n   ',ipcr_report_filename
         ipcr_cli = 'ipcress %s -m %d -s' % (ipcr_program_filename, args.max_mismatches)
         for fasta_file in args.fasta_files:
             ipcr_cli += ' "'+fasta_file+'"'
-        child = subprocess.Popen(ipcr_cli,
-                                 stdin=subprocess.PIPE,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
-                                 shell=(sys.platform!="win32"))
-        ipcr_report = open(ipcr_report_filename, 'w')
-        ipcr_report.write(child.stdout.read())
-        ipcr_report.close()
+        try:
+            child = subprocess.Popen(ipcr_cli,
+                                     stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     shell=(sys.platform!="win32"))
+            ipcr_report = open(ipcr_report_filename, 'w')
+            print '\nWriting ipcress report to:\n   ',ipcr_report_filename
+            ipcr_report.write(child.stdout.read())
+            ipcr_report.close()
+        except OSError, e:
+            print 'Faild to execute ipcress'
+            print_exception(e)
+            print 'It seems that "ipcress" executable is not found in the PATH.'
+            print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
+        except Exception, e:
+            print 'Faild to execute ipcress'
+            print_exception(e)
 #-----------------------------------------------------------------------------#
 
 
