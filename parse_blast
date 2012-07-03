@@ -34,8 +34,8 @@ except:
     print "The BioPython must be installed in your system for this script to work."
     sys.exit(1)
 
-from Blast import write_blast_report
-from StringTools import print_exception
+from DegenPrimer.Blast import write_blast_report
+from DegenPrimer.StringTools import print_exception
 
 #parse command line arguments
 parser = argparse.ArgumentParser(description='Parse blast results in xml format and write human readable report.')

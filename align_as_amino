@@ -43,7 +43,7 @@ try:
 except:
     print "The BioPython must be installed in your system for this script to work."
     sys.exit(1)
-from StringTools import print_exception
+from DegenPrimer.StringTools import print_exception
 
 
 #parse command line arguments

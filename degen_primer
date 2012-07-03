@@ -37,12 +37,12 @@ except:
     print "The BioPython must be installed in your system for this script to work."
     sys.exit(1)
 
-import TD_Functions    
-from TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
-from Blast import write_blast_report, blast_short
-from SecStructures import SecStructures
-from StringTools import hr, wrap_text, print_exception
-from DegenPrimerConfig import DegenPrimerConfig
+from DegenPrimer import TD_Functions    
+from DegenPrimer.TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
+from DegenPrimer.Blast import write_blast_report, blast_short
+from DegenPrimer.SecStructures import SecStructures
+from DegenPrimer.StringTools import hr, wrap_text, print_exception
+from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 ###############################################################################    
 
 

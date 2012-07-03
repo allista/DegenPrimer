@@ -6,6 +6,7 @@ Created on Jul 3, 2012
 
 import sys
 import subprocess
+from StringTools import print_exception
 
 class iPCR(object):
     '''Wrapper for ipcress process and parser for it's results'''
