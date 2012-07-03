@@ -1,1 +1,6 @@
 build
+dist
+*.cfg
+*.gb
+*.ipcr
+*.txt
