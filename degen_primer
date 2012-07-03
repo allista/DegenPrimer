@@ -43,6 +43,7 @@ from DegenPrimer.Blast import write_blast_report, blast_short
 from DegenPrimer.SecStructures import SecStructures
 from DegenPrimer.StringTools import hr, wrap_text, print_exception
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
+from DegenPrimer.iPCR import iPCR
 ###############################################################################    
 
 
@@ -187,55 +188,23 @@ def primer_pair_id(seq_rec1, seq_rec2):
 #GenBank file with primers
 fmt = 'gb'
 fmt_filename = job_id+'.'+fmt
-print '\nWriting unambiguous primers to:\n   ',fmt_filename
 primers_list = list()
 for primer in primers:
     if not primer: continue
     primers_list.append(primer[0])
     primers_list += primer[1]
 SeqIO.write(primers_list, fmt_filename, fmt)
+print '\nUnambiguous primers were written to:\n   ',fmt_filename
 
 #ipcress config file
 #this is only available for pairs of primers
 if args.sense_primer and args.antisense_primer:
-    ipcr_program_filename = job_id+'.ipcr'
-    ipcr_report_filename  = job_id+'-ipcr-report.txt'
-    print '\nWriting ipcress program to:\n   ',ipcr_program_filename
     fwd_primers  = pfam_primers(0)
     rev_primers  = pfam_primers(1)
-    ipcr_program = open(ipcr_program_filename, 'w')
-    for fwd_primer in fwd_primers:
-        for rev_primer in rev_primers:
-            pcr_string  = primer_pair_id(fwd_primer, rev_primer)
-            pcr_string += ' '+str(fwd_primer.seq)
-            pcr_string += ' '+str(rev_primer.seq)
-            pcr_string += ' '+str(args.min_amplicon)
-            pcr_string += ' '+str(args.max_amplicon)
-            pcr_string += '\n'
-            ipcr_program.write(pcr_string)
-    ipcr_program.close()
+    ipcr = iPCR(job_id, fwd_primers, rev_primers)
+    ipcr.writeProgram(args.min_amplicon, args.max_amplicon)
     if args.fasta_files:
-        ipcr_cli = 'ipcress %s -m %d -s' % (ipcr_program_filename, args.max_mismatches)
-        for fasta_file in args.fasta_files:
-            ipcr_cli += ' "'+fasta_file+'"'
-        try:
-            child = subprocess.Popen(ipcr_cli,
-                                     stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     shell=(sys.platform!="win32"))
-            ipcr_report = open(ipcr_report_filename, 'w')
-            print '\nWriting ipcress report to:\n   ',ipcr_report_filename
-            ipcr_report.write(child.stdout.read())
-            ipcr_report.close()
-        except OSError, e:
-            print 'Faild to execute ipcress'
-            print_exception(e)
-            print 'It seems that "ipcress" executable is not found in the PATH.'
-            print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
-        except Exception, e:
-            print 'Faild to execute ipcress'
-            print_exception(e)
+        ipcr.executeProgram(args.fasta_files, args.max_mismatches)
 #-----------------------------------------------------------------------------#
 
 
@@ -280,8 +249,6 @@ if args.do_blast:
 #check for self-dimers and hairpins
 structures_full_report_filename  = job_id+'-full-report.txt'
 structures_short_report_filename = job_id+'-short-report.txt'
-print '\nWriting full report with all secondary structures to:\n   ',structures_full_report_filename
-print '\nWriting short report with summary of secondary structures to:\n   ',structures_short_report_filename
 full_structures_file  = open(structures_full_report_filename, 'w')
 short_structures_file = open(structures_short_report_filename, 'w')
 #write header
@@ -353,6 +320,8 @@ if num_primers > 1:
                 short_structures_file.write(structs.formatShort())
 full_structures_file.close()
 short_structures_file.close()
+print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
+print '\nShort report with summary of secondary structures was written to:\n   ',structures_short_report_filename
 #-----------------------------------------------------------------------------#
 
 sys.exit(0)

@@ -32,7 +32,7 @@ class iPCR(object):
                 pcr_string += '\n'
                 ipcr_program.write(pcr_string)
         ipcr_program.close()
-        print '\nAn ipcress program was written to:\n   ', self._program_filename
+        print '\nThe ipcress program was written to:\n   ', self._program_filename
     #end def
     
     
@@ -47,9 +47,9 @@ class iPCR(object):
                                      stderr=subprocess.PIPE,
                                      shell=(sys.platform!="win32"))
             ipcr_report = open(self._report_filename, 'w')
-            print '\nWriting ipcress report to:\n   ',self._report_filename
             ipcr_report.write(child.stdout.read())
             ipcr_report.close()
+            print '\nThe ipcress report was written to:\n   ',self._report_filename
         except OSError, e:
             print 'Faild to execute ipcress'
             print_exception(e)

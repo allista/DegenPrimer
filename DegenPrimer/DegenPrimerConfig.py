@@ -227,7 +227,7 @@ class DegenPrimerConfig(object):
         config_file = open(config_filename, 'wb')
         config.write(config_file)
         config_file.close()
-        print 'Configuration is written to:\n   ', config_filename
+        print 'Configuration was written to:\n   ', config_filename
         print 'NOTE: you may always re-run current analysis with this file \n' \
               '      or use it as a template to run the analysis with modified \n' \
               '      parameters.'
