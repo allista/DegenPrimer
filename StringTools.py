@@ -29,7 +29,7 @@ text_width = 80
 
 
 def print_exception(e):
-    print "Exception occurred: " + str(type(e)) + " : " + e.message
+    print '\nException occurred: %s\n%s\n' % (str(type(e)), e.message)
     
 
 def hr(string, symbol='-'):
