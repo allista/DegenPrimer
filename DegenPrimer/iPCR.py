@@ -153,7 +153,7 @@ class iPCR(object):
         for colname in histogram:
             histogram[colname][0] /= norm
         #sort histogram by product len
-        histogram = sorted(zip(histogram, histogram.values()), reverse=True, key=lambda x: x[1][1])
+        histogram = sorted(zip(histogram, histogram.values()), key=lambda x: x[1][1])
         histogram = tuple((line[0], line[1][0]) for line in histogram)
         #format histogram
         return format_histogram(histogram, col_titles, hist_width)
@@ -201,7 +201,8 @@ class iPCR(object):
         #format report
         summary_text  = ''
         summary_text += time_hr()
-        summary_text += wrap_text('A summary report of the in silica PCR simulation.\n')
+        summary_text += 'A summary report of the in silica PCR simulation.\n'
+        summary_text += 'Number of mismatches allowed: %d\n' % self._max_mismatches
         summary_text += '\n'
         summary_text += hr(' iPCR products histogram ')
         summary_text += self._results_histogram()

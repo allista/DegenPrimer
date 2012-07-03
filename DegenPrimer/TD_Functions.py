@@ -161,30 +161,20 @@ def add_PCR_conditions(feature):
 
 
 def calculate_Tr(seq_rec, r):
-    try:
         primer_Tr = NN_Tr(seq_rec.seq, r)
         feature = source_feature(seq_rec)
         add_PCR_conditions(feature)
         feature.qualifiers['T-'+str(r)] = str(primer_Tr)
         return primer_Tr
-    except Exception, e:
-        print 'calculate_Tr:'
-        print_exception(e)
-        return None
 #end def
 
 
 def calculate_Tm(seq_rec):
-    try:
         primer_Tm = NN_Tm(seq_rec.seq)
         feature = source_feature(seq_rec)
         add_PCR_conditions(feature)
         feature.qualifiers['Tm'] = str(primer_Tm)
         return primer_Tm
-    except Exception, e:
-        print 'calculate_Tm:'
-        print_exception(e)
-        return None
 #end def
 
 

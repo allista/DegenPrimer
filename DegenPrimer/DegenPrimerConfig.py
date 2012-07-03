@@ -107,10 +107,11 @@ class DegenPrimerConfig(object):
                             required=False, nargs='+', type=str,
                             help='Path(s) to fasta files containing target sequences for ipcress simulation. '
                             'If fasta files are provided, ipcress simulation will be launched automatically.')
-        self._options.append(('iPCR','max_mismatches', 5, 'd'))
+        self._options.append(('iPCR','max_mismatches', None, 'd'))
         iPCR_group.add_argument('--max-mismatches', metavar='b', 
                             required=False, type=int,
-                            help='Maximum mismatches for ipcress simulation (default 5)')
+                            help='Maximum mismatches for ipcress simulation '
+                                 '(default 20% of the smallest primer length)')
         #BLAST
         BLAST_group = self._parser.add_argument_group('BLAST parameters')
         self._options.append(('BLAST','do_blast', False, 'd'))
@@ -150,7 +151,8 @@ class DegenPrimerConfig(object):
                        'value'  :option[2], 
                        'type'   :option[3]}
         #setup class member for the option
-        option_line = 'self.%(option)s = %(value)'+('%(type)s\n' % option_dict)
+        if option_dict['value'] == None: option_line = 'self.%(option)s = None'
+        else: option_line = 'self.%(option)s = %(value)'+('%(type)s\n' % option_dict) 
         exec (option_line % option_dict)
         #try to read in command line
         exec_line   = ('if self._args.%(option)s:\n'
@@ -190,6 +192,16 @@ class DegenPrimerConfig(object):
         for option in self._options:
             self._fill_option(option)
             
+        #set max_mismatches to be the 30% of the length of the smallest primer
+        if not self.max_mismatches:
+            if self.sense_primer:
+                self.max_mismatches = int(0.2*len(self.sense_primer))
+            if self.antisense_primer:
+                self.max_mismatches = min(int(0.2*len(self.antisense_primer)), 
+                                          self.max_mismatches)
+            if not self.max_mismatches:
+                self.max_mismatches = 1
+
         #set 'do_blast' explicitly from the command line
         self.do_blast = self._args.do_blast
         
