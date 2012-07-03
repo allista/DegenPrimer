@@ -107,10 +107,10 @@ class DegenPrimerConfig(object):
                             required=False, nargs='+', type=str,
                             help='Path(s) to fasta files containing target sequences for ipcress simulation. '
                             'If fasta files are provided, ipcress simulation will be launched automatically.')
-        self._options.append(('iPCR','max_mismatches', 1, 'd'))
+        self._options.append(('iPCR','max_mismatches', 5, 'd'))
         iPCR_group.add_argument('--max-mismatches', metavar='b', 
                             required=False, type=int,
-                            help='Maximum mismatches for ipcress simulation (default 1)')
+                            help='Maximum mismatches for ipcress simulation (default 5)')
         #BLAST
         BLAST_group = self._parser.add_argument_group('BLAST parameters')
         self._options.append(('BLAST','do_blast', False, 'd'))

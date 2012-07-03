@@ -1,22 +1,46 @@
+#!/usr/bin/python
+# coding=utf-8
+#
+# Copyright (C) 2012 Allis Tauri <allista@gmail.com>
+# 
+# indicator_gddccontrol is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 Created on Jul 3, 2012
 
-@author: allis
+@author: Allis Tauri <allista@gmail.com>
 '''
 
 import sys
 import subprocess
-from StringTools import print_exception
+import StringTools
+from StringTools import print_exception, format_histogram, wrap_text, time_hr, hr
 
 class iPCR(object):
     '''Wrapper for ipcress process and parser for it's results'''
 
+    #garbage string which ipcress inserts in the middle of a target sequence ID
+    _ipcress_target_garbage = ':filter(unmasked)'
+
+
     def __init__(self, job_id, fwd_primers, rev_primers):
         '''Constructor'''
-        self._program_filename = job_id+'.ipcr'
-        self._report_filename  = job_id+'-ipcr-report.txt'
+        self._program_filename  = job_id+'.ipcr'
+        self._report_filename   = job_id+'-ipcr-full-report.txt'
+        self._summary_filename  = job_id+'-ipcr-short-report.txt'
         self._fwd_primers = fwd_primers
         self._rev_primers = rev_primers
+        self._results = None
     #end def
     
     
@@ -37,10 +61,12 @@ class iPCR(object):
     
     
     def executeProgram(self, fasta_files, max_mismatches):
+        self._max_mismatches = max_mismatches
         ipcr_cli = 'ipcress %s -m %d -s' % (self._program_filename, max_mismatches)
         for fasta_file in fasta_files:
             ipcr_cli += ' "'+fasta_file+'"'
         try:
+            print '\nExecuting iPCR program. This may take awile...'
             child = subprocess.Popen(ipcr_cli,
                                      stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE,
@@ -49,7 +75,10 @@ class iPCR(object):
             ipcr_report = open(self._report_filename, 'w')
             ipcr_report.write(child.stdout.read())
             ipcr_report.close()
-            print '\nThe ipcress report was written to:\n   ',self._report_filename
+            print '\nFull ipcress report was written to:\n   ',self._report_filename
+            #parse the results and write a summary
+            self._parse_results()
+            self._write_summary()
         except OSError, e:
             print 'Faild to execute ipcress'
             print_exception(e)
@@ -59,5 +88,131 @@ class iPCR(object):
             print 'Faild to execute ipcress'
             print_exception(e)
     #end def
+    
+    
+    def _clear_target_string(self, target):
+        clean_target = ''
+        while target:
+            pos = target.find(self._ipcress_target_garbage)
+            if pos == -1:
+                clean_target += target
+                target = None
+            else:
+                clean_target += target[:pos]
+                target = target[pos+len(self._ipcress_target_garbage):]
+        return clean_target
+    #end def
+    
+    
+    def _parse_results(self):
+        self._results = []
+        ipcr_report = open(self._report_filename, 'r')
+        for line in ipcr_report:
+            line = line.rstrip('\n')
+            if not line: continue
+            if line == 'Ipcress result':
+                self._results.append(dict())
+            else:
+                words = line.split()
+                if   words[0] == 'Experiment:':
+                    self._results[-1]['name']   = words[1]
+                elif words[0] == 'Target:':
+                    target_name = (''.join(w+' ' for w in words[1:])).strip()
+                    self._results[-1]['target'] = self._clear_target_string(target_name)
+                elif words[0] == 'Product:':
+                    self._results[-1]['len']    = words[1]
+                elif words[0] == 'ipcress:':
+                    self._results[-1]['left']   = words[5]
+                    self._results[-1]['right']  = words[8]
+        ipcr_report.close()
+    #end def
+    
+    
+    def _results_histogram(self):
+        col_titles = ('PCR-product', 'relative concentration')
+        text_width = StringTools.text_width
+        hist_width = len(col_titles[1])
+        #construct histogram
+        histogram  = dict()
+        max_target = max(len(r['target']) for r in self._results)
+        max_len    = max(len(r['len']) for r in self._results)
+        for result in self._results:
+            target_spec   = ' %s%s b [%s-%s]' % (result['len'],
+                                                 ' '*(max_len-len(result['len'])),
+                                                 result['left'],
+                                                 result['right'])
+            target_limit  = text_width-hist_width-2 - len(target_spec)
+            target_spacer = max_target - len(result['target'])
+            if target_limit < 0: target_limit = 0
+            colname = (result['target']+' '*target_spacer)[:target_limit] + target_spec
+            if colname in histogram:
+                histogram[colname][0] += 1
+            else: histogram[colname] = [1,int(result['len'])]
+        #normalize histogram
+        norm = float(max(histogram.values(), key=lambda x: x[0])[0])
+        for colname in histogram:
+            histogram[colname][0] /= norm
+        #sort histogram by product len
+        histogram = sorted(zip(histogram, histogram.values()), reverse=True, key=lambda x: x[1][1])
+        histogram = tuple((line[0], line[1][0]) for line in histogram)
+        #format histogram
+        return format_histogram(histogram, col_titles, hist_width)
+    #end def
+    
+    
+    def _results_electrophoresis(self, window=20):
+        min_len     = min(int(r['len']) for r in self._results)
+        max_len     = max(int(r['len']) for r in self._results)
+        max_mark    = max(len(r['len']) for r in self._results)*2
+        text_width  = StringTools.text_width
+        line_width  = text_width - max_mark - 7 #mark b :###   :
+        #construct phoresis
+        phoresis    = [[l,0] for l in range(min_len, max_len, window)]
+        for result in self._results:
+            l = int(result['len'])
+            p = (l - min_len)/window
+            #print phoresis
+            phoresis[p][1] += 1
+        #format phoresis
+        phoresis_text = ''
+        max_line = max(l[1] for l in phoresis)
+        phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
+        phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
+        for l in range(len(phoresis)):
+            line = phoresis[l]
+            next_mark   = str(phoresis[l+1][0]) if l < len(phoresis)-1 else str(line[0]+window) 
+            mark_spacer = max_mark - len(str(line[0])) - len(next_mark)
+            line_value  = (line_width*line[1])/max_line
+            line_spacer = line_width - line_value 
+            phoresis_text += '%s-%d%s bp :%s%s:\n' % (next_mark,
+                                                      line[0], 
+                                                      ' '*mark_spacer,
+                                                      '#'*line_value,
+                                                      ' '*line_spacer) 
+        phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
+        phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
+        return phoresis_text
+    #end def
+    
+    
+    def _write_summary(self):
+        if not self._results: return
+        ipcr_summary = open(self._summary_filename, 'w')
+        #format report
+        summary_text  = ''
+        summary_text += time_hr()
+        summary_text += wrap_text('A summary report of the in silica PCR simulation.\n')
+        summary_text += '\n'
+        summary_text += hr(' iPCR products histogram ')
+        summary_text += self._results_histogram()
+        summary_text += wrap_text('"relative concentration" of a product is a normalized '
+                                  'number of primer pairs that yield this particular product.\n')
+        summary_text += '\n'
+        summary_text += hr(' iPCR products electrophoresis ')
+        summary_text += self._results_electrophoresis()
+        #write report
+        ipcr_summary.write(summary_text)
+        ipcr_summary.close()
+        print '\nShort ipcress report was written to:\n   ',self._summary_filename
 #end class
         

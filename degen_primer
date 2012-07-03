@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+#
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
 # indicator_gddccontrol is free software: you can redistribute it and/or modify it
@@ -14,7 +14,6 @@
 # 
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 '''
 Created on Jun 19, 2012
 
@@ -26,8 +25,6 @@ Tool to compute degenerate primer parameters using BioPython
 
 #imports
 import sys
-import subprocess 
-from time import ctime
 try:
     from Bio import SeqIO
     from Bio.Alphabet import IUPAC
@@ -39,9 +36,9 @@ except:
 
 from DegenPrimer import TD_Functions    
 from DegenPrimer.TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
-from DegenPrimer.Blast import write_blast_report, blast_short
+from DegenPrimer.Blast import Blast
 from DegenPrimer.SecStructures import SecStructures
-from DegenPrimer.StringTools import hr, wrap_text, print_exception
+from DegenPrimer.StringTools import hr, wrap_text, print_exception, time_hr
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.iPCR import iPCR
 ###############################################################################    
@@ -210,18 +207,16 @@ if args.sense_primer and args.antisense_primer:
 
 #test for primers specificity by BLAST
 if args.do_blast:
-    #generate Entrez query
+    #construct Entrez query
     entrez_query = ''
     if args.organisms:
         for organism in args.organisms:
             if entrez_query: entrez_query += ' OR '
             entrez_query += organism+'[organism]'
-
+    #construct BLAST query 
     #if both primers are provided, do a concatenated blast search:
     #PRIMER1-NNNNNNNNNN-PRIMER2
-    print '\nStarting a BLAST search. This may take awhile...' 
     blast_query = ''
-    blast_results  = None
     if args.sense_primer and args.antisense_primer:
         fwd_primers = pfam_primers(0)
         rev_primers = pfam_primers(1)
@@ -232,28 +227,30 @@ if args.do_blast:
                 blast_query_str += str(rev_primer.seq)
                 blast_query += SeqRecord(Seq(blast_query_str, IUPAC.ambiguous_dna), 
                                          id=primer_pair_id(fwd_primer, rev_primer)).format('fasta')
-        blast_results  = blast_short(blast_query, job_id, entrez_query) 
     else:
     #else just blast all primers in a single query 
         all_primers = all_primers()
         for primer in all_primers:
             blast_query += primer.format('fasta')
-        blast_results  = blast_short(blast_query, job_id, entrez_query)
+    #do the blast
+    print '\nStarting a BLAST search. This may take awhile...'
+    blast = Blast(job_id)
+    blast.blast_short(blast_query, entrez_query)
     #report results in human readable form
-    blast_report_filename = job_id+'-blast_report.txt' 
-    write_blast_report(blast_results, blast_report_filename, args.top_hits, args.top_hsps)
+    blast.write_blast_report(args.top_hits, args.top_hsps)
 #-----------------------------------------------------------------------------#
 
 
 #check for hairpins, dimers and cross-dimers
 #check for self-dimers and hairpins
+#write full and short reports
 structures_full_report_filename  = job_id+'-full-report.txt'
 structures_short_report_filename = job_id+'-short-report.txt'
 full_structures_file  = open(structures_full_report_filename, 'w')
 short_structures_file = open(structures_short_report_filename, 'w')
 #write header
 for f in (full_structures_file, short_structures_file):
-    f.write(hr(' %s ' % ctime(), symbol='#'))
+    f.write(time_hr())
     f.write(wrap_text('For each degenerate primer provided, a set of unambiguous primers is generated. '
                       'For each such set the minimum, maximum and mean melting temperatures are calculated. '
                       'For each primer in each set stable self-dimers and hairpins are predicted. '
@@ -261,7 +258,7 @@ for f in (full_structures_file, short_structures_file):
                       'If an unambiguous primer is provided, it is treated as a set with a single element.\n\n'))
     f.write(hr(' PCR conditions '))
     f.write(format_PCR_conditions()+'\n')
-    f.write(hr(' melting temperatures '))
+    f.write(hr(' primers and their melting temperatures '))
     #temperatures
     temps  = []
     
@@ -321,7 +318,7 @@ if num_primers > 1:
 full_structures_file.close()
 short_structures_file.close()
 print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
-print '\nShort report with summary of secondary structures was written to:\n   ',structures_short_report_filename
+print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
 #-----------------------------------------------------------------------------#
 
 sys.exit(0)

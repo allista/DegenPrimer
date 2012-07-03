@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding=utf-8
-
+#
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
 # indicator_gddccontrol is free software: you can redistribute it and/or modify it
@@ -15,7 +15,6 @@
 # 
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 '''
 Created on Jun 23, 2012
 
@@ -34,7 +33,7 @@ except:
     print "The BioPython must be installed in your system for this script to work."
     sys.exit(1)
 
-from DegenPrimer.Blast import write_blast_report
+from DegenPrimer.Blast import Blast
 from DegenPrimer.StringTools import print_exception
 
 #parse command line arguments
@@ -55,10 +54,10 @@ for blast_result in args.blast_results:
     #set filenames
     xml_filename = blast_result
     if   xml_filename.rfind('-blast.xml'): 
-        report_filename = xml_filename[0:xml_filename.rfind('-blast.xml')] + '-blast_report.txt'
+        job_id = xml_filename[0:xml_filename.rfind('-blast.xml')]
     elif xml_filename.rfind('.xml'): 
-        report_filename = xml_filename[0:xml_filename.rfind('.xml')] + '-blast_report.txt'
-    else: report_filename = xml_filename + '-blast_report.txt'
+        job_id = xml_filename[0:xml_filename.rfind('.xml')]
+    else: job_id = xml_filename
 
     #parse results
     try:
@@ -71,6 +70,7 @@ for blast_result in args.blast_results:
     results_file.close()
 
     #report results in human readable form
-    write_blast_report(blast_results, report_filename, args.top_hits, args.top_hsps)
+    blast = Blast(job_id, blast_results)
+    blast.write_blast_report(args.top_hits, args.top_hsps)
 
 sys.exit(0)

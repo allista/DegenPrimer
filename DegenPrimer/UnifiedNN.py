@@ -1,5 +1,5 @@
 # coding=utf-8
-
+#
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
 # indicator_gddccontrol is free software: you can redistribute it and/or modify it
@@ -14,7 +14,6 @@
 # 
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 '''
 Created on Jun 24, 2012
 
@@ -26,8 +25,10 @@ The thermodynamics of DNA structural motifs. Annual review of biophysics and
 biomolecular structure, 33, 415-40. doi:10.1146/annurev.biophys.32.110601.141800
 '''
 
-from Tri_Tetra_Loops import Tri_Tetra_Loops
+
 from math import log
+from Tri_Tetra_Loops import Tri_Tetra_Loops
+
 
 #constants
 R                 =  1.9872 #Universal gas constant cal/(K*mol)

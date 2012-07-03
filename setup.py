@@ -12,7 +12,6 @@
 # 
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 '''
 Created on Jun 19, 2012
 
@@ -41,15 +40,8 @@ setup(name='degen-primer',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Intended Audience :: Science/Research',
         'Operating System :: POSIX',
-        'Programming Language :: Python',
-        ],
-      py_modules=['StringTools', 
-                  'DegenPrimerConfig',
-                  'Blast', 
-                  'TD_Functions', 
-                  'SecStructures', 
-                  'Tri_Tetra_Loops', 
-                  'UnifiedNN'],
+        'Programming Language :: Python'],
+      packages=['DegenPrimer'],
       scripts=['degen_primer', 
                'parse_blast', 
                'align_as_amino'],

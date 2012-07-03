@@ -1,3 +1,9 @@
 eclipse.preferences.version=1
+encoding//DegenPrimer/Blast.py=utf-8
 encoding//DegenPrimer/DegenPrimerConfig.py=utf-8
+encoding//DegenPrimer/StringTools.py=utf-8
+encoding//DegenPrimer/TD_Functions.py=utf-8
+encoding//DegenPrimer/Tri_Tetra_Loops.py=utf-8
+encoding//DegenPrimer/UnifiedNN.py=utf-8
+encoding//DegenPrimer/iPCR.py=utf-8
 encoding/parse_blast=utf-8
