@@ -83,6 +83,20 @@ if args.antisense_primer:
     else: p_id = desc 
     primers[1] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna).upper(), 
                                id=p_id, name=desc, description=desc), [], dict()]
+    
+def pfam_primers(pfam):
+    global primers
+    if not primers[pfam]: return [] 
+    if not primers[pfam][1]:
+        return [primers[pfam][0]]
+    else: return primers[pfam][1]
+#end def
+
+def all_primers():
+    return pfam_primers(0) + pfam_primers(1)
+
+def primer_pair_id(seq_rec1, seq_rec2):
+    return seq_rec1.id+'-'+seq_rec2.id
 #-----------------------------------------------------------------------------#
 
 
@@ -167,21 +181,6 @@ for primer in primers:
 #-----------------------------------------------------------------------------#
 
 
-#output to GenBank and ipcress files
-def pfam_primers(pfam):
-    global primers
-    if not primers[pfam]: return [] 
-    if not primers[pfam][1]:
-        return [primers[pfam][0]]
-    else: return primers[pfam][1]
-#end def
-
-def all_primers():
-    return pfam_primers(0) + pfam_primers(1)
-
-def primer_pair_id(seq_rec1, seq_rec2):
-    return seq_rec1.id+'-'+seq_rec2.id
-
 #GenBank file with primers
 fmt = 'gb'
 fmt_filename = job_id+'.'+fmt
@@ -192,14 +191,17 @@ for primer in primers:
     primers_list += primer[1]
 SeqIO.write(primers_list, fmt_filename, fmt)
 print '\nUnambiguous primers were written to:\n   ',fmt_filename
+#-----------------------------------------------------------------------------#
 
-#ipcress config file
+
+#ipcress program file and test for primers specificity by iPCR
 #this is only available for pairs of primers
 if args.sense_primer and args.antisense_primer:
     fwd_primers  = pfam_primers(0)
     rev_primers  = pfam_primers(1)
     ipcr = iPCR(job_id, fwd_primers, rev_primers)
     ipcr.writeProgram(args.min_amplicon, args.max_amplicon)
+    #if target sequences are provided, run iPCR...
     if args.fasta_files:
         ipcr.executeProgram(args.fasta_files, args.max_mismatches)
 #-----------------------------------------------------------------------------#
@@ -213,36 +215,20 @@ if args.do_blast:
         for organism in args.organisms:
             if entrez_query: entrez_query += ' OR '
             entrez_query += organism+'[organism]'
-    #construct BLAST query 
-    #if both primers are provided, do a concatenated blast search:
-    #PRIMER1-NNNNNNNNNN-PRIMER2
-    blast_query = ''
-    if args.sense_primer and args.antisense_primer:
-        fwd_primers = pfam_primers(0)
-        rev_primers = pfam_primers(1)
-        for fwd_primer in fwd_primers:
-            for rev_primer in rev_primers:
-                blast_query_str  = str(fwd_primer.seq)
-                blast_query_str += 'N'*10 #spacer of 10 N
-                blast_query_str += str(rev_primer.seq)
-                blast_query += SeqRecord(Seq(blast_query_str, IUPAC.ambiguous_dna), 
-                                         id=primer_pair_id(fwd_primer, rev_primer)).format('fasta')
-    else:
-    #else just blast all primers in a single query 
-        all_primers = all_primers()
-        for primer in all_primers:
-            blast_query += primer.format('fasta')
     #do the blast
-    print '\nStarting a BLAST search. This may take awhile...'
     blast = Blast(job_id)
-    blast.blast_short(blast_query, entrez_query)
+    blast.blast_primers(all_primers(), entrez_query)
     #report results in human readable form
-    blast.write_blast_report(args.top_hits, args.top_hsps)
+    blast.write_hits_report(args.max_mismatches, 
+                            args.no_exonuclease)
+    blast.write_PCR_report(args.min_amplicon, 
+                           args.max_amplicon, 
+                           args.max_mismatches, 
+                           args.no_exonuclease)
 #-----------------------------------------------------------------------------#
 
 
 #check for hairpins, dimers and cross-dimers
-#check for self-dimers and hairpins
 #write full and short reports
 structures_full_report_filename  = job_id+'-full-report.txt'
 structures_short_report_filename = job_id+'-short-report.txt'

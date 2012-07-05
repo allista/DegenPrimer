@@ -1,3 +1,24 @@
+degen-primer (1.2-0ppa1) precise; urgency=low
+
+  * Bugfixes and improvements:
+  Fixed redundant BLAST query composition. => Much faster searches, less repeating results.
+  New BLAST results filtration by iPCR parameters.
+  New iPCR with BLAST results!
+  Minor bugfixes.
+
+ -- Allis Tauri <allista@gmail.com>  Fri, 06 Jul 2012 02:29:49 +0400
+
+degen-primer (1.1-0ppa1) precise; urgency=low
+
+  * Bugfixes and improvements:
+  Automatic calculation of max_mismatches.
+  New module iPCR for ipcress wrapping and parsing the results.
+  iPCR products histogram and in silica electrophoresis are added into the short report.
+  Lower case letters are allowed in the input sequences.
+  Unknown letters in the input sequences raise an exception and terminate the program.
+
+ -- Allis Tauri <allista@gmail.com>  Wed, 04 Jul 2012 18:45:48 +0400
+
 degen-primer (1.0-0ppa1) precise; urgency=low
 
   * Initial release

@@ -27,31 +27,41 @@ readable report. The original NCBI BLAST txt reports are more informative though
 #imports
 import sys
 import argparse
-try:
-    from Bio.Blast import NCBIXML
-except:
-    print "The BioPython must be installed in your system for this script to work."
-    sys.exit(1)
+#try:
+#    from Bio.Blast import NCBIXML
+#except:
+#    print "The BioPython must be installed in your system for this script to work."
+#    sys.exit(1)
 
 from DegenPrimer.Blast import Blast
-from DegenPrimer.StringTools import print_exception
+#from DegenPrimer.StringTools import print_exception
 
 #parse command line arguments
 parser = argparse.ArgumentParser(description='Parse blast results in xml format and write human readable report.')
 parser.add_argument('blast_results', metavar='filename.xml',
                     type=str, nargs='+',
                     help='File with blast results in xml format')
-parser.add_argument('--top-hits', dest='top_hits', metavar='N',
-                    required=False, type=int, default=10,
-                    help='Number of top hits to include in the report')
-parser.add_argument('--top-hsps', dest='top_hsps', metavar='N',
-                    required=False, type=int, default=4,
-                    help='Number of top HSPs of each hit to include in the report')
+#in silica PCR
+iPCR_group = parser.add_argument_group('BLAST results filtration and in silica PCR simulation')
+iPCR_group.add_argument('--min-amplicon', metavar='bp', 
+                    required=False, type=int, default=50,
+                    help='Minimum amplicon size (default 50)')
+iPCR_group.add_argument('--max-amplicon', metavar='bp', 
+                    required=False, type=int, default=3000,
+                    help='Maximum amplicon size (default 3000)')
+iPCR_group.add_argument('--max-mismatches', metavar='b', 
+                    required=False, type=int, default=3,
+                    help='Maximum number of mismatches between a primer '
+                    'and a target sequence (default 3).')
+iPCR_group.add_argument('--no-exonuclease', default=False, 
+                    required=False, action='store_true', 
+                    help="Set this flag if you are planning to use a "
+                    "DNA-polymerase without 3'-5'-exonuclease activity.")
 args = parser.parse_args()
 
 
 for blast_result in args.blast_results:
-    #set filenames
+    #set job_id
     xml_filename = blast_result
     if   xml_filename.rfind('-blast.xml'): 
         job_id = xml_filename[0:xml_filename.rfind('-blast.xml')]
@@ -59,18 +69,16 @@ for blast_result in args.blast_results:
         job_id = xml_filename[0:xml_filename.rfind('.xml')]
     else: job_id = xml_filename
 
-    #parse results
-    try:
-        results_file = open(xml_filename, 'r')
-        blast_results = list(NCBIXML.parse(results_file))
-    except Exception, e:
-        print 'parse_blast.parse results:'
-        print_exception(e)
-        sys.exit(1)
-    results_file.close()
-
+    #parse blast results
+    blast = Blast(job_id)
+    #load blast results
+    blast.load_results()
     #report results in human readable form
-    blast = Blast(job_id, blast_results)
-    blast.write_blast_report(args.top_hits, args.top_hsps)
-
+    blast.write_hits_report(args.max_mismatches, 
+                            args.no_exonuclease)
+    blast.write_PCR_report(args.min_amplicon, 
+                           args.max_amplicon, 
+                           args.max_mismatches, 
+                           args.no_exonuclease)
+###
 sys.exit(0)

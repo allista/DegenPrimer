@@ -35,19 +35,20 @@ class DegenPrimerConfig(object):
         """Constructor"""
         #setup a list of options and a parser for command line arguments
         self._options = []
-        self._parser = argparse.ArgumentParser(description='This is a tool to compute degenerate \
-        primer parameters. At least one primer (sense or antisense) should be provided.')
+        self._parser = argparse.ArgumentParser(description='This is a tool to compute degenerate '
+                                               'primer parameters. At least one primer (sense or '
+                                               'antisense) should be provided.')
         #configuration file
         conf_group = self._parser.add_argument_group('Preset configuration')
         conf_group.add_argument('config_file', metavar='file.cfg', 
-                            type=str, nargs='?',
-                            help='Path to a configuration file containing some '
-                                 'or all of the options listed below. If any '
-                                 'option is present in the configuration file '
-                                 'and on the command line, the latter overrides '
-                                 'the former. '
-                                 '(NOTE, that the "--do-blast" option '
-                                 'always must be set explicitly on the command line.)')
+                                type=str, nargs='?',
+                                help='Path to a configuration file containing some '
+                                'or all of the options listed below. If any '
+                                'option is present in the configuration file '
+                                'and on the command line, the latter overrides '
+                                'the former. '
+                                '(NOTE, that the "--do-blast" option '
+                                'always must be set explicitly on the command line.)')
         #primers with ids
         prim_group = self._parser.add_argument_group('Primers with IDs')
         #self._options.append(('SECTION','OPTION', 'VALUE', 'TYPE'))
@@ -63,8 +64,8 @@ class DegenPrimerConfig(object):
         self._options.append(('primers','antisense_primer', None, 's'))
         prim_group.add_argument('-a', '--antisense', '-r', '--reverse', dest='antisense_primer', metavar='SEQUENCE',
                             required=False, type=str,  
-                            help='An antisense primer sequence (5\'->3\') composed of \
-                            capital letters of extended IUPAC DNA alphabet')
+                            help='An antisense primer sequence (5\'->3\') composed of '
+                            'capital letters of extended IUPAC DNA alphabet')
         self._options.append(('primers','antisense_primer_id', None, 's'))
         prim_group.add_argument('--antisense-id', '--rev-id', dest='antisense_primer_id', metavar='ID', 
                             required=False, type=str,
@@ -92,26 +93,45 @@ class DegenPrimerConfig(object):
                             required=False, type=float,
                             help='Concentration of primer (assume C(sense)=C(antisense)) \
                             in uM for Tm and dG correction (def=0.25)')
+        self._options.append(('PCR','dG_threshold', -5.0, 'f'))
+        TmdG_group.add_argument('--dG-threshold', metavar='kcal/mol', 
+                            required=False, type=float,
+                            help='Dimers with free energy ABOVE this threshold will not '
+                            'be reported in SHORT report (default is -5 kcal/mol. '
+                            'For hairpins the threshold is grater by 2 kcal/mol. '
+                            'For 3\' structures corresponding thresholds are grater by '
+                            'another 1 kcal/mol' )
         #in silica PCR
         iPCR_group = self._parser.add_argument_group('In silica PCR simulation parameters')
         self._options.append(('iPCR','min_amplicon', 50, 'd'))
         iPCR_group.add_argument('--min-amplicon', metavar='bp', 
                             required=False, type=int,
-                            help='Minimum amplicon size for ipcress simulation (default 50)')
+                            help='Minimum amplicon size (default 50). Applies to '
+                            'both ipcress simulation and blast results parsing.')
         self._options.append(('iPCR','max_amplicon', 3000, 'd'))
         iPCR_group.add_argument('--max-amplicon', metavar='bp', 
                             required=False, type=int,
-                            help='Maximum amplicon size for ipcress simulation (default 3000)')
-        self._options.append(('iPCR','fasta_files', None, 's'))
-        iPCR_group.add_argument('--fasta-files', metavar='path', 
-                            required=False, nargs='+', type=str,
-                            help='Path(s) to fasta files containing target sequences for ipcress simulation. '
-                            'If fasta files are provided, ipcress simulation will be launched automatically.')
+                            help='Maximum amplicon size (default 3000). Applies to '
+                            'both ipcress simulation and blast results parsing.')
         self._options.append(('iPCR','max_mismatches', None, 'd'))
         iPCR_group.add_argument('--max-mismatches', metavar='b', 
                             required=False, type=int,
-                            help='Maximum mismatches for ipcress simulation '
-                                 '(default 20% of the smallest primer length)')
+                            help='Maximum number of mismatches between a primer '
+                            'and a target sequence '
+                            '(default 20%% of the biggest primer length). Applies to '
+                            'both ipcress simulation and blast results parsing.')
+        self._options.append(('iPCR','no_exonuclease', False, 'd'))
+        iPCR_group.add_argument('--no-exonuclease', default=False, 
+                            required=False, action='store_true', 
+                            help="Set this flag if you are planning to use a "
+                            "DNA-polymerase without 3'-5'-exonuclease activity. Applies to "
+                            "both ipcress simulation and blast results parsing.")
+        self._options.append(('iPCR','fasta_files', None, 's'))
+        iPCR_group.add_argument('--fasta-files', metavar='path', 
+                            required=False, nargs='+', type=str,
+                            help='Path(s) to fasta files containing target sequences. '
+                            'If fasta files are provided, ipcress simulation will be '
+                            'launched automatically. Applies only to ipcress simulation.')
         #BLAST
         BLAST_group = self._parser.add_argument_group('BLAST parameters')
         self._options.append(('BLAST','do_blast', False, 'd'))
@@ -122,26 +142,8 @@ class DegenPrimerConfig(object):
         self._options.append(('BLAST','organisms', None, 's'))
         BLAST_group.add_argument('--organisms', metavar='name', 
                             required=False, type=str, nargs='+',
-                            help='List of organisms or higher taxons to be used in Entrez \
-                            query in blast searches (e.g. bacteria)')
-        self._options.append(('BLAST','top_hits', 10, 'd'))
-        BLAST_group.add_argument('--top-hits', dest='top_hits', metavar='N',
-                            required=False, type=int,
-                            help='Number of top hits to include in the report')
-        self._options.append(('BLAST','top_hsps', 4, 'd'))
-        BLAST_group.add_argument('--top-hsps', dest='top_hsps', metavar='N',
-                            required=False, type=int,
-                            help='Number of top HSPs of each hit to include in the report')
-        #output
-        output_group= self._parser.add_argument_group('Output parameters')
-        self._options.append(('output','dG_threshold', -5.0, 'f'))
-        output_group.add_argument('--dG-threshold', metavar='kcal/mol', 
-                            required=False, type=float,
-                            help='Dimers with free energy ABOVE this threshold will not '
-                            'be reported in SHORT report (default is -5 kcal/mol. '
-                            'For hairpins the threshold is grater by 2 kcal/mol. '
-                            'For 3\' structures corresponding thresholds are grater by '
-                            'another 1 kcal/mol' )
+                            help='List of organisms or higher taxons to be used in Entrez '
+                            'query in blast searches (e.g. bacteria)')
     #end def
     
     
@@ -192,12 +194,12 @@ class DegenPrimerConfig(object):
         for option in self._options:
             self._fill_option(option)
             
-        #set max_mismatches to be the 30% of the length of the smallest primer
+        #set max_mismatches to be the 20% of the length of the smallest primer
         if not self.max_mismatches:
             if self.sense_primer:
                 self.max_mismatches = int(0.2*len(self.sense_primer))
             if self.antisense_primer:
-                self.max_mismatches = min(int(0.2*len(self.antisense_primer)), 
+                self.max_mismatches = max(int(0.2*len(self.antisense_primer)), 
                                           self.max_mismatches)
             if not self.max_mismatches:
                 self.max_mismatches = 1

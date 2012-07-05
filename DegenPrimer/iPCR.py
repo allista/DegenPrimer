@@ -24,13 +24,16 @@ Created on Jul 3, 2012
 import sys
 import subprocess
 import StringTools
-from StringTools import print_exception, format_histogram, wrap_text, time_hr, hr
+from StringTools import print_exception, format_histogram, wrap_text, time_hr, hr, format_electrophoresis
 
 class iPCR(object):
     '''Wrapper for ipcress process and parser for it's results'''
 
     #garbage string which ipcress inserts in the middle of a target sequence ID
     _ipcress_target_garbage = ':filter(unmasked)'
+    
+    #titles of a histogram columns
+    _col_titles = ('PCR-product', 'relative concentration')
 
 
     def __init__(self, job_id, fwd_primers, rev_primers):
@@ -66,7 +69,7 @@ class iPCR(object):
         for fasta_file in fasta_files:
             ipcr_cli += ' "'+fasta_file+'"'
         try:
-            print '\nExecuting iPCR program. This may take awile...'
+            print '\nExecuting iPCR program. This may take awhile...'
             child = subprocess.Popen(ipcr_cli,
                                      stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE,
@@ -129,9 +132,8 @@ class iPCR(object):
     
     
     def _results_histogram(self):
-        col_titles = ('PCR-product', 'relative concentration')
         text_width = StringTools.text_width
-        hist_width = len(col_titles[1])
+        hist_width = len(self._col_titles[1])
         #construct histogram
         histogram  = dict()
         max_target = max(len(r['target']) for r in self._results)
@@ -156,42 +158,22 @@ class iPCR(object):
         histogram = sorted(zip(histogram, histogram.values()), key=lambda x: x[1][1])
         histogram = tuple((line[0], line[1][0]) for line in histogram)
         #format histogram
-        return format_histogram(histogram, col_titles, hist_width)
+        return format_histogram(histogram, self._col_titles, hist_width)
     #end def
     
     
     def _results_electrophoresis(self, window=20):
         min_len     = min(int(r['len']) for r in self._results)
         max_len     = max(int(r['len']) for r in self._results)
-        max_mark    = max(len(r['len']) for r in self._results)*2
-        text_width  = StringTools.text_width
-        line_width  = text_width - max_mark - 7 #mark b :###   :
         #construct phoresis
-        phoresis    = [[l,0] for l in range(min_len, max_len, window)]
+        phoresis    = [[l,0] for l in range(min_len, max_len+window, window)]
         for result in self._results:
             l = int(result['len'])
             p = (l - min_len)/window
             #print phoresis
             phoresis[p][1] += 1
         #format phoresis
-        phoresis_text = ''
-        max_line = max(l[1] for l in phoresis)
-        phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
-        phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-        for l in range(len(phoresis)):
-            line = phoresis[l]
-            next_mark   = str(phoresis[l+1][0]) if l < len(phoresis)-1 else str(line[0]+window) 
-            mark_spacer = max_mark - len(str(line[0])) - len(next_mark)
-            line_value  = (line_width*line[1])/max_line
-            line_spacer = line_width - line_value 
-            phoresis_text += '%s-%d%s bp :%s%s:\n' % (next_mark,
-                                                      line[0], 
-                                                      ' '*mark_spacer,
-                                                      '#'*line_value,
-                                                      ' '*line_spacer) 
-        phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-        phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
-        return phoresis_text
+        return format_electrophoresis(phoresis, window)
     #end def
     
     
@@ -215,5 +197,6 @@ class iPCR(object):
         ipcr_summary.write(summary_text)
         ipcr_summary.close()
         print '\nShort ipcress report was written to:\n   ',self._summary_filename
+    #end def
 #end class
         
