@@ -1,3 +1,10 @@
+degen-primer (1.3-0ppa1) quantal; urgency=low
+
+  * improvements:
+  Primer may be provided not only as a raw sequence but as a fasta or genbank file.
+
+ -- Allis Tauri <allista@gmail.com>  Wed, 11 Jul 2012 17:14:29 +0400
+
 degen-primer (1.2-0ppa1) precise; urgency=low
 
   * Bugfixes and improvements:

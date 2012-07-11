@@ -27,13 +27,11 @@ Tool to compute degenerate primer parameters using BioPython
 import sys
 try:
     from Bio import SeqIO
-    from Bio.Alphabet import IUPAC
-    from Bio.Seq import Seq
-    from Bio.SeqRecord import SeqRecord
 except:
     print "The BioPython must be installed in your system for this script to work."
     sys.exit(1)
 
+from DegenPrimer.OligoFunctions import generate_unambiguous
 from DegenPrimer import TD_Functions    
 from DegenPrimer.TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
 from DegenPrimer.Blast import Blast
@@ -44,13 +42,14 @@ from DegenPrimer.iPCR import iPCR
 ###############################################################################    
 
 
-print ''
 #parse command line arguments and/or configuration file
+print ''
 args = DegenPrimerConfig()
 args.parse_configuration()
 
-#set job ID
-job_id = args.job_id
+#set job ID and primers list
+primers = args.primers
+job_id  = args.job_id
 
 #set concentrations
 TD_Functions.C_Na   = args.Na
@@ -61,29 +60,24 @@ TD_Functions.C_Prim = args.Primer
 
 #save the configuration only after preliminary check
 if not args.sense_primer and not args.antisense_primer:
-    print 'At least one primer (sense or antisense) should be provided.'
+    print '\nAt least one primer (sense or antisense) should be provided.'
     sys.exit(1)
 else: args.save_configuration()
+print ''
 #-----------------------------------------------------------------------------#
 
 
-#parse primers
-primers = [[],[]]
-if args.sense_primer:
-    desc = 'sense'
-    if args.sense_primer_id:
-        p_id = args.sense_primer_id
-    else: p_id = desc 
-    primers[0] = [SeqRecord(Seq(args.sense_primer, IUPAC.ambiguous_dna).upper(), 
-                               id=p_id, name=desc, description=desc), [], dict()]
-if args.antisense_primer:
-    desc = 'antisense'
-    if args.antisense_primer_id:
-        p_id = args.antisense_primer_id
-    else: p_id = desc 
-    primers[1] = [SeqRecord(Seq(args.antisense_primer, IUPAC.ambiguous_dna).upper(), 
-                               id=p_id, name=desc, description=desc), [], dict()]
-    
+#generate unambiguous primer sets
+for primer in primers:
+    try:
+        if primer: primer[1] = generate_unambiguous(primer[0])
+    except Exception, e:
+        print_exception(e)
+        sys.exit(1)
+#-----------------------------------------------------------------------------#
+
+
+#primer lists
 def pfam_primers(pfam):
     global primers
     if not primers[pfam]: return [] 
@@ -94,60 +88,6 @@ def pfam_primers(pfam):
 
 def all_primers():
     return pfam_primers(0) + pfam_primers(1)
-
-def primer_pair_id(seq_rec1, seq_rec2):
-    return seq_rec1.id+'-'+seq_rec2.id
-#-----------------------------------------------------------------------------#
-
-
-#generate unambiguous primer sets
-IUPAC_ambiguous={'R': ['A', 'G'],
-                 'Y': ['C', 'T'],
-                 'S': ['G', 'C'],
-                 'W': ['A', 'T'],
-                 'K': ['G', 'T'],
-                 'M': ['A', 'C'],
-                 'B': ['C', 'G', 'T'],
-                 'D': ['A', 'G', 'T'],
-                 'H': ['A', 'C', 'T'],
-                 'V': ['A', 'C', 'G'],
-                 'N': ['A', 'T', 'C', 'G']}
-
-def generate_unambiguous(seq_rec):
-    """generate a list of all possible combinations from an ambiguous sequence"""
-    global IUPAC_ambiguous
-    unambiguous_strings = ['']
-    #generate list of sequence strings
-    for letter in seq_rec.seq:
-        n_sequences = len(unambiguous_strings)
-        if letter in ['A', 'T', 'G', 'C']:
-            for s in range(n_sequences):
-                unambiguous_strings[s] += letter
-        elif letter in IUPAC_ambiguous:
-            replacements = IUPAC_ambiguous[letter]
-            n_replacements = len(replacements) 
-            unambiguous_strings *= n_replacements
-            for r in range(n_replacements):
-                for s in range(n_sequences):
-                    unambiguous_strings[s+n_sequences*r] += replacements[r]
-        else: raise ValueError('Unknown letter %s in sequence:\n%s' % (letter, str(seq_rec)))
-    #make a list of SeqRecords
-    unambiguous_seq_list = list()
-    if len(unambiguous_strings) < 2: return unambiguous_seq_list
-    for s in range(len(unambiguous_strings)):
-        un_seq = Seq(unambiguous_strings[s], IUPAC.unambiguous_dna)
-        unambiguous_seq_list.append(SeqRecord(un_seq, description=seq_rec.description, 
-                                              id=seq_rec.id+"_"+str(s)))
-    return unambiguous_seq_list
-#end def
-
-#unambiguous primers
-for primer in primers:
-    try:
-        if primer: primer[1] = generate_unambiguous(primer[0])
-    except Exception, e:
-        print_exception(e)
-        sys.exit(1)
 #-----------------------------------------------------------------------------#
 
 
@@ -181,8 +121,8 @@ for primer in primers:
 #-----------------------------------------------------------------------------#
 
 
-#GenBank file with primers
-fmt = 'gb'
+#fasta file with primers
+fmt = 'fasta'
 fmt_filename = job_id+'.'+fmt
 primers_list = list()
 for primer in primers:

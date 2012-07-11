@@ -15,3 +15,5 @@ MUSCLE as a backend to perform the alignment.
 2) parse_blast — which parses previously saved blast xml output and produces 
 human readable report. The original NCBI BLAST txt reports are more informative 
 though.
+
+It depends on python2 >= 2.7 and Biopython >= 1.58

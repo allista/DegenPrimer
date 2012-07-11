@@ -28,7 +28,7 @@ def read(fname):
 
 from distutils.core import setup
 setup(name='degen-primer',
-      version='1.2',
+      version='1.3',
       description='Tool to compute degenerate primer parameters using BioPython',
       long_description=read('README'),
       license='GPL-3',

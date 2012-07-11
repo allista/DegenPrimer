@@ -25,6 +25,7 @@ Created on Jul 1, 2012
 import argparse
 from ConfigParser import SafeConfigParser
 from StringTools import random_text, print_exception
+from OligoFunctions import load_sequence
 
 class DegenPrimerConfig(object):
     """
@@ -55,21 +56,25 @@ class DegenPrimerConfig(object):
         self._options.append(('primers','sense_primer', None, 's'))
         prim_group.add_argument('-s', '--sense', '-f', '--forwad', dest='sense_primer', metavar='SEQUENCE', 
                             required=False, type=str,
-                            help='A sense primer sequence (5\'->3\') composed of '
-                                 'capital letters of extended IUPAC DNA alphabet')
+                            help='A sense primer sequence (5\'->3\'). '
+                            'It may be a fasta or genbank file '
+                            'or simply a raw sequence string composed of '
+                            'letters of extended IUPAC DNA alphabet')
         self._options.append(('primers','sense_primer_id', None, 's'))
         prim_group.add_argument('--sense-id', '--fwd-id', dest='sense_primer_id', metavar='ID', 
                             required=False, type=str,
-                            help='A sense primer identification string')
+                            help='A sense primer identifier')
         self._options.append(('primers','antisense_primer', None, 's'))
         prim_group.add_argument('-a', '--antisense', '-r', '--reverse', dest='antisense_primer', metavar='SEQUENCE',
                             required=False, type=str,  
-                            help='An antisense primer sequence (5\'->3\') composed of '
-                            'capital letters of extended IUPAC DNA alphabet')
+                            help='An antisense primer sequence (5\'->3\'). '
+                            'It may be a fasta or genbank file '
+                            'or simply a raw sequence string composed of '
+                            'letters of extended IUPAC DNA alphabet')
         self._options.append(('primers','antisense_primer_id', None, 's'))
         prim_group.add_argument('--antisense-id', '--rev-id', dest='antisense_primer_id', metavar='ID', 
                             required=False, type=str,
-                            help='An antisense primer identification string')
+                            help='An antisense primer identifier')
         #Tm and dG calculations
         TmdG_group = self._parser.add_argument_group('PCR conditions for Tm and dG calculation')
         self._options.append(('PCR','Na', 50, 'f'))
@@ -129,7 +134,7 @@ class DegenPrimerConfig(object):
         self._options.append(('iPCR','fasta_files', None, 's'))
         iPCR_group.add_argument('--fasta-files', metavar='path', 
                             required=False, nargs='+', type=str,
-                            help='Path(s) to fasta files containing target sequences. '
+                            help='Path(s) to fasta file(s) containing target sequences. '
                             'If fasta files are provided, ipcress simulation will be '
                             'launched automatically. Applies only to ipcress simulation.')
         #BLAST
@@ -210,17 +215,25 @@ class DegenPrimerConfig(object):
         #if fasta_files was read in from the config file, convert it to the list
         if type(self.fasta_files) == str:
             self.fasta_files = eval(self.fasta_files)
+                
+        #load primers
+        self.primers = [[],[]]
+        if self.sense_primer:
+            seq_record = load_sequence(self.sense_primer, self.sense_primer_id, 'sense')
+            self.primers[0] = [seq_record, [], dict()]
+        if self.antisense_primer:
+            seq_record = load_sequence(self.antisense_primer, self.antisense_primer_id, 'antisense')
+            self.primers[1] = [seq_record, [], dict()]
             
         #set job_id
-        self.job_id = ''
-        if self.sense_primer_id:
-            self.job_id  = self.sense_primer_id
-        if self.antisense_primer_id:
-            if self.job_id != '': self.job_id += '-'
-            self.job_id += self.antisense_primer_id
         #if there's no ids provided, generate a random one
-        if not self.job_id: 
-            self.job_id = random_text(6)+'-'+random_text(6)
+        self.job_id = ''
+        for primer in self.primers:
+            if not primer: continue
+            if self.job_id != '': self.job_id += '-'
+            if primer[0].id:
+                self.job_id += primer[0].id
+            else: random_text(6)
     #end def
     
     

@@ -3,4 +3,5 @@ __all__ = ['iPCR',
            'DegenPrimerConfig',
            'TD_Functions',
            'SecStructures',
-           'StringTools']
+           'StringTools',
+           'OligoFunctions']
