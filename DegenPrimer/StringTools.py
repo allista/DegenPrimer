@@ -98,32 +98,6 @@ def format_histogram(histogram, col_names, hist_width=10):
 #end def
 
 
-def format_electrophoresis(phoresis, window):
-    global text_width
-    max_line    = max(l[1] for l in phoresis)
-    max_mark    = max(len(str(l[0])) for l in phoresis)*2
-    line_width  = text_width - max_mark - 7 #mark b :###   :
-    #format phoresis
-    phoresis_text = ''
-    phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
-    phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-    for l in range(len(phoresis)):
-        line = phoresis[l]
-        next_mark   = str(phoresis[l+1][0]) if l < len(phoresis)-1 else str(line[0]+window) 
-        mark_spacer = max_mark - len(str(line[0])) - len(next_mark)
-        line_value  = (line_width*line[1])/max_line
-        line_spacer = line_width - line_value 
-        phoresis_text += '%s-%d%s bp :%s%s:\n' % (next_mark,
-                                                  line[0], 
-                                                  ' '*mark_spacer,
-                                                  '#'*line_value,
-                                                  ' '*line_spacer) 
-    phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-    phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
-    return phoresis_text
-#end def
-
-
 #tests
 if __name__ == '__main__':
     text_width = 40

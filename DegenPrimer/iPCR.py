@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
-# indicator_gddccontrol is free software: you can redistribute it and/or modify it
+# degen_primer is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
@@ -24,7 +24,8 @@ Created on Jul 3, 2012
 import sys
 import subprocess
 import StringTools
-from StringTools import print_exception, format_histogram, wrap_text, time_hr, hr, format_electrophoresis
+from StringTools import print_exception, format_histogram, wrap_text, time_hr, hr
+from Electrophoresis import print_electrophoresis
 
 class iPCR(object):
     '''Wrapper for ipcress process and parser for it's results'''
@@ -80,16 +81,19 @@ class iPCR(object):
             ipcr_report.close()
             print '\nFull ipcress report was written to:\n   ',self._report_filename
             #parse the results and write a summary
-            self._parse_results()
-            self._write_summary()
         except OSError, e:
             print 'Faild to execute ipcress'
             print_exception(e)
             print 'It seems that "ipcress" executable is not found in the PATH.'
             print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
+            return
         except Exception, e:
             print 'Faild to execute ipcress'
             print_exception(e)
+            return
+        #parse results
+        self._parse_results()
+        self._write_summary()
     #end def
     
     
@@ -115,6 +119,7 @@ class iPCR(object):
             if not line: continue
             if line == 'Ipcress result':
                 self._results.append(dict())
+                self._results[-1]['quantity'] = 1
             else:
                 words = line.split()
                 if   words[0] == 'Experiment:':
@@ -123,10 +128,10 @@ class iPCR(object):
                     target_name = (''.join(w+' ' for w in words[1:])).strip()
                     self._results[-1]['target'] = self._clear_target_string(target_name)
                 elif words[0] == 'Product:':
-                    self._results[-1]['len']    = words[1]
+                    self._results[-1]['len']    = int(words[1])
                 elif words[0] == 'ipcress:':
-                    self._results[-1]['left']   = words[5]
-                    self._results[-1]['right']  = words[8]
+                    self._results[-1]['left']   = int(words[5])
+                    self._results[-1]['right']  = int(words[8])
         ipcr_report.close()
     #end def
     
@@ -137,10 +142,10 @@ class iPCR(object):
         #construct histogram
         histogram  = dict()
         max_target = max(len(r['target']) for r in self._results)
-        max_len    = max(len(r['len']) for r in self._results)
+        max_len    = max(len(str(r['len'])) for r in self._results)
         for result in self._results:
-            target_spec   = ' %s%s b [%s-%s]' % (result['len'],
-                                                 ' '*(max_len-len(result['len'])),
+            target_spec   = ' %d%s b [%d-%d]' % (result['len'],
+                                                 ' '*(max_len-len(str(result['len']))),
                                                  result['left'],
                                                  result['right'])
             target_limit  = text_width-hist_width-2 - len(target_spec)
@@ -149,7 +154,7 @@ class iPCR(object):
             colname = (result['target']+' '*target_spacer)[:target_limit] + target_spec
             if colname in histogram:
                 histogram[colname][0] += 1
-            else: histogram[colname] = [1,int(result['len'])]
+            else: histogram[colname] = [1,result['len']]
         #normalize histogram
         norm = float(max(histogram.values(), key=lambda x: x[0])[0])
         for colname in histogram:
@@ -159,21 +164,6 @@ class iPCR(object):
         histogram = tuple((line[0], line[1][0]) for line in histogram)
         #format histogram
         return format_histogram(histogram, self._col_titles, hist_width)
-    #end def
-    
-    
-    def _results_electrophoresis(self, window=20):
-        min_len     = min(int(r['len']) for r in self._results)
-        max_len     = max(int(r['len']) for r in self._results)
-        #construct phoresis
-        phoresis    = [[l,0] for l in range(min_len, max_len+window, window)]
-        for result in self._results:
-            l = int(result['len'])
-            p = (l - min_len)/window
-            #print phoresis
-            phoresis[p][1] += 1
-        #format phoresis
-        return format_electrophoresis(phoresis, window)
     #end def
     
     
@@ -192,7 +182,7 @@ class iPCR(object):
                                   'number of primer pairs that yield this particular product.\n')
         summary_text += '\n'
         summary_text += hr(' iPCR products electrophoresis ')
-        summary_text += self._results_electrophoresis()
+        summary_text += print_electrophoresis(self._results)
         #write report
         ipcr_summary.write(summary_text)
         ipcr_summary.close()

@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
-# indicator_gddccontrol is free software: you can redistribute it and/or modify it
+# degen_primer is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
@@ -21,15 +21,15 @@ Created on Jun 26, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-
 from itertools import chain
 from ConfigParser import SafeConfigParser
 from Bio.Blast import NCBIWWW, NCBIXML 
 from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
-from StringTools import hr, wrap_text, format_histogram, time_hr, format_electrophoresis
+from StringTools import hr, wrap_text, format_histogram, time_hr
 import StringTools
+from Electrophoresis import print_electrophoresis
 
 
 class Blast(object):
@@ -269,22 +269,6 @@ class Blast(object):
         #format histogram
         return format_histogram(histogram, self._all_products_col_titles, hist_width)
     #end def
-
-
-    def _all_products_electrophoresis(self, products, window=20):
-        all_products = list(chain(*(products.values())))
-        min_len     = min(p['len'] for p in all_products)
-        max_len     = max(p['len'] for p in all_products)
-        #construct phoresis
-        phoresis    = [[l,0] for l in range(min_len, max_len+window, window)]
-        for product in all_products:
-            l = product['len']
-            p = (l - min_len)/window
-            #print phoresis
-            phoresis[p][1] += product['quantity']
-        #format phoresis
-        return format_electrophoresis(phoresis, window)
-    #end def
     
 
     def write_PCR_report(self, min_amplicon, max_amplicon, max_mismatches, no_exonuclease):
@@ -330,14 +314,16 @@ class Blast(object):
             blast_report.write('\n\n\n')
             #all products electrophoresis
             blast_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
-            blast_report.write(self._all_products_electrophoresis(self._PCR_products[record_name]))
+            blast_report.write(print_electrophoresis(list(chain(*(self._PCR_products[record_name].values())))))
             blast_report.write('\n\n')
             #PCR products by target
-            blast_report.write(hr(' histogram of possible PCR products grouped '
-                                  'by target sequence ', symbol='='))
+            blast_report.write(hr(' the same grouped by target sequence ', symbol='='))
             for target_name in self._PCR_products[record_name]:
                 blast_report.write(self._products_histogram(target_name, self._PCR_products[record_name][target_name]))
-                blast_report.write('\n\n')
+                blast_report.write(print_electrophoresis(self._PCR_products[record_name][target_name]))
+                blast_report.write('\n')
+                blast_report.write(hr(''))
+                blast_report.write('\n')
         blast_report.close()
         print '\nPossible PCR products defined by hits from BLAST search were written to:\n   ' + \
             blast_report_filename
