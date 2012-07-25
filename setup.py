@@ -43,7 +43,6 @@ setup(name='degen-primer',
         'Programming Language :: Python'],
       packages=['DegenPrimer'],
       scripts=['degen_primer', 
-               'parse_blast', 
-               'align_as_amino'],
+               'parse_blast'],
       #data_files=[('share/applications', ['DegenPrimer.desktop'])]
       )

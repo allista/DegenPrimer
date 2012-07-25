@@ -24,10 +24,15 @@ Created on Jul 11, 2012
 
 import os
 import re
-from Bio.Alphabet import IUPAC
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-from Bio import SeqIO
+from StringTools import print_exception
+try:
+    from Bio.Alphabet import IUPAC
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
+    from Bio import SeqIO
+except Exception, e:
+    print_exception(e)
+    raise ImportError('The BioPython must be installed in your system.')
 
 
 IUPAC_ambiguous={'R': ['A', 'G'],

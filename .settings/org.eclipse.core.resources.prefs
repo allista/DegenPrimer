@@ -1,6 +1,7 @@
 eclipse.preferences.version=1
 encoding//DegenPrimer/Blast.py=utf-8
 encoding//DegenPrimer/DegenPrimerConfig.py=utf-8
+encoding//DegenPrimer/DegenPrimerConfigCLI.py=utf-8
 encoding//DegenPrimer/Electrophoresis.py=utf-8
 encoding//DegenPrimer/OligoFunctions.py=utf-8
 encoding//DegenPrimer/StringTools.py=utf-8

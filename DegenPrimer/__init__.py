@@ -1,7 +1,10 @@
 __all__ = ['iPCR',
            'Blast',
            'DegenPrimerConfig',
+           'DegenPrimerConfigCLI',
+           'DegenPrimerPipeline',
            'TD_Functions',
            'SecStructures',
            'StringTools',
-           'OligoFunctions']
+           'OligoFunctions',
+           'Electrophoresis']

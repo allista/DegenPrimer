@@ -33,8 +33,14 @@ comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-6
 '''
 
 from math import sqrt, log
-from Bio.SeqFeature import SeqFeature, FeatureLocation
 from UnifiedNN import *
+from StringTools import print_exception
+try:
+    from Bio.SeqFeature import SeqFeature, FeatureLocation
+except Exception, e:
+    print_exception(e)
+    raise ImportError('The BioPython must be installed in your system.')
+
 
 #utility functions
 def print_exception(e):

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # coding=utf-8
 #
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
@@ -22,158 +21,368 @@ Created on Jul 1, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import argparse
 from ConfigParser import SafeConfigParser
 from StringTools import random_text, print_exception
 from OligoFunctions import load_sequence
 
 class DegenPrimerConfig(object):
     """
-    Parse command line and/or configuration file and store all job parameters
+    Base class for degen_primer configuration parsers
     """
+    
+    #program description
+    _description = 'This is a tool to compute degenerate ' \
+                   'primer parameters. At least one primer (sense or ' \
+                   'antisense) should be provided.'
+    
+    #directory of option goups
+    #          #name
+    _groups  = {'primers':'Primers with IDs',
+               'PCR'    :'PCR conditions for Tm and dG calculation',
+               'iPCR'   :'In silica PCR simulation parameters',
+               'BLAST'  :'BLAST parameters'}
 
+    #dictionary of options
+    #           name            group
+    _options = [                #primers with ids
+               ('sense_primer','primers',
+                               #command-line arguments 
+                               ('-s', '--sense', '-f', '--forward'),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'SEQUENCE',
+                               #help string
+                               'A sense primer sequence (5\'->3\'). '
+                               'It may be a fasta or genbank file '
+                               'or simply a raw sequence string composed of '
+                               'letters of extended IUPAC DNA alphabet',
+                               #type
+                               str, #for argparse
+                               's', #for string formatting
+                               ('string','file'), #for gui
+                               #default value
+                               None),
+               ('antisense_primer','primers',
+                               #command-line arguments 
+                               ('-a', '--antisense', '-r', '--reverse'),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'SEQUENCE',
+                               #help string
+                               'An antisense primer sequence (5\'->3\'). '
+                               'It may be a fasta or genbank file '
+                               'or simply a raw sequence string composed of '
+                               'letters of extended IUPAC DNA alphabet',
+                               #type
+                               str, #for argparse
+                               's', #for string formatting
+                               ('string','file'), #for gui
+                               #default value
+                               None),
+               ('sense_primer_id','primers',
+                               #command-line arguments 
+                               ('--sense-id', '--fwd-id'),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'ID',
+                               #help string
+                               'A sense primer identifier',
+                               #type
+                               str, #for argparse
+                               's', #for string formatting
+                               ('string',), #for gui
+                               #default value
+                               None),
+               ('antisense_primer_id','primers',
+                               #command-line arguments 
+                               ('--antisense-id', '--rev-id'),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'ID',
+                               #help string
+                               'An antisense primer identifier',
+                               #type
+                               str, #for argparse
+                               's', #for string formatting
+                               ('string',), #for gui
+                               #default value
+                               None),
+                #Tm and dG calculations
+               ('Na','PCR',
+                               #command-line arguments 
+                               ('--Na',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'C(Na) mM',
+                               #help string
+                               'Concentration of monovalent ions in mM for '
+                               'Tm and dG correction (def=50)',
+                               #type
+                               float, #for argparse
+                               'f', #for string formatting
+                               ('float',), #for gui
+                               #default value
+                               50.0),
+               ('Mg','PCR',
+                               #command-line arguments 
+                               ('--Mg',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'C(Na) mM',
+                               #help string
+                               'Concentration of divalent ions in mM for '
+                               'Tm and dG correction (def=1.5)',
+                               #type
+                               float, #for argparse
+                               'f', #for string formatting
+                               ('float',), #for gui
+                               #default value
+                               1.5),
+               ('dNTP','PCR',
+                               #command-line arguments 
+                               ('--dNTP',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'C(Na) mM',
+                               #help string
+                               'Concentration of dNTP in mM for '
+                               'Tm and dG correction (def=0)',
+                               #type
+                               float, #for argparse
+                               'f', #for string formatting
+                               ('float',), #for gui
+                               #default value
+                               0),
+               ('DNA','PCR',
+                               #command-line arguments 
+                               ('--DNA',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'C(Na) nM',
+                               #help string
+                               'Concentration of target DNA in nM for '
+                               'Tm and dG correction (def=50)',
+                               #type
+                               float, #for argparse
+                               'f', #for string formatting
+                               ('float',), #for gui
+                               #default value
+                               0.25),
+               ('Primer','PCR',
+                               #command-line arguments 
+                               ('--Primer',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'C(Na) uM',
+                               #help string
+                               'Concentration of primer (assume C(sense)=C(antisense)) '
+                               'in uM for Tm and dG correction (def=0.25)',
+                               #type
+                               float, #for argparse
+                               'f', #for string formatting
+                               ('float',), #for gui
+                               #default value
+                               50),
+               ('sec_dG','PCR',
+                               #command-line arguments 
+                               ('--sec-dG',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'kcal/mol',
+                               #help string
+                               'Dimers with free energy ABOVE this threshold will not '
+                               'be reported in SHORT report (default is -5 kcal/mol. '
+                               'For hairpins the threshold is grater by 2 kcal/mol. '
+                               'For 3\' structures corresponding thresholds are grater by '
+                               'another 1 kcal/mol',
+                               #type
+                               float, #for argparse
+                               'f', #for string formatting
+                               ('float',), #for gui
+                               #default value
+                               -5.0),
+               #in silica PCR
+               ('min_amplicon','iPCR',
+                               #command-line arguments 
+                               ('--min-amplicon',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'bp',
+                               #help string
+                               'Minimum amplicon size (default 50). Applies to '
+                               'both ipcress simulation and blast results parsing.',
+                               #type
+                               int, #for argparse
+                               'd', #for string formatting
+                               ('integer',), #for gui
+                               #default value
+                               50),
+               ('max_amplicon','iPCR',
+                               #command-line arguments 
+                               ('--max-amplicon',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'bp',
+                               #help string
+                               'Maximum amplicon size (default 3000). Applies to '
+                               'both ipcress simulation and blast results parsing.',
+                               #type
+                               int, #for argparse
+                               'd', #for string formatting
+                               ('integer',), #for gui
+                               #default value
+                               3000),
+               ('max_mismatches','iPCR',
+                               #command-line arguments 
+                               ('--max-mismatches',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'bp',
+                               #help string
+                               'Maximum number of mismatches between a primer '
+                               'and a target sequence '
+                               '(default 20%% of the biggest primer length). '
+                               'Applies only to ipcress simulation.',
+                               #type
+                               int, #for argparse
+                               'd', #for string formatting
+                               ('integer',), #for gui
+                               #default value
+                               None),
+               ('hsp_dG','iPCR',
+                               #command-line arguments 
+                               ('--hsp-dG',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               'kcal/mol',
+                               #help string
+                               'HSPs with free energy ABOVE this threshold '
+                               'will be considered unstable, not yielding PCR products '
+                               '(default -10 kcal/mol). Applies only to blast results parsing.',
+                               #type
+                               float, #for argparse
+                               'f', #for string formatting
+                               ('float',), #for gui
+                               #default value
+                               -10.0),
+               ('no_exonuclease','iPCR',
+                               #command-line arguments 
+                               ('--no-exonuclease',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               None,
+                               #help string
+                               "Set this flag if you are planning to use a "
+                               "DNA-polymerase without 3'-5'-exonuclease activity. "
+                               "Applies only to blast results parsing.",
+                               #type
+                               bool, #for argparse
+                               'd', #for string formatting
+                               ('boolean',), #for gui
+                               #default value
+                               -10.0),
+               ('fasta_files','iPCR',
+                               #command-line arguments 
+                               ('--fasta-files',),
+                               #number of arguments
+                               '+',
+                               #metavar
+                               'path',
+                               #help string
+                               'Path(s) to fasta file(s) containing target sequences. '
+                               'If fasta files are provided, ipcress simulation will be '
+                               'launched automatically. Applies only to ipcress simulation.',
+                               #type
+                               str, #for argparse
+                               's', #for string formatting
+                               ('string','file'), #for gui
+                               #default value
+                               None),
+               #BLAST
+               ('do_blast','BLAST',
+                               #command-line arguments 
+                               ('--do-blast',),
+                               #number of arguments
+                               1,
+                               #metavar
+                               None,
+                               #help string
+                               'Do blast search for specificity of primers/primer-pairs. '
+                               'This option must be always set explicitly.',
+                               #type
+                               bool, #for argparse
+                               'd', #for string formatting
+                               ('boolean',), #for gui
+                               #default value
+                               False),
+               ('organisms','BLAST',
+                               #command-line arguments 
+                               ('--organisms',),
+                               #number of arguments
+                               '+',
+                               #metavar
+                               None,
+                               #help string
+                               'List of organisms or higher taxons to be used in Entrez '
+                               'query in blast searches (e.g. bacteria)',
+                               #type
+                               str, #for argparse
+                               's', #for string formatting
+                               ('string',), #for gui
+                               #default value
+                               None),
+              ]
+
+
+    #base class constructor, there's nothing to initialize yet
     def __init__(self):
-        """Constructor"""
-        #setup a list of options and a parser for command line arguments
-        self._options = []
-        self._parser = argparse.ArgumentParser(description='This is a tool to compute degenerate '
-                                               'primer parameters. At least one primer (sense or '
-                                               'antisense) should be provided.')
-        #configuration file
-        conf_group = self._parser.add_argument_group('Preset configuration')
-        conf_group.add_argument('config_file', metavar='file.cfg', 
-                                type=str, nargs='?',
-                                help='Path to a configuration file containing some '
-                                'or all of the options listed below. If any '
-                                'option is present in the configuration file '
-                                'and on the command line, the latter overrides '
-                                'the former. '
-                                '(NOTE, that the "--do-blast" option '
-                                'always must be set explicitly on the command line.)')
-        #primers with ids
-        prim_group = self._parser.add_argument_group('Primers with IDs')
-        #self._options.append(('SECTION','OPTION', 'VALUE', 'TYPE'))
-        self._options.append(('primers','sense_primer', None, 's'))
-        prim_group.add_argument('-s', '--sense', '-f', '--forwad', dest='sense_primer', metavar='SEQUENCE', 
-                            required=False, type=str,
-                            help='A sense primer sequence (5\'->3\'). '
-                            'It may be a fasta or genbank file '
-                            'or simply a raw sequence string composed of '
-                            'letters of extended IUPAC DNA alphabet')
-        self._options.append(('primers','sense_primer_id', None, 's'))
-        prim_group.add_argument('--sense-id', '--fwd-id', dest='sense_primer_id', metavar='ID', 
-                            required=False, type=str,
-                            help='A sense primer identifier')
-        self._options.append(('primers','antisense_primer', None, 's'))
-        prim_group.add_argument('-a', '--antisense', '-r', '--reverse', dest='antisense_primer', metavar='SEQUENCE',
-                            required=False, type=str,  
-                            help='An antisense primer sequence (5\'->3\'). '
-                            'It may be a fasta or genbank file '
-                            'or simply a raw sequence string composed of '
-                            'letters of extended IUPAC DNA alphabet')
-        self._options.append(('primers','antisense_primer_id', None, 's'))
-        prim_group.add_argument('--antisense-id', '--rev-id', dest='antisense_primer_id', metavar='ID', 
-                            required=False, type=str,
-                            help='An antisense primer identifier')
-        #Tm and dG calculations
-        TmdG_group = self._parser.add_argument_group('PCR conditions for Tm and dG calculation')
-        self._options.append(('PCR','Na', 50, 'f'))
-        TmdG_group.add_argument('--Na', metavar='C(Na) mM', 
-                            required=False, type=float,
-                            help='Concentration of monovalent ions in mM for Tm and dG correction (def=50)')
-        self._options.append(('PCR','Mg', 1.5, 'f'))
-        TmdG_group.add_argument('--Mg', metavar='C(Mg) mM', 
-                            required=False, type=float,
-                            help='Concentration of divalent ions in mM for Tm and dG correction (def=1.5)')
-        self._options.append(('PCR','dNTP', 0, 'f'))
-        TmdG_group.add_argument('--dNTP', metavar='C(Mg) mM', 
-                            required=False, type=float,
-                            help='Concentration of dNTP in mM for Tm and dG correction (def=0)')
-        self._options.append(('PCR','DNA', 50, 'f'))
-        TmdG_group.add_argument('--DNA', metavar='C(DNA) nM', 
-                            required=False, type=float,
-                            help='Concentration of target DNA in nM for Tm and dG correction (def=50)')
-        self._options.append(('PCR','Primer', 0.25, 'f'))
-        TmdG_group.add_argument('--Primer', metavar='C(Primer) uM', 
-                            required=False, type=float,
-                            help='Concentration of primer (assume C(sense)=C(antisense)) \
-                            in uM for Tm and dG correction (def=0.25)')
-        self._options.append(('PCR','dG_threshold', -5.0, 'f'))
-        TmdG_group.add_argument('--dG-threshold', metavar='kcal/mol', 
-                            required=False, type=float,
-                            help='Dimers with free energy ABOVE this threshold will not '
-                            'be reported in SHORT report (default is -5 kcal/mol. '
-                            'For hairpins the threshold is grater by 2 kcal/mol. '
-                            'For 3\' structures corresponding thresholds are grater by '
-                            'another 1 kcal/mol' )
-        #in silica PCR
-        iPCR_group = self._parser.add_argument_group('In silica PCR simulation parameters')
-        self._options.append(('iPCR','min_amplicon', 50, 'd'))
-        iPCR_group.add_argument('--min-amplicon', metavar='bp', 
-                            required=False, type=int,
-                            help='Minimum amplicon size (default 50). Applies to '
-                            'both ipcress simulation and blast results parsing.')
-        self._options.append(('iPCR','max_amplicon', 3000, 'd'))
-        iPCR_group.add_argument('--max-amplicon', metavar='bp', 
-                            required=False, type=int,
-                            help='Maximum amplicon size (default 3000). Applies to '
-                            'both ipcress simulation and blast results parsing.')
-        self._options.append(('iPCR','max_mismatches', None, 'd'))
-        iPCR_group.add_argument('--max-mismatches', metavar='b', 
-                            required=False, type=int,
-                            help='Maximum number of mismatches between a primer '
-                            'and a target sequence '
-                            '(default 20%% of the biggest primer length). Applies to '
-                            'both ipcress simulation and blast results parsing.')
-        self._options.append(('iPCR','no_exonuclease', False, 'd'))
-        iPCR_group.add_argument('--no-exonuclease', default=False, 
-                            required=False, action='store_true', 
-                            help="Set this flag if you are planning to use a "
-                            "DNA-polymerase without 3'-5'-exonuclease activity. Applies to "
-                            "both ipcress simulation and blast results parsing.")
-        self._options.append(('iPCR','fasta_files', None, 's'))
-        iPCR_group.add_argument('--fasta-files', metavar='path', 
-                            required=False, nargs='+', type=str,
-                            help='Path(s) to fasta file(s) containing target sequences. '
-                            'If fasta files are provided, ipcress simulation will be '
-                            'launched automatically. Applies only to ipcress simulation.')
-        #BLAST
-        BLAST_group = self._parser.add_argument_group('BLAST parameters')
-        self._options.append(('BLAST','do_blast', False, 'd'))
-        BLAST_group.add_argument('--do-blast', default=False, 
-                            required=False, action='store_true', 
-                            help='Do blast search for specificity of primers/primer-pairs. '
-                            'This option must be always set explicitly.')
-        self._options.append(('BLAST','organisms', None, 's'))
-        BLAST_group.add_argument('--organisms', metavar='name', 
-                            required=False, type=str, nargs='+',
-                            help='List of organisms or higher taxons to be used in Entrez '
-                            'query in blast searches (e.g. bacteria)')
-    #end def
+        pass
+    
+    
+    #virtual
+    def _override_option(self, option_name):
+        return None
     
     
     def _fill_option(self, option):
-        option_dict = {'section':option[0], 
-                       'option' :option[1], 
-                       'value'  :option[2], 
-                       'type'   :option[3]}
+        option_dict = {'section':option[1], 
+                       'option' :option[0], 
+                       'type'   :option[7], 
+                       'value'  :option[9]}
         #setup class member for the option
         if option_dict['value'] == None: option_line = 'self.%(option)s = None'
         else: option_line = 'self.%(option)s = %(value)'+('%(type)s\n' % option_dict) 
         exec (option_line % option_dict)
-        #try to read in command line
-        exec_line   = ('if self._args.%(option)s:\n'
-                       '    self.%(option)s = self._args.%(option)s\n')
-        exec (exec_line % option_dict)
-        #if not, try to read in config file
-        exec_line   = ('if not self._args.%(option)s and self._config '
+        #try to override default value
+        value_override = self._override_option(option[0])
+        if value_override:
+            exec_line   = ('self.%(option)s = value_override\n')
+            exec (exec_line % option_dict)
+            return
+        #if failed, try to read in config file
+        exec_line   = ('if self._config '
                        'and self._config.has_option("%(section)s","%(option)s") '
                        'and self._config.get("%(section)s","%(option)s") != "None":\n')
-        if   option[3] == 's':
+        if   option_dict['type'] == 's':
             exec_line += '    self.%(option)s = self._config.get("%(section)s","%(option)s")\n'
-        elif option[3] == 'f':
+        elif option_dict['type'] == 'f':
             exec_line += '    self.%(option)s = self._config.getfloat("%(section)s","%(option)s")\n'
-        elif option[3] == 'd':
+        elif option_dict['type'] == 'd':
             exec_line += '    self.%(option)s = self._config.getint("%(section)s","%(option)s")\n'
         try: 
             exec (exec_line % option_dict)
@@ -184,21 +393,20 @@ class DegenPrimerConfig(object):
     #end def
     
     
-    def parse_configuration(self):
-        #parse command line arguments
-        self._args = self._parser.parse_args()
-        
+    def parse_configuration(self, config_file=None):
         #read in configuration file if it is provided
-        self._config = None
-        if self._args.config_file:
+        self._config_file = config_file
+        self._config      = None
+        if self._config_file:
             self._config = SafeConfigParser()
-            if not self._config.read(self._args.config_file):
+            if not self._config.read(self._config_file):
                 self._config = None
         
         #fill in the configuration
         for option in self._options:
             self._fill_option(option)
-            
+        
+        #customize some options    
         #set max_mismatches to be the 20% of the length of the smallest primer
         if not self.max_mismatches:
             if self.sense_primer:
@@ -209,10 +417,7 @@ class DegenPrimerConfig(object):
             if not self.max_mismatches:
                 self.max_mismatches = 1
 
-        #set 'do_blast' explicitly from the command line
-        self.do_blast = self._args.do_blast
-        
-        #if fasta_files was read in from the config file, convert it to the list
+        #if 'fasta_files' was read in from the config file, convert it to the list
         if type(self.fasta_files) == str:
             self.fasta_files = eval(self.fasta_files)
                 
@@ -233,7 +438,8 @@ class DegenPrimerConfig(object):
             if self.job_id != '': self.job_id += '-'
             if primer[0].id:
                 self.job_id += primer[0].id
-            else: random_text(6)
+        if not self.job_id: 
+            self.job_id = random_text(6)+'-'+random_text(6)
     #end def
     
     
@@ -242,13 +448,13 @@ class DegenPrimerConfig(object):
         config.optionxform = str
         for option in self._options:
             #do not save 'do_blast' option
-            if option[1] == 'do_blast': continue
+            if option[0] == 'do_blast': continue
             #save all other
-            if not config.has_section(option[0]):
-                config.add_section(option[0])
+            if not config.has_section(option[1]):
+                config.add_section(option[1])
             exec 'config.set("%(section)s", "%(option)s", ' \
-                 'str(self.%(option)s))' % {'section': option[0],
-                                            'option' : option[1]}
+                 'str(self.%(option)s))' % {'section': option[1],
+                                            'option' : option[0]}
         #write output
         config_filename = self.job_id + '.cfg'
         config_file = open(config_filename, 'wb')
@@ -263,7 +469,7 @@ class DegenPrimerConfig(object):
     
     def print_options(self):
         for option in self._options:
-            exec 'print "%(option)s:", self.%(option)s' % {'option':option[1]}
+            exec 'print "%(option)s:", self.%(option)s' % {'option':option[0]}
 #end class
 
 

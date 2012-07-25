@@ -23,13 +23,18 @@ Created on Jun 26, 2012
 
 from itertools import chain
 from ConfigParser import SafeConfigParser
-from Bio.Blast import NCBIWWW, NCBIXML 
-from Bio.SeqRecord import SeqRecord
-from Bio.Alphabet import IUPAC
-from Bio.Seq import Seq
-from StringTools import hr, wrap_text, format_histogram, time_hr
 import StringTools
+from StringTools import hr, wrap_text, format_histogram, time_hr, print_exception
 from Electrophoresis import print_electrophoresis
+from TD_Functions import dimer_dG
+try:
+    from Bio.Blast import NCBIWWW, NCBIXML 
+    from Bio.SeqRecord import SeqRecord
+    from Bio.Alphabet import IUPAC
+    from Bio.Seq import Seq
+except Exception, e:
+    print_exception(e)
+    raise ImportError('The BioPython must be installed in your system.')
 
 
 class Blast(object):
@@ -136,9 +141,18 @@ class Blast(object):
     #end def
     
     
-    def _check_hsp(self, hsp, max_mismatches, no_exonuclease):
-        mismatches   = 0
-        match_3prim  = True
+    def _check_hsp(self, hsp, max_dG, no_exonuclease):
+        #check dG constraint
+        dimer  = (set(), set(), [])
+        query  = Seq(hsp.query, IUPAC.unambiguous_dna) #5'-3'
+        target = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement() #revcomp(3'-5')
+        for i in range(len(hsp.match)):
+            if hsp.match[i] == '|':
+                dimer[0].add(i)
+                dimer[1].add(i)
+        dG    = dimer_dG(dimer, query, target)
+        if dG > max_dG: return False
+        #check 3' constraint
         query_start  = hsp.query_start
         query_end    = hsp.query_end
         for primer in self._boundaries:
@@ -146,16 +160,12 @@ class Blast(object):
             or query_end  > primer[1]:
                 continue
             if no_exonuclease and query_end < primer[1]:
-                match_3prim = False
-                break
-            mismatches  = query_start-primer[0] + primer[1]-query_end
-            mismatches += len(hsp.match.split(' '))-1
-            break
-        return match_3prim and mismatches <= max_mismatches
+                return False
+        return True
     #end def 
         
     
-    def _find_PCR_products(self, min_amplicon, max_amplicon, max_mismatches, no_exonuclease):
+    def _find_PCR_products(self, min_amplicon, max_amplicon, max_dG, no_exonuclease):
         self._PCR_products = dict()
         sorted_hits = []
         for record in self._blast_results:
@@ -169,7 +179,7 @@ class Blast(object):
                 #check and sort all hsps 
                 for hsp in alignment.hsps:
                     #check for 3' matching and mismatch number
-                    if not self._check_hsp(hsp, max_mismatches, no_exonuclease):
+                    if not self._check_hsp(hsp, max_dG, no_exonuclease):
                         continue
                     #add hsp to corresponding dictionary
                     target_end   = hsp.sbjct_end
@@ -271,10 +281,10 @@ class Blast(object):
     #end def
     
 
-    def write_PCR_report(self, min_amplicon, max_amplicon, max_mismatches, no_exonuclease):
+    def write_PCR_report(self, min_amplicon, max_amplicon, max_dG, no_exonuclease):
         if not self._blast_results: return
         #parse results
-        self._find_PCR_products(min_amplicon, max_amplicon, max_mismatches, no_exonuclease)
+        self._find_PCR_products(min_amplicon, max_amplicon, max_dG, no_exonuclease)
         #
         blast_report_filename = self._job_id + '-blast-PCR-report.txt'
         blast_report = open(blast_report_filename, 'w')
@@ -294,9 +304,9 @@ class Blast(object):
         if no_exonuclease:
             blast_report.write("DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n")
         else: blast_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
-        blast_report.write('Minimum amplicon size: %d\n' % min_amplicon)
-        blast_report.write('Maximum amplicon size: %d\n' % max_amplicon)
-        blast_report.write('Mismatches allowed:    %d\n' % max_mismatches)
+        blast_report.write('Minimum amplicon size:      %d\n' % min_amplicon)
+        blast_report.write('Maximum amplicon size:      %d\n' % max_amplicon)
+        blast_report.write('Maximum dG of an alignment: %.2f\n' % max_dG)
         blast_report.write('\n\n\n')
         #if no PCR products have been found
         if not self._PCR_products:
@@ -330,7 +340,7 @@ class Blast(object):
     #end def
 
     
-    def write_hits_report(self, max_mismatches, no_exonuclease):
+    def write_hits_report(self, max_dG, no_exonuclease):
         if not self._blast_results: return
         blast_report_filename = self._job_id + '-blast-hits-report.txt'
         blast_report = open(blast_report_filename, 'w')
@@ -346,7 +356,7 @@ class Blast(object):
         if no_exonuclease:
             blast_report.write("DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n")
         else: blast_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
-        blast_report.write('Mismatches allowed: %d\n' % max_mismatches)
+        blast_report.write('Maximum dG of an alignment: %.2f\n' % max_dG)
         blast_report.write('\n')
         blast_report.write(hr(''))
         blast_report.write('\n\n')
@@ -355,10 +365,6 @@ class Blast(object):
             blast_record = self._blast_results[r]
             num_hits = len(blast_record.alignments)
             blast_report.write(hr(' query ID: %s '  % blast_record.query, symbol='#'))
-            #blast_report.write('Query length: %s\n' % blast_record.query_length)
-            #blast_report.write('Hits:         %s\n' % num_hits)
-            #print hits
-            #blast_report.write('\n\n')
             blast_report.write(hr(' %d hits ' % num_hits,  symbol='#'))
             for a in range(num_hits):
                 alignment = blast_record.alignments[a]
@@ -372,7 +378,7 @@ class Blast(object):
                 hsps_text    = ''
                 printed_hsps = 0
                 for hsp in alignment.hsps:
-                    if not self._check_hsp(hsp, max_mismatches, no_exonuclease):
+                    if not self._check_hsp(hsp, max_dG, no_exonuclease):
                         continue
                     printed_hsps += 1
                     hsps_text += str(hsp)+'\n'

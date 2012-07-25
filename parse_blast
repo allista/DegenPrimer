@@ -27,14 +27,8 @@ readable report. The original NCBI BLAST txt reports are more informative though
 #imports
 import sys
 import argparse
-#try:
-#    from Bio.Blast import NCBIXML
-#except:
-#    print "The BioPython must be installed in your system for this script to work."
-#    sys.exit(1)
-
 from DegenPrimer.Blast import Blast
-#from DegenPrimer.StringTools import print_exception
+
 
 #parse command line arguments
 parser = argparse.ArgumentParser(description='Parse blast results in xml format and write human readable report.')
@@ -49,10 +43,11 @@ iPCR_group.add_argument('--min-amplicon', metavar='bp',
 iPCR_group.add_argument('--max-amplicon', metavar='bp', 
                     required=False, type=int, default=3000,
                     help='Maximum amplicon size (default 3000)')
-iPCR_group.add_argument('--max-mismatches', metavar='b', 
-                    required=False, type=int, default=3,
-                    help='Maximum number of mismatches between a primer '
-                    'and a target sequence (default 3).')
+iPCR_group.add_argument('--hsp-dG', metavar='kcal/mol', 
+                            required=False, type=float, default=-10.0,   
+                            help='HSPs with free energy ABOVE this threshold '
+                            'will be considered unstable, not yielding PCR products '
+                            '(default -10 kcal/mol).')
 iPCR_group.add_argument('--no-exonuclease', default=False, 
                     required=False, action='store_true', 
                     help="Set this flag if you are planning to use a "
@@ -74,11 +69,11 @@ for blast_result in args.blast_results:
     #load blast results
     blast.load_results()
     #report results in human readable form
-    blast.write_hits_report(args.max_mismatches, 
+    blast.write_hits_report(args.hsp_dG, 
                             args.no_exonuclease)
     blast.write_PCR_report(args.min_amplicon, 
                            args.max_amplicon, 
-                           args.max_mismatches, 
+                           args.hsp_dG, 
                            args.no_exonuclease)
 ###
 sys.exit(0)
