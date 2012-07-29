@@ -38,354 +38,401 @@ class DegenPrimerConfig(object):
     #directory of option goups
     #          #name
     _groups  = {'primers':'Primers with IDs',
-               'PCR'    :'PCR conditions for Tm and dG calculation',
-               'iPCR'   :'In silica PCR simulation parameters',
-               'BLAST'  :'BLAST parameters'}
+                'PCR'    :'PCR conditions for Tm and dG calculation',
+                'iPCR'   :'In silica PCR simulation parameters',
+                'BLAST'  :'BLAST parameters'}
 
     #dictionary of options
     #           name            group
     _options = [                #primers with ids
-               ('sense_primer','primers',
+               {'option':'sense_primer',
+                               'section'   :'primers',
                                #command-line arguments 
-                               ('-s', '--sense', '-f', '--forward'),
+                               'args'      :('-s', '--sense', '-f', '--forward'),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'SEQUENCE',
+                               'metavar'   :'SEQUENCE',
                                #help string
-                               'A sense primer sequence (5\'->3\'). '
+                               'help'      :'A sense primer sequence (5\'->3\'). '
                                'It may be a fasta or genbank file '
                                'or simply a raw sequence string composed of '
                                'letters of extended IUPAC DNA alphabet',
                                #type
-                               str, #for argparse
-                               's', #for string formatting
-                               ('string','file'), #for gui
+                               'py_type'   :str, #for argparse
+                               'str_type'  :'s', #for string formatting
+                               'field_type':'file', #for gui
                                #default value
-                               None),
-               ('antisense_primer','primers',
+                               'default'   :None,
+                               'limits'    :(None, None)},
+               {'option':'antisense_primer',
+                               'section'   :'primers',
                                #command-line arguments 
-                               ('-a', '--antisense', '-r', '--reverse'),
+                               'args'      :('-a', '--antisense', '-r', '--reverse'),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'SEQUENCE',
+                               'metavar'   :'SEQUENCE',
                                #help string
-                               'An antisense primer sequence (5\'->3\'). '
+                               'help'      :'An antisense primer sequence (5\'->3\'). '
                                'It may be a fasta or genbank file '
                                'or simply a raw sequence string composed of '
                                'letters of extended IUPAC DNA alphabet',
                                #type
-                               str, #for argparse
-                               's', #for string formatting
-                               ('string','file'), #for gui
+                               'py_type'   :str, #for argparse
+                               'str_type'  :'s', #for string formatting
+                               'field_type':'file', #for gui
                                #default value
-                               None),
-               ('sense_primer_id','primers',
+                               'default'   :None,
+                               'limits'    :(None, None)},
+               {'option':'sense_primer_id',
+                               'section'   :'primers',
                                #command-line arguments 
-                               ('--sense-id', '--fwd-id'),
+                               'args'      :('--sense-id', '--fwd-id'),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'ID',
+                               'metavar'   :'ID',
                                #help string
-                               'A sense primer identifier',
+                               'help'      :'A sense primer identifier',
                                #type
-                               str, #for argparse
-                               's', #for string formatting
-                               ('string',), #for gui
+                               'py_type'   :str, #for argparse
+                               'str_type'  :'s', #for string formatting
+                               'field_type':'string', #for gui
                                #default value
-                               None),
-               ('antisense_primer_id','primers',
+                               'default'   :None,
+                               'limits'    :(None, None)},
+               {'option':'antisense_primer_id',
+                               'section'   :'primers',
                                #command-line arguments 
-                               ('--antisense-id', '--rev-id'),
+                               'args'      :('--antisense-id', '--rev-id'),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'ID',
+                               'metavar'   :'ID',
                                #help string
-                               'An antisense primer identifier',
+                               'help'      :'An antisense primer identifier',
                                #type
-                               str, #for argparse
-                               's', #for string formatting
-                               ('string',), #for gui
+                               'py_type'   :str, #for argparse
+                               'str_type'  :'s', #for string formatting
+                               'field_type':'string', #for gui
                                #default value
-                               None),
+                               'default'   :None,
+                               'limits'    :(None, None)},
                 #Tm and dG calculations
-               ('Na','PCR',
+               {'option':'Na',
+                               'section'   :'PCR',
                                #command-line arguments 
-                               ('--Na',),
+                               'args'      :('--Na',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'C(Na) mM',
+                               'metavar'   :'mM',
                                #help string
-                               'Concentration of monovalent ions in mM for '
+                               'help'      :'Concentration of monovalent ions in mM for '
                                'Tm and dG correction (def=50)',
                                #type
-                               float, #for argparse
-                               'f', #for string formatting
-                               ('float',), #for gui
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
                                #default value
-                               50.0),
-               ('Mg','PCR',
+                               'default'   :50.0,
+                               'limits'    :(50, 1100)},
+               {'option':'Mg',
+                               'section'   :'PCR',
                                #command-line arguments 
-                               ('--Mg',),
+                               'args'      :('--Mg',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'C(Na) mM',
+                               'metavar'   :'mM',
                                #help string
-                               'Concentration of divalent ions in mM for '
+                               'help'      :'Concentration of divalent ions in mM for '
                                'Tm and dG correction (def=1.5)',
                                #type
-                               float, #for argparse
-                               'f', #for string formatting
-                               ('float',), #for gui
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
                                #default value
-                               1.5),
-               ('dNTP','PCR',
+                               'default'   :1.5,
+                               'limits'    :(0, 1000)},
+               {'option':'dNTP',
+                               'section'   :'PCR',
                                #command-line arguments 
-                               ('--dNTP',),
+                               'args'      :('--dNTP',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'C(Na) mM',
+                               'metavar'   :'mM',
                                #help string
-                               'Concentration of dNTP in mM for '
+                               'help'      :'Concentration of dNTP in mM for '
                                'Tm and dG correction (def=0)',
                                #type
-                               float, #for argparse
-                               'f', #for string formatting
-                               ('float',), #for gui
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
                                #default value
-                               0),
-               ('DNA','PCR',
+                               'default'   :0,
+                               'limits'    :(0, 1000)},
+               {'option':'DNA',
+                               'section'   :'PCR',
                                #command-line arguments 
-                               ('--DNA',),
+                               'args'      :('--DNA',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'C(Na) nM',
+                               'metavar'   :'nM',
                                #help string
-                               'Concentration of target DNA in nM for '
+                               'help'      :'Concentration of target DNA in nM for '
                                'Tm and dG correction (def=50)',
                                #type
-                               float, #for argparse
-                               'f', #for string formatting
-                               ('float',), #for gui
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
                                #default value
-                               0.25),
-               ('Primer','PCR',
+                               'default'   :50,
+                               'limits'    :(0, 1000)},
+               {'option':'Primer',
+                               'section'   :'PCR',
                                #command-line arguments 
-                               ('--Primer',),
+                               'args'      :('--Primer',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'C(Na) uM',
+                               'metavar'   :'uM',
                                #help string
-                               'Concentration of primer (assume C(sense)=C(antisense)) '
+                               'help'      :'Concentration of primer (assume C(sense)=C(antisense)) '
                                'in uM for Tm and dG correction (def=0.25)',
                                #type
-                               float, #for argparse
-                               'f', #for string formatting
-                               ('float',), #for gui
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
                                #default value
-                               50),
-               ('sec_dG','PCR',
+                               'default'   :0.25,
+                               'limits'    :(0, 1000)},
+               {'option':'sec_dG',
+                               'section'   :'PCR',
                                #command-line arguments 
-                               ('--sec-dG',),
+                               'args'      :('--sec-dG',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'kcal/mol',
+                               'metavar'   :'kcal/mol',
                                #help string
-                               'Dimers with free energy ABOVE this threshold will not '
+                               'help'      :'Dimers with free energy ABOVE this threshold will not '
                                'be reported in SHORT report (default is -5 kcal/mol. '
                                'For hairpins the threshold is grater by 2 kcal/mol. '
                                'For 3\' structures corresponding thresholds are grater by '
                                'another 1 kcal/mol',
                                #type
-                               float, #for argparse
-                               'f', #for string formatting
-                               ('float',), #for gui
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
                                #default value
-                               -5.0),
+                               'default'   :-5.0,
+                               'limits'    :(-1000, 0)},
                #in silica PCR
-               ('min_amplicon','iPCR',
+               {'option':'min_amplicon',
+                               'section'   :'iPCR',
                                #command-line arguments 
-                               ('--min-amplicon',),
+                               'args'      :('--min-amplicon',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'bp',
+                               'metavar'   :'bp',
                                #help string
-                               'Minimum amplicon size (default 50). Applies to '
+                               'help'      :'Minimum amplicon size (default 50). Applies to '
                                'both ipcress simulation and blast results parsing.',
                                #type
-                               int, #for argparse
-                               'd', #for string formatting
-                               ('integer',), #for gui
+                               'py_type'   :int, #for argparse
+                               'str_type'  :'d', #for string formatting
+                               'field_type':'integer', #for gui
                                #default value
-                               50),
-               ('max_amplicon','iPCR',
+                               'default'   :50,
+                               'limits'    :(1, 1000000000)},
+               {'option':'max_amplicon',
+                               'section'   :'iPCR',
                                #command-line arguments 
-                               ('--max-amplicon',),
+                               'args'      :('--max-amplicon',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'bp',
+                               'metavar'   :'bp',
                                #help string
-                               'Maximum amplicon size (default 3000). Applies to '
+                               'help'      :'Maximum amplicon size (default 3000). Applies to '
                                'both ipcress simulation and blast results parsing.',
                                #type
-                               int, #for argparse
-                               'd', #for string formatting
-                               ('integer',), #for gui
+                               'py_type'   :int, #for argparse
+                               'str_type'  :'d', #for string formatting
+                               'field_type':'integer', #for gui
                                #default value
-                               3000),
-               ('max_mismatches','iPCR',
+                               'default'   :3000,
+                               'limits'    :(1, 1000000000)},
+               {'option':'max_mismatches',
+                               'section'   :'iPCR',
                                #command-line arguments 
-                               ('--max-mismatches',),
+                               'args'      :('--max-mismatches',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'bp',
+                               'metavar'   :'bp',
                                #help string
-                               'Maximum number of mismatches between a primer '
+                               'help'      :'Maximum number of mismatches between a primer '
                                'and a target sequence '
-                               '(default 20%% of the biggest primer length). '
+                               '(default 20 percent of the biggest primer length). '
                                'Applies only to ipcress simulation.',
                                #type
-                               int, #for argparse
-                               'd', #for string formatting
-                               ('integer',), #for gui
+                               'py_type'   :int, #for argparse
+                               'str_type'  :'d', #for string formatting
+                               'field_type':'integer', #for gui
                                #default value
-                               None),
-               ('hsp_dG','iPCR',
+                               'default'   :None,
+                               'limits'    :(0, 1000000000)},
+               {'option':'hsp_dG',
+                               'section'   :'iPCR',
                                #command-line arguments 
-                               ('--hsp-dG',),
+                               'args'      :('--hsp-dG',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               'kcal/mol',
+                               'metavar'   :'kcal/mol',
                                #help string
-                               'HSPs with free energy ABOVE this threshold '
+                               'help'      :'HSPs with free energy ABOVE this threshold '
                                'will be considered unstable, not yielding PCR products '
                                '(default -10 kcal/mol). Applies only to blast results parsing.',
                                #type
-                               float, #for argparse
-                               'f', #for string formatting
-                               ('float',), #for gui
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
                                #default value
-                               -10.0),
-               ('no_exonuclease','iPCR',
+                               'default'   :-10.0,
+                               'limits'    :(-1000, 0)},
+               {'option':'no_exonuclease',
+                               'section'   :'iPCR',
                                #command-line arguments 
-                               ('--no-exonuclease',),
+                               'args'      :('--no-exonuclease',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               None,
+                               'metavar'   :None,
                                #help string
-                               "Set this flag if you are planning to use a "
+                               'help'      :"Set this flag if you are planning to use a "
                                "DNA-polymerase without 3'-5'-exonuclease activity. "
                                "Applies only to blast results parsing.",
                                #type
-                               bool, #for argparse
-                               'd', #for string formatting
-                               ('boolean',), #for gui
+                               'py_type'   :bool, #for argparse
+                               'str_type'  :'d', #for string formatting
+                               'field_type':'boolean', #for gui
                                #default value
-                               -10.0),
-               ('fasta_files','iPCR',
+                               'default'   :False,
+                               'limits'    :(None, None)},
+               {'option':'fasta_files',
+                               'section'   :'iPCR',
                                #command-line arguments 
-                               ('--fasta-files',),
+                               'args'      :('--fasta-files',),
                                #number of arguments
-                               '+',
+                               'nargs'     :'+',
                                #metavar
-                               'path',
+                               'metavar'   :'path',
                                #help string
-                               'Path(s) to fasta file(s) containing target sequences. '
+                               'help'      :'Path(s) to fasta file(s) containing target sequences. '
                                'If fasta files are provided, ipcress simulation will be '
                                'launched automatically. Applies only to ipcress simulation.',
                                #type
-                               str, #for argparse
-                               's', #for string formatting
-                               ('string','file'), #for gui
+                               'py_type'   :str, #for argparse
+                               'str_type'  :'s', #for string formatting
+                               'field_type':'file', #for gui
                                #default value
-                               None),
+                               'default'   :None,
+                               'limits'    :(None, None)},
                #BLAST
-               ('do_blast','BLAST',
+               {'option':'do_blast',
+                               'section'   :'BLAST',
                                #command-line arguments 
-                               ('--do-blast',),
+                               'args'      :('--do-blast',),
                                #number of arguments
-                               1,
+                               'nargs'     :1,
                                #metavar
-                               None,
+                               'metavar'   :None,
                                #help string
-                               'Do blast search for specificity of primers/primer-pairs. '
+                               'help'      :'Do blast search for specificity of primers/primer-pairs. '
                                'This option must be always set explicitly.',
                                #type
-                               bool, #for argparse
-                               'd', #for string formatting
-                               ('boolean',), #for gui
+                               'py_type'   :bool, #for argparse
+                               'str_type'  :'d', #for string formatting
+                               'field_type':'boolean', #for gui
                                #default value
-                               False),
-               ('organisms','BLAST',
+                               'default'   :False,
+                               'limits'    :(None, None)},
+               {'option':'organisms',
+                               'section'   :'BLAST',
                                #command-line arguments 
-                               ('--organisms',),
+                               'args'      :('--organisms',),
                                #number of arguments
-                               '+',
+                               'nargs'     :'+',
                                #metavar
-                               None,
+                               'metavar'   :None,
                                #help string
-                               'List of organisms or higher taxons to be used in Entrez '
+                               'help'      :'List of organisms or higher taxons to be used in Entrez '
                                'query in blast searches (e.g. bacteria)',
                                #type
-                               str, #for argparse
-                               's', #for string formatting
-                               ('string',), #for gui
+                               'py_type'   :str, #for argparse
+                               'str_type'  :'s', #for string formatting
+                               'field_type':'string', #for gui
                                #default value
-                               None),
+                               'default'   :None,
+                               'limits'    :(None, None)},
               ]
 
 
     #base class constructor, there's nothing to initialize yet
     def __init__(self):
-        pass
+        self._reports = list()
+        return
+    
+    
+    def _multiple_args(self, option):
+        nargs = option['nargs']
+        return nargs == '*' or nargs == '+'
+    #end def
     
     
     #virtual
-    def _override_option(self, option_name):
+    def _override_option(self, option):
         return None
     
     
     def _fill_option(self, option):
-        option_dict = {'section':option[1], 
-                       'option' :option[0], 
-                       'type'   :option[7], 
-                       'value'  :option[9]}
         #setup class member for the option
-        if option_dict['value'] == None: option_line = 'self.%(option)s = None'
-        else: option_line = 'self.%(option)s = %(value)'+('%(type)s\n' % option_dict) 
-        exec (option_line % option_dict)
+        if option['default'] == None: option_line = 'self.%(option)s = None'
+        else: option_line = 'self.%(option)s = %(default)'+('%(str_type)s\n' % option) 
+        exec (option_line % option)
         #try to override default value
-        value_override = self._override_option(option[0])
+        value_override = self._override_option(option)
         if value_override:
             exec_line   = ('self.%(option)s = value_override\n')
-            exec (exec_line % option_dict)
+            exec (exec_line % option)
             return
         #if failed, try to read in config file
         exec_line   = ('if self._config '
                        'and self._config.has_option("%(section)s","%(option)s") '
                        'and self._config.get("%(section)s","%(option)s") != "None":\n')
-        if   option_dict['type'] == 's':
+        if   option['py_type'] == str:
             exec_line += '    self.%(option)s = self._config.get("%(section)s","%(option)s")\n'
-        elif option_dict['type'] == 'f':
+        elif option['py_type'] == float:
             exec_line += '    self.%(option)s = self._config.getfloat("%(section)s","%(option)s")\n'
-        elif option_dict['type'] == 'd':
+        elif option['py_type'] == int:
             exec_line += '    self.%(option)s = self._config.getint("%(section)s","%(option)s")\n'
-        try: 
-            exec (exec_line % option_dict)
+        elif option['py_type'] == bool:
+            exec_line += '    self.%(option)s = self._config.getboolean("%(section)s","%(option)s")\n'
+        try:
+            #read value from configuration 
+            exec (exec_line % option)
+            #if it is a list, evaluate it
+            if self._multiple_args(option):
+                exec_line   = ('if self.%(option)s:\n'
+                               '    self.%(option)s = eval(self.%(option)s)\n')
+                exec (exec_line % option)
         except Exception, e:
             print 'DegenPrimerConfig._fill_option:'
             print_exception(e) 
@@ -400,6 +447,7 @@ class DegenPrimerConfig(object):
         if self._config_file:
             self._config = SafeConfigParser()
             if not self._config.read(self._config_file):
+                print 'Unable to load configuration from', self._config_file
                 self._config = None
         
         #fill in the configuration
@@ -417,10 +465,6 @@ class DegenPrimerConfig(object):
             if not self.max_mismatches:
                 self.max_mismatches = 1
 
-        #if 'fasta_files' was read in from the config file, convert it to the list
-        if type(self.fasta_files) == str:
-            self.fasta_files = eval(self.fasta_files)
-                
         #load primers
         self.primers = [[],[]]
         if self.sense_primer:
@@ -448,13 +492,13 @@ class DegenPrimerConfig(object):
         config.optionxform = str
         for option in self._options:
             #do not save 'do_blast' option
-            if option[0] == 'do_blast': continue
+            if option['option'] == 'do_blast': continue
             #save all other
-            if not config.has_section(option[1]):
-                config.add_section(option[1])
+            if not config.has_section(option['section']):
+                config.add_section(option['section'])
             exec 'config.set("%(section)s", "%(option)s", ' \
-                 'str(self.%(option)s))' % {'section': option[1],
-                                            'option' : option[0]}
+                 'str(self.%(option)s))' % {'section': option['section'],
+                                            'option' : option['option']}
         #write output
         config_filename = self.job_id + '.cfg'
         config_file = open(config_filename, 'wb')
@@ -469,7 +513,11 @@ class DegenPrimerConfig(object):
     
     def print_options(self):
         for option in self._options:
-            exec 'print "%(option)s:", self.%(option)s' % {'option':option[0]}
+            exec 'print "%(option)s:", self.%(option)s' % {'option':option['option']}
+            
+    
+    def register_report(self, report_name, report_file):
+        self._reports.append((report_name, report_file))
 #end class
 
 

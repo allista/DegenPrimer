@@ -286,8 +286,8 @@ class Blast(object):
         #parse results
         self._find_PCR_products(min_amplicon, max_amplicon, max_dG, no_exonuclease)
         #
-        blast_report_filename = self._job_id + '-blast-PCR-report.txt'
-        blast_report = open(blast_report_filename, 'w')
+        self._blast_PCR_report_filename = self._job_id + '-blast-PCR-report.txt'
+        blast_report = open(self._blast_PCR_report_filename, 'w')
         blast_report.write(time_hr())
         #header
         blast_report.write(wrap_text('All hits are filtered by number of mismatches '
@@ -336,14 +336,14 @@ class Blast(object):
                 blast_report.write('\n')
         blast_report.close()
         print '\nPossible PCR products defined by hits from BLAST search were written to:\n   ' + \
-            blast_report_filename
+            self._blast_PCR_report_filename
     #end def
 
     
     def write_hits_report(self, max_dG, no_exonuclease):
         if not self._blast_results: return
-        blast_report_filename = self._job_id + '-blast-hits-report.txt'
-        blast_report = open(blast_report_filename, 'w')
+        self._blast_report_filename = self._job_id + '-blast-hits-report.txt'
+        blast_report = open(self._blast_report_filename, 'w')
         blast_report.write(time_hr())
         #header
         blast_report.write(wrap_text('All hits are filtered by number of mismatches '
@@ -400,6 +400,11 @@ class Blast(object):
             if a < len(self._blast_results)-1: blast_report.write('\n\n')
         blast_report.close()
         print '\nTop hits with top HSPs from BLAST results were written to:\n   ' + \
-            blast_report_filename
+            self._blast_report_filename
     #end def
+    
+    
+    def register_reports(self, args):
+        args.register_report('BLAST hits', self._blast_report_filename)
+        args.register_report('BLAST PCR', self._blast_PCR_report_filename)
 #end class

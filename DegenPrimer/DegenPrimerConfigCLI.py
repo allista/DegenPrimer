@@ -28,7 +28,7 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
     '''Command line configuration parser for dege_primer CLI'''
 
     def __init__(self):
-        """Constructor"""
+        DegenPrimerConfig.__init__(self)
         #setup a list of options and a parser for command line arguments
         self._parser = argparse.ArgumentParser(description=self._description)
         #configuration file
@@ -47,23 +47,23 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
         #all other options
         arg_groups = dict()
         for option in self._options:
-            if option[1] not in arg_groups:
-                arg_groups[option[1]] = self._parser.add_argument_group(self._groups[option[1]])
-            if option[6] == bool:
-                arg_groups[option[1]].add_argument(*option[2], dest=option[0], 
-                                               help=option[5], default=option[9],
+            if option['section'] not in arg_groups:
+                arg_groups[option['section']] = self._parser.add_argument_group(self._groups[option['section']])
+            if option['py_type'] == bool:
+                arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], 
+                                               help=option['help'], default=option['default'],
                                                action='store_true')
             else:
-                arg_groups[option[1]].add_argument(*option[2], dest=option[0], nargs=option[3], 
-                                               metavar=option[4], help=option[5], type=option[6])
+                arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], nargs=option['nargs'], 
+                                                           type=option['py_type'], metavar=option['metavar'], help=option['help'])
     #end def
     
     
-    def _override_option(self, option_name):
+    def _override_option(self, option):
         value_override = None
-        exec_line   = ('if self._args.%(option)s:\n'
-                       '    value_override = self._args.%(option)s\n')
-        exec (exec_line % {'option':option_name})
+        exec_line = ('if self._args.%(option)s:\n'
+                     '    value_override = self._args.%(option)s\n')
+        exec (exec_line % option)
         return value_override
     #end def
     

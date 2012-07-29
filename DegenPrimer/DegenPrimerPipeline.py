@@ -130,7 +130,8 @@ def degen_primer_pipeline(args):
         ipcr.writeProgram(args.min_amplicon, args.max_amplicon)
         #if target sequences are provided, run iPCR...
         if args.fasta_files:
-            ipcr.executeProgram(args.fasta_files, args.max_mismatches)
+            if ipcr.executeProgram(args.fasta_files, args.max_mismatches):
+                ipcr.register_reports(args)
     #-----------------------------------------------------------------------------#
     
     
@@ -152,6 +153,7 @@ def degen_primer_pipeline(args):
                                args.max_amplicon, 
                                args.hsp_dG, 
                                args.no_exonuclease)
+        blast.register_reports(args)
     #-----------------------------------------------------------------------------#
     
     
@@ -233,5 +235,7 @@ def degen_primer_pipeline(args):
     print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
     print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
     #-----------------------------------------------------------------------------#
+    print '\nDone\n'
+    args.register_report('Tm and secondary structures', structures_short_report_filename)
     return 0
 #end def

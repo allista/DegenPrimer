@@ -86,14 +86,20 @@ class iPCR(object):
             print_exception(e)
             print 'It seems that "ipcress" executable is not found in the PATH.'
             print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
-            return
+            return False
         except Exception, e:
             print 'Faild to execute ipcress'
             print_exception(e)
-            return
+            return False
         #parse results
         self._parse_results()
         self._write_summary()
+        return True
+    #end def
+    
+    
+    def register_reports(self, args):
+        args.register_report('iPCR short report', self._summary_filename)
     #end def
     
     
