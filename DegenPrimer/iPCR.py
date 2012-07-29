@@ -21,7 +21,7 @@ Created on Jul 3, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import sys
+import sys, os
 import subprocess
 import StringTools
 from StringTools import print_exception, format_histogram, wrap_text, time_hr, hr
@@ -65,6 +65,16 @@ class iPCR(object):
     
     
     def executeProgram(self, fasta_files, max_mismatches):
+        #check if any of the fasta-files exists
+        have_fasta = False
+        for ffile in fasta_files:
+            if os.path.isfile(ffile):
+                have_fasta = True
+                break
+        if not have_fasta: 
+            print '\nFailed to execute ipcress: no existing fasta files were provided.'
+            return False
+        #is so, execute a program
         self._max_mismatches = max_mismatches
         ipcr_cli = 'ipcress %s -m %d -s' % (self._program_filename, max_mismatches)
         for fasta_file in fasta_files:
@@ -80,18 +90,17 @@ class iPCR(object):
             ipcr_report.write(child.stdout.read())
             ipcr_report.close()
             print '\nFull ipcress report was written to:\n   ',self._report_filename
-            #parse the results and write a summary
         except OSError, e:
-            print 'Faild to execute ipcress'
+            print '\nFaild to execute ipcress'
             print_exception(e)
             print 'It seems that "ipcress" executable is not found in the PATH.'
             print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
             return False
         except Exception, e:
-            print 'Faild to execute ipcress'
+            print '\nFaild to execute ipcress'
             print_exception(e)
             return False
-        #parse results
+        #parse the results and write a summary
         self._parse_results()
         self._write_summary()
         return True

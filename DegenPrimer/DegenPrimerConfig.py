@@ -409,7 +409,7 @@ class DegenPrimerConfig(object):
         exec (option_line % option)
         #try to override default value
         value_override = self._override_option(option)
-        if value_override:
+        if value_override != None:
             exec_line   = ('self.%(option)s = value_override\n')
             exec (exec_line % option)
             return
@@ -456,7 +456,7 @@ class DegenPrimerConfig(object):
         
         #customize some options    
         #set max_mismatches to be the 20% of the length of the smallest primer
-        if not self.max_mismatches:
+        if self.max_mismatches == None:
             if self.sense_primer:
                 self.max_mismatches = int(0.2*len(self.sense_primer))
             if self.antisense_primer:
