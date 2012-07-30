@@ -9,6 +9,9 @@ model and the latest thermodynamic tables with corrections for particular PCR
 conditions.
 
 In addition to degen_primer itself, the helper scripts parse_blast is included. 
-It parses previously saved blast xml output and produces human readable report. 
+It parses previously saved blast xml output and produces human readable report.
+
+The align_as_amino tool is still provided but will be soon moved into 
+the BioUtils project.
 
 It depends on python2 >= 2.7 and Biopython >= 1.58
