@@ -8,12 +8,7 @@ All calculations of thermodynamic parameters are made using Nearest Neighbor
 model and the latest thermodynamic tables with corrections for particular PCR 
 conditions.
 
-In addition to degen_primer itself, two helper scripts are included:
-1) align_as_amino — which aligns nucleotide sequences translating them prior to 
-alignment, then reverse the translation using original sequences. It uses 
-MUSCLE as a backend to perform the alignment.
-2) parse_blast — which parses previously saved blast xml output and produces 
-human readable report. The original NCBI BLAST txt reports are more informative 
-though.
+In addition to degen_primer itself, the helper scripts parse_blast is included. 
+It parses previously saved blast xml output and produces human readable report. 
 
 It depends on python2 >= 2.7 and Biopython >= 1.58
