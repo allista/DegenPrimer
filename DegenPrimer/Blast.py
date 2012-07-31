@@ -69,6 +69,7 @@ class Blast(object):
         results_filename    = self._job_id+'-blast.xml'
         query_filename      = self._job_id+'-blast.cfg'
         #load blast results
+        print '\nLoading previously saved BLAST results:\n   ', results_filename
         try:
             results_file        = open(results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
