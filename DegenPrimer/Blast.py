@@ -61,6 +61,7 @@ class Blast(object):
         self._boundaries    = None
         self._query         = None
         self._PCR_products  = None
+        self.have_results   = False
     #end def
 
     
@@ -68,42 +69,52 @@ class Blast(object):
         results_filename    = self._job_id+'-blast.xml'
         query_filename      = self._job_id+'-blast.cfg'
         #load blast results
-        results_file        = open(results_filename, 'r')
-        self._blast_results = list(NCBIXML.parse(results_file))
-        results_file.close()
-        #load query configuration
-        query_config        = SafeConfigParser()
-        query_config.read(query_filename)
-        #parse query configuration
-        self._query      = SeqRecord(Seq(query_config.get('query', 'query'), 
-                                         IUPAC.unambiguous_dna), self._job_id)
-        self._boundaries = eval(query_config.get('query', 'boundaries'))
+        try:
+            results_file        = open(results_filename, 'r')
+            self._blast_results = list(NCBIXML.parse(results_file))
+            results_file.close()
+            #load query configuration
+            query_config        = SafeConfigParser()
+            query_config.read(query_filename)
+            #parse query configuration
+            self._query      = SeqRecord(Seq(query_config.get('query', 'query'), 
+                                             IUPAC.unambiguous_dna), self._job_id)
+            self._boundaries = eval(query_config.get('query', 'boundaries'))
+            self.have_results = True
+        except Exception, e:
+            print '\nFailed to load blast results.'
     #end def
     
 
     def blast_short(self, query, entrez_query=''):
         if not query: return
         print '\nStarting a BLAST search. This may take awhile...'
-        blast_results = NCBIWWW.qblast('blastn', 
-                                       self.database, 
-                                       self._query.format('fasta'), 
-                                       expect       = self.e_val, 
-                                       word_size    = self.w_size,
-                                       nucl_penalty = self.n_pen,
-                                       nucl_reward  = self.n_rew,
-                                       filter       = self.fltr,
-                                       entrez_query = entrez_query)
-        #save results to a file
-        results_filename = self._job_id+'-blast.xml'
-        results_file = open(results_filename, 'w')
-        results_file.write(blast_results.read())
-        results_file.close()
-        blast_results.close()
-        print '\nBlast output was written to:\n   '+results_filename
-        #parse results
-        results_file  = open(results_filename, 'r')
-        self._blast_results = list(NCBIXML.parse(results_file))
-        results_file.close()
+        try:
+            blast_results = NCBIWWW.qblast('blastn', 
+                                           self.database, 
+                                           self._query.format('fasta'), 
+                                           expect       = self.e_val, 
+                                           word_size    = self.w_size,
+                                           nucl_penalty = self.n_pen,
+                                           nucl_reward  = self.n_rew,
+                                           filter       = self.fltr,
+                                           entrez_query = entrez_query)
+            #save results to a file
+            results_filename = self._job_id+'-blast.xml'
+            results_file = open(results_filename, 'w')
+            results_file.write(blast_results.read())
+            results_file.close()
+            blast_results.close()
+            print '\nBlast output was written to:\n   '+results_filename
+            #parse results
+            results_file  = open(results_filename, 'r')
+            self._blast_results = list(NCBIXML.parse(results_file))
+            results_file.close()
+        except Exception, e:
+            print '\nFailed to obtain BLAST search results from NCBI.'
+            print_exception(e)
+            return
+        self.have_results = True
     #end def
 
 

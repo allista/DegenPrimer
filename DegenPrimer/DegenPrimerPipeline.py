@@ -136,6 +136,8 @@ def degen_primer_pipeline(args):
     
     
     #test for primers specificity by BLAST
+    blast = Blast(job_id)
+    #if --do-blast command was provided, make an actual query
     if args.do_blast:
         #construct Entrez query
         entrez_query = ''
@@ -144,8 +146,12 @@ def degen_primer_pipeline(args):
                 if entrez_query: entrez_query += ' OR '
                 entrez_query += organism+'[organism]'
         #do the blast
-        blast = Blast(job_id)
         blast.blast_primers(all_primers(), entrez_query)
+    #otherwise, reparse previously saved results with current parameters
+    else:
+        #load blast results
+        blast.load_results()
+    if blast.have_results:
         #report results in human readable form
         blast.write_hits_report(args.hsp_dG, 
                                 args.no_exonuclease)

@@ -65,6 +65,7 @@ for blast_result in args.blast_results:
     else: job_id = xml_filename
 
     #parse blast results
+    #init blast object
     blast = Blast(job_id)
     #load blast results
     blast.load_results()
