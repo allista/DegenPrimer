@@ -1,3 +1,10 @@
+degen-primer (1.5-0ppa1) precise; urgency=low
+
+  * improvement:
+  Saved BLAST-results are now reparced with current settings by default if --do-blast is not set. 
+
+ -- Allis Tauri <allista@gmail.com>  Sat, 06 Oct 2012 15:33:20 +0400
+
 degen-primer (1.4-0ppa1) precise; urgency=low
 
   * improvements:
