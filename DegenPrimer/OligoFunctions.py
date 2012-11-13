@@ -106,3 +106,7 @@ def load_sequence(seq_string, rec_id=None, desc=None):
     else: return SeqRecord(Seq(seq_string, IUPAC.ambiguous_dna).upper(), 
                            id=rec_id, name=desc, description=desc)
 #end def
+
+
+def self_complement(seq_rec):
+    return str(seq_rec.seq) == str(seq_rec.seq.reverse_complement())

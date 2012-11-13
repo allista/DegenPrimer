@@ -24,16 +24,24 @@ Tool to compute degenerate primer parameters using BioPython
 
 #imports
 import sys
-from DegenPrimer.StringTools import hr, wrap_text
+from DegenPrimer.StringTools import hr, wrap_text, print_exception
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
 from DegenPrimer.DegenPrimerPipeline import degen_primer_pipeline
 ###############################################################################    
 
 
-#parse command line arguments and/or configuration file
 args = DegenPrimerConfigCLI()
-args.parse_configuration()
+try:
+    #parse command line arguments and/or configuration file
+    args.parse_configuration()
+except ValueError, e:
+    #if not in batch mode, consider incorrect values as errors
+    if not args.batch():
+        print_exception(e)
+        sys.exit(1)
+    #in batch mode all values except do_blast flag are ignored anyway
+    else: pass
 
 print ''
 if not args.batch():
@@ -46,7 +54,12 @@ else:
     return_code = 0
     for config_file in args.config_files:
         config = DegenPrimerConfig()
-        config.parse_configuration(config_file)
+        try:
+            config.parse_configuration(config_file)
+        except ValueError, e:
+            print '\nUnable to perform analysis with the set of values given in "%s"' % config_file
+            print_exception(e)
+            continue
         config.do_blast = args.do_blast
         print hr(' Repeating analysis for %s ' % config_file)
         return_code |= degen_primer_pipeline(config)

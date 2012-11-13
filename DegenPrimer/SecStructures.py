@@ -338,7 +338,7 @@ class SecStructures(object):
         if self._3prim_dimers: 
             header_string += '3\'-dimers count: %d\n' % self._3prim_dimers
         #minimum dG
-        header_string += 'Most stable: %.2f kcal/mol\n' % structures[0][2][0]
+        header_string += 'Most stable dimer: %.2f kcal/mol\n' % structures[0][2][0]
         if self._3prim_dimers: 
             header_string += 'Most stable 3\' dimer: %.2f kcal/mol\n' % self._min_3prim_dimer_dG
         header_string += '\n'
@@ -428,7 +428,7 @@ class SecStructures(object):
         if self._3prim_hairpins: 
             header_string += '3\'-hairpins count: %d\n' % self._3prim_hairpins
         #minimum dG
-        header_string += 'Most stable: %.2f kcal/mol\n' % hairpins[0][2][0]
+        header_string += 'Most stable hairpin: %.2f kcal/mol\n' % hairpins[0][2][0]
         if self._3prim_hairpins: 
             header_string += 'Most stable 3\' hairpin: %.2f kcal/mol\n' % self._min_3prim_hairpin_dG
         header_string += '\n'

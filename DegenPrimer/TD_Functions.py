@@ -52,7 +52,8 @@ C_Mg   = 1.5  #mM
 C_Na   = 50   #mM; should be above 0.05M and below 1.1M
 C_dNTP = 0    #mM
 C_DNA  = 50   #nM; DNA template concentration
-C_Prim = 0.11 #uM; Primer concentration
+C_Prim = 0.1  #uM; Primer concentration
+C_DMSO = 0    #percent
 
 def C_Na_eq():
     """divalent cation correction (Ahsen et al., 2001)"""
@@ -62,45 +63,29 @@ def C_Na_eq():
 
 
 def NN_Tr(seq, r):
-    """Calculate temperature for equilibrium with 'r' ratio 
-    using Nearest Neighbor TD tables and two-state equilibrium
-    equations from the paper of SantaLucia & Hicks (2004)"""
-    global C_DNA, R, K0
+    '''Calculate temperature for primer-template association equilibrium 
+    with 'r' ratio using two-state equilibrium model and the Nearest Neighbor \
+    TD tables and from the paper of SantaLucia & Hicks (2004).
+    Note, that two-state equilibrium model used here is based on assumption, that 
+    primer sequence is not self-complementary.'''
+    #value constraints
+    if r >=1 or r <=0:
+        raise ValueError('TD_Functions.NN_Tr: equilibrium ratio should be in the (0;1) interval.')
+    #definitions
+    global C_Prim, C_DNA, C_DMSO, R, K0, Sym_Correction
     seq_str = str(seq)
     rev_com = str(seq.reverse_complement())
     seq_len = len(seq)
-    dH, dS, K = 0, 0, 0
+    dH, dS = 0, 0
+    #concentrations
+    P   = C_Prim*1e-6
+    D   = C_DNA *1e-9
+    DUP = r*min(P,D)
+    #equilibrium constant 
+    K   = DUP/((P-DUP)*(D-DUP))
     #initial corrections
     dH += delta_H('ini', 'ini')
     dS += delta_S('ini', 'ini')
-    #test for self-complementarity
-    if seq_str == rev_com:
-        dH += delta_H('sym', 'sym')
-        dS += delta_S('sym', 'sym')
-        #concentrations
-        #C_Prim uM; C_DNA nM; DNA 2 strands
-        A = C_Prim*1e-6
-        B = 2*C_DNA*1e-9 #both strands
-        if A*(1-r) <= B*r: 
-            raise ValueError('For self-complementary oligonucleotides: for '
-                             'equilibrium at %d%% ssPrimer concentration '
-                             'should be grater than %f of target dsDNA concentration' % \
-                             (100*r, r/(1-r)))
-        #equilibrium constant
-        #primer binds to itself as well as to both strands of target DNA
-        #thus effective primer concentration and consequently Tm are decreased 
-        K = r**2/(2*(1-r)) * A/(A*(1-r)-B*r)**2
-    else:
-        #concentrations
-        A = C_Prim*1e-6
-        B = C_DNA*1e-9
-        if A <= B*r: 
-            raise ValueError('For equilibrium at %d%% ssPrimer concentration '
-                             'should be grater than %f of target dsDNA concentration' % \
-                             (100*r, r))
-        #equilibrium constant 
-        #primer binds
-        K  = r/((1-r)*(A-B*r))
     #test for AT terminals
     if seq_str[0] == 'A' or seq_str[0] == 'T':
         dH += delta_H('ter', 'ter')
@@ -117,7 +102,7 @@ def NN_Tr(seq, r):
     #salt concentration correction
     dS = dS + dS_Na_coefficient * len(seq_str) * log(C_Na_eq()*1e-3) #C_Na mM
     #final temperature calculation
-    return dH * 1000/(dS - R * log(K)) + K0
+    return dH * 1000/(dS - R * log(K)) + K0 - 0.75 * C_DMSO #DMSO correction from [2]
 #end def
 
 def NN_Tm(seq): return NN_Tr(seq, 0.5)
@@ -143,12 +128,14 @@ def format_PCR_conditions():
                  len(str(C_Mg)), 
                  len(str(C_dNTP)),
                  len(str(C_DNA)),
-                 len(str(C_Prim)))
+                 len(str(C_Prim)),
+                 len(str(C_DMSO)))
     conc_str += 'C(Na)     = ' + str(C_Na)  + ' '*(spacer-len(str(C_Na)))   +' mM\n'
     conc_str += 'C(Mg)     = ' + str(C_Mg)  + ' '*(spacer-len(str(C_Mg)))   +' mM\n'
     conc_str += 'C(dNTP)   = ' + str(C_dNTP)+ ' '*(spacer-len(str(C_dNTP))) +' mM\n'
     conc_str += 'C(DNA)    = ' + str(C_DNA) + ' '*(spacer-len(str(C_DNA)))  +' nM\n'
     conc_str += 'C(Primer) = ' + str(C_Prim)+ ' '*(spacer-len(str(C_Prim))) +' uM\n'
+    conc_str += 'C(DMSO)   = ' + str(C_DMSO)+ ' '*(spacer-len(str(C_DMSO))) +' %\n'
     return conc_str
 #end_def
 
@@ -160,6 +147,7 @@ def add_PCR_conditions(feature):
         feature.qualifiers['C_dNTP']    = str(C_dNTP)+' mM'
         feature.qualifiers['C_DNA']     = str(C_DNA)+ ' nM'
         feature.qualifiers['C_Primer']  = str(C_Prim)+' uM'
+        feature.qualifiers['C_DMSO']    = str(C_DMSO)+' %'
     except Exception, e:
         print 'add_PCR_conditions:'
         print_exception(e)

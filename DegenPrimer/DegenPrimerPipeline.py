@@ -19,7 +19,7 @@ Created on Jul 25, 2012
 '''
 
 #imports
-from DegenPrimer.OligoFunctions import generate_unambiguous
+from DegenPrimer.OligoFunctions import generate_unambiguous, self_complement
 from DegenPrimer import TD_Functions    
 from DegenPrimer.TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
 from DegenPrimer.Blast import Blast
@@ -45,12 +45,21 @@ def degen_primer_pipeline(args):
     TD_Functions.C_dNTP = args.dNTP
     TD_Functions.C_DNA  = args.DNA
     TD_Functions.C_Prim = args.Primer
+    TD_Functions.C_DMSO = args.DMSO
     
-    #save the configuration only after preliminary check
+    #check if at least one primer is provided
     if not args.sense_primer and not args.antisense_primer:
         print 'At least one primer (sense or antisense) should be provided.'
         return 1
-    else: args.save_configuration()
+    #test for self-complementarity
+    for primer in primers:
+        if primer and self_complement(primer[0]):
+            print 'Error: %s primer "%s" [%s] is self-complementary.' % \
+                    (primer[0].description, primer[0].id, primer[0].seq)
+            print 'You should not use self-complementary oligonucleotides as primers.\n'
+            return 1
+    #save the configuration only after preliminary checks
+    args.save_configuration()
     print ''
     #-----------------------------------------------------------------------------#
     

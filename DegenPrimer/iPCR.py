@@ -74,7 +74,7 @@ class iPCR(object):
         if not have_fasta: 
             print '\nFailed to execute ipcress: no existing fasta files were provided.'
             return False
-        #is so, execute a program
+        #if so, execute a program
         self._max_mismatches = max_mismatches
         ipcr_cli = 'ipcress %s -m %d -s' % (self._program_filename, max_mismatches)
         for fasta_file in fasta_files:
@@ -101,7 +101,8 @@ class iPCR(object):
             print_exception(e)
             return False
         #parse the results and write a summary
-        self._parse_results()
+        if not self._parse_results():
+            return False
         self._write_summary()
         return True
     #end def
@@ -127,8 +128,13 @@ class iPCR(object):
     
     
     def _parse_results(self):
+        try:
+            ipcr_report = open(self._report_filename, 'r')
+        except Exception, e:
+            print('\nFailed to open iPCR full report file:\n   %s' % self._report_filename)
+            print_exception(e)
+            return False
         self._results = []
-        ipcr_report = open(self._report_filename, 'r')
         for line in ipcr_report:
             line = line.rstrip('\n')
             if not line: continue
@@ -148,6 +154,11 @@ class iPCR(object):
                     self._results[-1]['left']   = int(words[5])
                     self._results[-1]['right']  = int(words[8])
         ipcr_report.close()
+        if not self._results:
+            print('\nNo results found in full iPCR report:\n   %s' % self._report_filename)
+            self._results = None
+            return False
+        return True
     #end def
     
     
@@ -183,8 +194,12 @@ class iPCR(object):
     
     
     def _write_summary(self):
-        if not self._results: return
-        ipcr_summary = open(self._summary_filename, 'w')
+        try:
+            ipcr_summary = open(self._summary_filename, 'w')
+        except Exception, e:
+            print('\nFailed to open iPCR summary file for writing:\n   %s' % self._summary_filename)
+            print_exception(e)
+            return
         #format report
         summary_text  = ''
         summary_text += time_hr()

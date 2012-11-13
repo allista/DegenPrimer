@@ -21,6 +21,7 @@ Created on Jun 26, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+import os
 from itertools import chain
 from ConfigParser import SafeConfigParser
 import StringTools
@@ -68,6 +69,8 @@ class Blast(object):
     def load_results(self):
         results_filename    = self._job_id+'-blast.xml'
         query_filename      = self._job_id+'-blast.cfg'
+        #if there's no saved results, quit silently
+        if not os.path.isfile(results_filename): return
         #load blast results
         print '\nLoading previously saved BLAST results:\n   ', results_filename
         try:
@@ -409,7 +412,7 @@ class Blast(object):
                 blast_report.write(hr('', symbol='='))
                 if a < num_hits-1: blast_report.write('\n\n')
             blast_report.write(hr('', symbol='#'))
-            if a < len(self._blast_results)-1: blast_report.write('\n\n')
+            if r < len(self._blast_results)-1: blast_report.write('\n\n')
         blast_report.close()
         print '\nTop hits with top HSPs from BLAST results were written to:\n   ' + \
             self._blast_report_filename

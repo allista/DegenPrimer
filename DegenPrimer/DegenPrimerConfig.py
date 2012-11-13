@@ -137,7 +137,7 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :50.0,
-                               'limits'    :(50, 1100)},
+                               'limits'    :(1, 5000)}, #5M max
                {'option':'Mg',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -155,7 +155,7 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :1.5,
-                               'limits'    :(0, 1000)},
+                               'limits'    :(0, 5000)}, #5M max
                {'option':'dNTP',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -173,7 +173,7 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :0,
-                               'limits'    :(0, 1000)},
+                               'limits'    :(0, 1000)}, #1M max
                {'option':'DNA',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -191,7 +191,7 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :50,
-                               'limits'    :(0, 1000)},
+                               'limits'    :(1, 1e9)}, #1M max
                {'option':'Primer',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -209,7 +209,25 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :0.25,
-                               'limits'    :(0, 1000)},
+                               'limits'    :(0.001, 1e6)}, #1M max
+               {'option':'DMSO',
+                               'section'   :'PCR',
+                               #command-line arguments 
+                               'args'      :('--DMSO',),
+                               #number of arguments
+                               'nargs'     :1,
+                               #metavar
+                               'metavar'   :'%',
+                               #help string
+                               'help'      :'Concentration of DMSO (%% v/v) '
+                               'for Tm and dG correction (def=0)',
+                               #type
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
+                               #default value
+                               'default'   :0,
+                               'limits'    :(0, 100)},
                {'option':'sec_dG',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -402,6 +420,17 @@ class DegenPrimerConfig(object):
         return None
     
     
+    def _check_limits(self, option, value):
+        if option['limits'][0] and value < option['limits'][0] \
+        or option['limits'][1] and value > option['limits'][1]:
+            raise ValueError(('The value of "%(option)s" parameter should be within' % option) + \
+                             (' [' + str(option['limits'][0]) + \
+                              ', ' + str(option['limits'][1]) + \
+                              '] ' + option['metavar']))
+        else: return True
+    #end def
+    
+    
     def _fill_option(self, option):
         #setup class member for the option
         if option['default'] == None: option_line = 'self.%(option)s = None'
@@ -412,31 +441,31 @@ class DegenPrimerConfig(object):
         if value_override != None:
             exec_line   = ('self.%(option)s = value_override\n')
             exec (exec_line % option)
-            return
-        #if failed, try to read in config file
-        exec_line   = ('if self._config '
-                       'and self._config.has_option("%(section)s","%(option)s") '
-                       'and self._config.get("%(section)s","%(option)s") != "None":\n')
-        if   option['py_type'] == str:
-            exec_line += '    self.%(option)s = self._config.get("%(section)s","%(option)s")\n'
-        elif option['py_type'] == float:
-            exec_line += '    self.%(option)s = self._config.getfloat("%(section)s","%(option)s")\n'
-        elif option['py_type'] == int:
-            exec_line += '    self.%(option)s = self._config.getint("%(section)s","%(option)s")\n'
-        elif option['py_type'] == bool:
-            exec_line += '    self.%(option)s = self._config.getboolean("%(section)s","%(option)s")\n'
-        try:
-            #read value from configuration 
-            exec (exec_line % option)
-            #if it is a list, evaluate it
-            if self._multiple_args(option):
-                exec_line   = ('if self.%(option)s:\n'
-                               '    self.%(option)s = eval(self.%(option)s)\n')
+        #if no value given, try to read in from config file
+        elif self._config:
+            exec_line   = ('if  self._config.has_option("%(section)s","%(option)s") '
+                           'and self._config.get("%(section)s","%(option)s") != "None":\n')
+            if   option['py_type'] == str:
+                exec_line += '    self.%(option)s = self._config.get("%(section)s","%(option)s")\n'
+            elif option['py_type'] == float:
+                exec_line += '    self.%(option)s = self._config.getfloat("%(section)s","%(option)s")\n'
+            elif option['py_type'] == int:
+                exec_line += '    self.%(option)s = self._config.getint("%(section)s","%(option)s")\n'
+            elif option['py_type'] == bool:
+                exec_line += '    self.%(option)s = self._config.getboolean("%(section)s","%(option)s")\n'
+            try:
+                #read value from configuration 
                 exec (exec_line % option)
-        except Exception, e:
-            print 'DegenPrimerConfig._fill_option:'
-            print_exception(e) 
-            pass
+                #if it is a list, evaluate it
+                if self._multiple_args(option):
+                    exec_line   = ('if self.%(option)s:\n'
+                                   '    self.%(option)s = eval(self.%(option)s)\n')
+                    exec (exec_line % option)
+            except Exception, e:
+                print 'DegenPrimerConfig._fill_option:'
+                print_exception(e)
+        #check if option value is within limits
+        self._check_limits(option, eval('self.%(option)s' % option))
     #end def
     
     
@@ -466,24 +495,26 @@ class DegenPrimerConfig(object):
                 self.max_mismatches = 1
 
         #load primers
+        #if no primer ids are provided, generate a random ones
         self.primers = [[],[]]
         if self.sense_primer:
             seq_record = load_sequence(self.sense_primer, self.sense_primer_id, 'sense')
+            if not seq_record.id:
+                seq_record.id = random_text(6)
             self.primers[0] = [seq_record, [], dict()]
         if self.antisense_primer:
             seq_record = load_sequence(self.antisense_primer, self.antisense_primer_id, 'antisense')
+            if not seq_record.id:
+                seq_record.id = random_text(6)
             self.primers[1] = [seq_record, [], dict()]
             
         #set job_id
-        #if there's no ids provided, generate a random one
         self.job_id = ''
         for primer in self.primers:
             if not primer: continue
             if self.job_id != '': self.job_id += '-'
             if primer[0].id:
                 self.job_id += primer[0].id
-        if not self.job_id: 
-            self.job_id = random_text(6)+'-'+random_text(6)
     #end def
     
     
