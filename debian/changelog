@@ -1,3 +1,13 @@
+degen-primer (1.6-0ppa1) precise; urgency=low
+
+  * Bufgixes.
+  Value constraints check of input data.
+  Improved Tm prediction with primer concentrations.
+  DMSO correction of predicted Tm.
+  batch_test.py added for testing Tm prediction algorithm with experimental data.
+
+ -- Allis Tauri <allista@gmail.com>  Thu, 15 Nov 2012 20:00:45 +0400
+
 degen-primer (1.5-0ppa1) precise; urgency=low
 
   * improvement:
