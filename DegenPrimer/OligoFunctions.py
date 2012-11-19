@@ -25,6 +25,7 @@ Created on Jul 11, 2012
 import os
 import re
 from StringTools import print_exception
+from SecStructures import Dimer
 try:
     from Bio.Alphabet import IUPAC
     from Bio.Seq import Seq
@@ -109,4 +110,20 @@ def load_sequence(seq_string, rec_id=None, desc=None):
 
 
 def self_complement(seq_rec):
+    '''return True if sequence is selfcomplement'''
     return str(seq_rec.seq) == str(seq_rec.seq.reverse_complement())
+
+
+def dimer(seq1, seq2):
+    '''form a simple dimer structure from two sequences of the same length;
+    both sequences should be 5'->3' oriented'''
+    if len(seq1) != len(seq2):
+        raise ValueError('OligoFunctions.dimer: sequences must be of the same length.')
+    forward = seq1
+    revcomp = seq2.reverse_complement()
+    dimer   =  Dimer()
+    for i in range(len(seq1)):
+        if forward[i] == revcomp[i]:
+            dimer.add(i,i)
+    return dimer
+#end def

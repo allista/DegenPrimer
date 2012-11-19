@@ -32,7 +32,7 @@ deoxynucleotide triphosphate, and dimethyl sulfoxide concentrations with
 comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-61.
 '''
 
-from math import sqrt, log
+from math import sqrt, log, exp
 from UnifiedNN import *
 from StringTools import print_exception
 try:
@@ -54,6 +54,7 @@ C_dNTP = 0    #mM
 C_DNA  = 50   #nM; DNA template concentration
 C_Prim = 0.1  #uM; Primer concentration
 C_DMSO = 0    #percent
+PCR_T  = 37   #C;  temperature at which PCR is conducted. Default is 37 for dG tables contain values of standard Gibbs energy at 37C
 
 def C_Na_eq():
     """divalent cation correction (Ahsen et al., 2001)"""
@@ -173,12 +174,10 @@ def calculate_Tm(seq_rec):
 
 
 def dimer_dG(dimer, seq1, seq2):
-    fwd_matches = list(dimer[0])
-    fwd_matches.sort()
-    #e.g. (2 ,3 ,4 ,8 ,9 )
-    rev_matches = list(dimer[1])
-    rev_matches.sort()
-    #e.g. (13,14,15,19,20)
+    fwd_matches = dimer.fwd_matches()
+    #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
+    rev_matches = dimer.rev_matches()
+    #e.g. 3-'(13,14,15,19,20)-5'
     seq_str = str(seq1)
     seq_len = len(seq_str)
     rev_str = str(seq2[::-1])
@@ -238,12 +237,10 @@ def dimer_dG(dimer, seq1, seq2):
 
 
 def hairpin_dG(hairpin, seq):
-    fwd_matches = list(hairpin[0])
-    fwd_matches.sort()
-    #e.g. (2 ,3 ,4 ,8 ,9 )
-    rev_matches = list(hairpin[1])
-    rev_matches.sort(reverse=True)
-    #e.g  (24,23,22,18,17)
+    fwd_matches = hairpin.fwd_matches()
+    #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
+    rev_matches = hairpin.rev_matches()
+    #e.g  3'-(24,23,22,18,17)...-5'
     seq_str = str(seq)
     seq_len = len(seq_str)
     dG_Na   = dG_Na_coefficient_oligo * 1 * log(C_Na_eq()*1e-3)
@@ -299,4 +296,27 @@ def hairpin_dG(hairpin, seq):
             dG += Terminal_mismatch_mean
     else: dG += Terminal_mismatch_mean
     return dG
+#end def
+
+
+def equilibrium_constant(dG_T, T):
+    '''calculate equilibrium constant of the annealing reaction
+    at a given temperature, given standard dG at this temperature'''
+    global R, K0
+    return exp(-1000*dG_T/(R*(T-K0))) #annealing equilibrium constant
+
+
+def conversion_degree(dG_T, T):
+    '''calculate conversion degree at equilibrium
+    given standard dG(kcal/mol) of annealing at T(C) temperature'''
+    global C_Prim, C_DNA 
+    K = equilibrium_constant(dG_T, T)
+    P    = C_Prim*1e-6 #M
+    D    = C_DNA *1e-9 #M
+    #quadratic equation with respect to DUP = r*min(P,D), 
+    #where 'r' is a conversion degree
+    _b    = (K*P+K*D+1) #MINUS b; always positive
+    disc = _b*_b - 4*K*(K*P*D) #this should always be >= 0 given non-negative K, P and D
+    DUP  = (_b-sqrt(disc))/(2*K) #take the smallest positive root
+    return DUP/min(P,D)
 #end def

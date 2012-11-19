@@ -22,12 +22,11 @@ Created on Jun 26, 2012
 '''
 
 import os
-from itertools import chain
 from ConfigParser import SafeConfigParser
-import StringTools
-from StringTools import hr, wrap_text, format_histogram, time_hr, print_exception
-from Electrophoresis import print_electrophoresis
+from StringTools import hr, wrap_text, time_hr, print_exception
+from SecStructures import Dimer
 from TD_Functions import dimer_dG
+from PCR_Results import PCR_Results
 try:
     from Bio.Blast import NCBIWWW, NCBIXML 
     from Bio.SeqRecord import SeqRecord
@@ -158,13 +157,12 @@ class Blast(object):
     
     def _check_hsp(self, hsp, max_dG, no_exonuclease):
         #check dG constraint
-        dimer  = (set(), set(), [])
+        dimer  = Dimer()
         query  = Seq(hsp.query, IUPAC.unambiguous_dna) #5'-3'
         target = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement() #revcomp(3'-5')
         for i in range(len(hsp.match)):
             if hsp.match[i] == '|':
-                dimer[0].add(i)
-                dimer[1].add(i)
+                dimer.add(i,i)
         dG    = dimer_dG(dimer, query, target)
         if dG > max_dG: return False
         #check 3' constraint
@@ -180,119 +178,53 @@ class Blast(object):
     #end def 
         
     
-    def _find_PCR_products(self, min_amplicon, max_amplicon, max_dG, no_exonuclease):
+    def _find_PCR_products(self, min_amplicon, max_amplicon, quantity_threshold, no_exonuclease):
         self._PCR_products = dict()
         sorted_hits = []
         for record in self._blast_results:
-            self._PCR_products[record.query] = dict()
+            self._PCR_products[record.query] = PCR_Results(min_amplicon, max_amplicon, no_exonuclease, 0.0) #TODO: add quantity threshold parameter 
             sorted_hits.append(dict())
             record_hits = sorted_hits[-1]
             for alignment in record.alignments:
                 hit_title = (alignment.title.split('|')[-1]).strip()
-                record_hits[hit_title] = {'fwd':dict(), 'rev':dict()}
+                record_hits[hit_title] = {'fwd':list(), 'rev':list()}
                 hits = record_hits[hit_title]
                 #check and sort all hsps 
                 for hsp in alignment.hsps:
-                    #check for 3' matching and mismatch number
-                    if not self._check_hsp(hsp, max_dG, no_exonuclease):
-                        continue
                     #add hsp to corresponding dictionary
                     target_end   = hsp.sbjct_end
-                    query_dir    = hsp.frame[0]
+                    primer_dir    = hsp.frame[0]
                     target_dir   = hsp.frame[1]
+                    primer       = Seq(hsp.query, IUPAC.unambiguous_dna) #5'->3'
+                    target       = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement() #5'->3'
                     #fwd hsp
-                    if query_dir == 1 and target_dir == 1:
-                        if target_end not in hits['fwd']:
-                            hits['fwd'][target_end] = 1
-                        else: hits['fwd'][target_end] += 1
+                    if primer_dir == 1 and target_dir == 1:
+                        hits['fwd'].append({'start':target_end,
+                                            'fwd_seq':target,
+                                            'fwd_primer':primer})
                     #rev hsp
-                    elif query_dir == 1 and target_dir == -1:
-                        if target_end not in hits['rev']:
-                            hits['rev'][target_end] = 1
-                        else: hits['rev'][target_end] += 1
+                    elif primer_dir == 1 and target_dir == -1:
+                        hits['rev'].append({'end':target_end,
+                                            'rev_seq':target,
+                                            'rev_primer':primer})
                 #search for possible PCR products
-                self._PCR_products[record.query][hit_title] = []
-                products = self._PCR_products[record.query][hit_title]
                 for fwd_hit in hits['fwd']:
                     for rev_hit in hits['rev']:
-                        if fwd_hit < rev_hit \
-                        and rev_hit-fwd_hit < max_amplicon \
-                        and rev_hit-fwd_hit < max_amplicon:
-                            products.append({'target'  :hit_title,
-                                             'start'   :fwd_hit, 
-                                             'end'     :rev_hit, 
-                                             'len'     :(rev_hit-fwd_hit), 
-                                             'quantity':min(hits['fwd'][fwd_hit],
-                                                            hits['rev'][rev_hit])})
-                #remove empty target products dict
-                if not products: del self._PCR_products[record.query][hit_title]
+                        if fwd_hit['start'] < rev_hit['end']:
+                            self._PCR_products[record.query].add_product(
+                                                    hit_title,
+                                                    fwd_hit['start'], 
+                                                    rev_hit['end'], 
+                                                    rev_hit['end'] - fwd_hit['start'],
+                                                    fwd_hit['fwd_seq'],
+                                                    rev_hit['rev_seq'],
+                                                    fwd_hit['fwd_primer'],
+                                                    rev_hit['rev_primer']) 
+            #compute PCR products quantities
+            self._PCR_products[record.query].compute_quantities()
             #remove empty query products dict
-            if not self._PCR_products[record.query]: del self._PCR_products[record.query]
-    #end def
-
-    
-    def _products_histogram(self, name, products):
-        text_width = StringTools.text_width
-        hist_width = len(self._products_col_titles[1])
-        #construct histogram
-        histogram  = dict()
-        max_start  = max(len(str(p['start'])) for p in products)
-        max_end    = max(len(str(p['end'])) for p in products)
-        max_len    = max(len(str(p['len'])) for p in products)
-        prod_limit = text_width-hist_width-2
-        for product in products:
-            product_spec   = '%d%s bp [%d%s-%s%d]' % (product['len'],
-                                                      ' '*(max_len-len(str(product['len']))),
-                                                      product['start'],
-                                                      ' '*(max_start-len(str(product['start']))),
-                                                      ' '*(max_end-len(str(product['end']))),
-                                                      product['end'])
-            
-            colname = product_spec+' '*(prod_limit - len(product_spec))
-            if colname not in histogram:
-                histogram[colname] = [product['quantity'],product['start']]
-            else: histogram[colname][0] += product['quantity'] 
-        #normalize histogram
-        norm = float(max(histogram.values(), key=lambda x: x[0])[0])
-        for colname in histogram:
-            histogram[colname][0] /= norm
-        #sort histogram by product len
-        histogram = sorted(zip(histogram, histogram.values()), key=lambda x: x[1][1])
-        histogram = tuple((line[0], line[1][0]) for line in histogram)
-        #format histogram
-        return format_histogram(histogram, (name, self._products_col_titles[1]), hist_width)
-    #end def
-
-    
-    def _all_products_histogram(self, products):
-        all_products = list(chain(*(products.values())))
-        text_width = StringTools.text_width
-        hist_width = len(self._all_products_col_titles[1])
-        #construct histogram
-        histogram  = dict()
-        max_target = max(len(p['target']) for p in all_products)
-        max_len    = max(len(str(p['len'])) for p in all_products)
-        for product in all_products:
-            target_spec   = ' %d%s bp [%d-%d]' % (product['len'],
-                                                 ' '*(max_len-len(str(product['len']))),
-                                                 product['start'],
-                                                 product['end'])
-            target_limit  = text_width-hist_width-2 - len(target_spec)
-            target_spacer = max_target - len(product['target'])
-            if target_limit < 0: target_limit = 0
-            colname = (product['target']+' '*target_spacer)[:target_limit] + target_spec
-            if colname not in histogram:
-                histogram[colname] = [product['quantity'],product['len']]
-            else: histogram[colname][0] += product['quantity'] 
-        #normalize histogram
-        norm = float(max(histogram.values(), key=lambda x: x[0])[0])
-        for colname in histogram:
-            histogram[colname][0] /= norm
-        #sort histogram by product len
-        histogram = sorted(zip(histogram, histogram.values()), key=lambda x: x[1][1])
-        histogram = tuple((line[0], line[1][0]) for line in histogram)
-        #format histogram
-        return format_histogram(histogram, self._all_products_col_titles, hist_width)
+            if not self._PCR_products[record.query]: 
+                del self._PCR_products[record.query]
     #end def
     
 
@@ -321,7 +253,7 @@ class Blast(object):
         else: blast_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
         blast_report.write('Minimum amplicon size:      %d\n' % min_amplicon)
         blast_report.write('Maximum amplicon size:      %d\n' % max_amplicon)
-        blast_report.write('Maximum dG of an alignment: %.2f\n' % max_dG)
+        blast_report.write('Maximum dG of an alignment: %.2f\n' % max_dG) #TODO: replace with conversion degree
         blast_report.write('\n\n\n')
         #if no PCR products have been found
         if not self._PCR_products:
@@ -333,22 +265,19 @@ class Blast(object):
             blast_report.write(hr(' query ID: %s ' % record_name, symbol='#'))
             #all products histogram
             blast_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-            blast_report.write(self._all_products_histogram(self._PCR_products[record_name]))
-            blast_report.write(wrap_text('"relative concentration" of a product is a normalized '
-                                         'number of primer pairs that yield this particular product.\n'))
+            blast_report.write(self._PCR_products[record_name].all_products_histogram())
+#            blast_report.write(wrap_text('"relative concentration" of a product is a normalized '
+#                                         'number of primer pairs that yield this particular product.\n'))
+#TODO: write description of a relative concentration
             blast_report.write('\n\n\n')
             #all products electrophoresis
             blast_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
-            blast_report.write(print_electrophoresis(list(chain(*(self._PCR_products[record_name].values())))))
+            blast_report.write(self._PCR_products[record_name].all_products_electrophoresis())
             blast_report.write('\n\n')
-            #PCR products by target
-            blast_report.write(hr(' the same grouped by target sequence ', symbol='='))
-            for target_name in self._PCR_products[record_name]:
-                blast_report.write(self._products_histogram(target_name, self._PCR_products[record_name][target_name]))
-                blast_report.write(print_electrophoresis(self._PCR_products[record_name][target_name]))
-                blast_report.write('\n')
-                blast_report.write(hr(''))
-                blast_report.write('\n')
+            #PCR products by hit, if there more than one hit 
+            if len(self._PCR_products[record_name].hits()) > 1:
+                blast_report.write(hr(' the same grouped by target sequence ', symbol='='))
+                blast_report.write(self._PCR_products[record_name].all_graphs_grouped_by_hit())
         blast_report.close()
         print '\nPossible PCR products defined by hits from BLAST search were written to:\n   ' + \
             self._blast_PCR_report_filename

@@ -66,38 +66,6 @@ def wrap_text(text):
 #end def
 
 
-def format_histogram(histogram, col_names, hist_width=10):
-    global text_width
-    histogram_string = ''
-    #maximum column name width
-    max_name = text_width-hist_width-2
-    #cut name column title if necessary 
-    if len(col_names[0]) > max_name:
-        names = col_names[0][:max_name]
-    else: names = col_names[0]
-    #spacers
-    names_spacer = max_name - len(names)
-    hists_spacer = hist_width - len(col_names[1])
-    #column_titles 
-    histogram_string += '-'*(names_spacer/2)+names + \
-                        '-'*(names_spacer-names_spacer/2) + '|' + \
-                        '-'*(hists_spacer/2)+col_names[1] + \
-                        '-'*(hists_spacer-hists_spacer/2) + '|\n'
-    #histogram lines
-    for col in histogram:
-        if len(col[0]) > max_name:
-            name = col[0][:max_name]
-        else: name = col[0]
-        name_spacer = max_name - len(name)
-        hist_value  = int(col[1]*hist_width)
-        col_spacer  = hist_width - hist_value
-        histogram_string += name + ' '*name_spacer
-        histogram_string += ':' + '#'*hist_value + ' '*col_spacer + ':' + '\n'
-    histogram_string += '\n'
-    return histogram_string
-#end def
-
-
 #tests
 if __name__ == '__main__':
     text_width = 40

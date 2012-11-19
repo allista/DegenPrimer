@@ -24,3 +24,4 @@ dist
 ./oligonucleotide-Tm.R
 ./packages_DegenPrymer.pdf
 RE:(?i).*\.csv
+./discriminant-test.R

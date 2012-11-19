@@ -135,12 +135,17 @@ def degen_primer_pipeline(args):
     if args.sense_primer and args.antisense_primer:
         fwd_primers  = pfam_primers(0)
         rev_primers  = pfam_primers(1)
-        ipcr = iPCR(job_id, fwd_primers, rev_primers)
-        ipcr.writeProgram(args.min_amplicon, args.max_amplicon)
+        ipcr = iPCR(job_id, fwd_primers, rev_primers, args.min_amplicon, args.max_amplicon, args.no_exonuclease, 0.0) #TODO: replace 0.0 with quantity_threshold parameter
+        ipcr.writeProgram()
         #if target sequences are provided, run iPCR...
         if args.fasta_files:
-            if ipcr.executeProgram(args.fasta_files, args.max_mismatches):
-                ipcr.register_reports(args)
+            ipcr.executeProgram(args.fasta_files, args.max_mismatches)
+        else:
+            #load previously saved results
+            ipcr.load_results()
+        if ipcr.have_results:
+            ipcr.write_PCR_report()
+            ipcr.register_reports(args)
     #-----------------------------------------------------------------------------#
     
     

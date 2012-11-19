@@ -23,9 +23,10 @@ Created on Jul 3, 2012
 
 import sys, os
 import subprocess
-import StringTools
-from StringTools import print_exception, format_histogram, wrap_text, time_hr, hr
-from Electrophoresis import print_electrophoresis
+from StringTools import print_exception, wrap_text, time_hr, hr
+from Bio.Seq import Seq
+from Bio.Alphabet import IUPAC
+from PCR_Results import PCR_Results
 
 class iPCR(object):
     '''Wrapper for ipcress process and parser for it's results'''
@@ -33,30 +34,47 @@ class iPCR(object):
     #garbage string which ipcress inserts in the middle of a target sequence ID
     _ipcress_target_garbage = ':filter(unmasked)'
     
-    #titles of a histogram columns
-    _col_titles = ('PCR-product', 'relative concentration')
 
-
-    def __init__(self, job_id, fwd_primers, rev_primers):
-        '''Constructor'''
-        self._program_filename  = job_id+'.ipcr'
-        self._report_filename   = job_id+'-ipcr-full-report.txt'
-        self._summary_filename  = job_id+'-ipcr-short-report.txt'
-        self._fwd_primers = fwd_primers
-        self._rev_primers = rev_primers
-        self._results = None
+    def __init__(self, 
+                 job_id, 
+                 fwd_primers, 
+                 rev_primers, 
+                 min_amplicon, 
+                 max_amplicon, 
+                 no_exonuclease, 
+                 quantity_threshold):
+        #files
+        self._program_filename    = job_id+'.ipcr'
+        self._raw_report_filename = job_id+'-ipcr-raw-report.txt'
+        self._PCR_report_filename = job_id+'-ipcr-PCR-report.txt'
+        #parameters
+        self._fwd_primers        = fwd_primers
+        self._rev_primers        = rev_primers
+        self._max_mismatches     = None
+        self._min_amplicon       = min_amplicon
+        self._max_amplicon       = max_amplicon
+        self._no_exonuclease     = no_exonuclease
+        self._quantity_threshold = quantity_threshold
+        #results
+        self._PCR_products = PCR_Results(self._min_amplicon,
+                                        self._max_amplicon,
+                                        self._no_exonuclease,
+                                        self._quantity_threshold)
+        self._results     = None
+        self._hits        = None
+        self.have_results = False
     #end def
     
     
-    def writeProgram(self, min_amplicon, max_amplicon):
+    def writeProgram(self):
         ipcr_program = open(self._program_filename, 'w')
         for fwd_primer in self._fwd_primers:
             for rev_primer in self._rev_primers:
                 pcr_string  = fwd_primer.id + '-' + rev_primer.id
                 pcr_string += ' '+str(fwd_primer.seq)
                 pcr_string += ' '+str(rev_primer.seq)
-                pcr_string += ' '+str(min_amplicon)
-                pcr_string += ' '+str(max_amplicon)
+                pcr_string += ' '+str(self._min_amplicon)
+                pcr_string += ' '+str(self._max_amplicon)
                 pcr_string += '\n'
                 ipcr_program.write(pcr_string)
         ipcr_program.close()
@@ -86,10 +104,10 @@ class iPCR(object):
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE,
                                      shell=(sys.platform!="win32"))
-            ipcr_report = open(self._report_filename, 'w')
+            ipcr_report = open(self._raw_report_filename, 'w')
             ipcr_report.write(child.stdout.read())
             ipcr_report.close()
-            print '\nFull ipcress report was written to:\n   ',self._report_filename
+            print '\nRaw ipcress report was written to:\n   ',self._raw_report_filename
         except OSError, e:
             print '\nFaild to execute ipcress'
             print_exception(e)
@@ -100,16 +118,7 @@ class iPCR(object):
             print '\nFaild to execute ipcress'
             print_exception(e)
             return False
-        #parse the results and write a summary
-        if not self._parse_results():
-            return False
-        self._write_summary()
-        return True
-    #end def
-    
-    
-    def register_reports(self, args):
-        args.register_report('iPCR short report', self._summary_filename)
+        return self.load_results()
     #end def
     
     
@@ -127,96 +136,128 @@ class iPCR(object):
     #end def
     
     
-    def _parse_results(self):
+    def load_results(self):
+        #open results file
         try:
-            ipcr_report = open(self._report_filename, 'r')
-        except Exception, e:
-            print('\nFailed to open iPCR full report file:\n   %s' % self._report_filename)
-            print_exception(e)
+            ipcr_report = open(self._raw_report_filename, 'r')
+        except Exception:
+            print('\nFailed to open raw iPCR report file:\n   %s' % self._raw_report_filename)
             return False
+        #parse results file
         self._results = []
+        self._hits = []
         for line in ipcr_report:
             line = line.rstrip('\n')
             if not line: continue
             if line == 'Ipcress result':
                 self._results.append(dict())
-                self._results[-1]['quantity'] = 1
             else:
                 words = line.split()
                 if   words[0] == 'Experiment:':
-                    self._results[-1]['name']   = words[1]
+                    self._results[-1]['experiment']   = words[1]
                 elif words[0] == 'Target:':
                     target_name = (''.join(w+' ' for w in words[1:])).strip()
-                    self._results[-1]['target'] = self._clear_target_string(target_name)
+                    target_name = self._clear_target_string(target_name)
+                    self._results[-1]['hit'] = target_name
+                    if not target_name in self._hits:
+                        self._hits.append(target_name)
                 elif words[0] == 'Product:':
-                    self._results[-1]['len']    = int(words[1])
+                    self._results[-1]['length']  = int(words[1])
                 elif words[0] == 'ipcress:':
-                    self._results[-1]['left']   = int(words[5])
-                    self._results[-1]['right']  = int(words[8])
+                    self._results[-1]['start']   = int(words[5])
+                    self._results[-1]['end']     = int(words[8])
+                elif words[-1] == 'forward':
+                    seq = Seq(words[0].strip('.')[::-1], IUPAC.unambiguous_dna).complement()  #forward template 5'->3'
+                    self._results[-1]['fwd_seq'] = seq
+                elif words[-1] == 'primers':
+                    self._results[-1]['fwd_primer'] = Seq(words[0][3:-3], IUPAC.unambiguous_dna) #forward primer 5'->3'
+                    self._results[-1]['rev_primer'] = Seq(words[1][3:-3][::-1], IUPAC.unambiguous_dna) #reverse primer 5'->3'
+                elif words[-1] == 'revcomp':
+                    seq = Seq(words[0].strip('.'), IUPAC.unambiguous_dna).complement() #forward template 5'->3'
+                    self._results[-1]['rev_seq'] = seq
         ipcr_report.close()
         if not self._results:
-            print('\nNo results found in full iPCR report:\n   %s' % self._report_filename)
+            print('\nNo results found in raw iPCR report:\n   %s' % self._raw_report_filename)
             self._results = None
             return False
+        #add results to PCR_Results object
+        for result in self._results:
+            self._PCR_products.add_product(result['hit'], 
+                                          result['start'], 
+                                          result['end']+len(result['rev_primer']), #ipcress defines end position as 3'-start of the reverse primer
+                                          result['length'], 
+                                          result['fwd_seq'], 
+                                          result['rev_seq'], 
+                                          result['fwd_primer'], 
+                                          result['rev_primer'])
+        #compute PCR products quantities
+        self._PCR_products.compute_quantities()
+        if not self._PCR_products:
+            print('\nAll results found in raw iPCR report were filtered out\n')
+            return False
+        self.have_results = True
         return True
     #end def
     
     
-    def _results_histogram(self):
-        text_width = StringTools.text_width
-        hist_width = len(self._col_titles[1])
-        #construct histogram
-        histogram  = dict()
-        max_target = max(len(r['target']) for r in self._results)
-        max_len    = max(len(str(r['len'])) for r in self._results)
-        for result in self._results:
-            target_spec   = ' %d%s b [%d-%d]' % (result['len'],
-                                                 ' '*(max_len-len(str(result['len']))),
-                                                 result['left'],
-                                                 result['right'])
-            target_limit  = text_width-hist_width-2 - len(target_spec)
-            target_spacer = max_target - len(result['target'])
-            if target_limit < 0: target_limit = 0
-            colname = (result['target']+' '*target_spacer)[:target_limit] + target_spec
-            if colname in histogram:
-                histogram[colname][0] += 1
-            else: histogram[colname] = [1,result['len']]
-        #normalize histogram
-        norm = float(max(histogram.values(), key=lambda x: x[0])[0])
-        for colname in histogram:
-            histogram[colname][0] /= norm
-        #sort histogram by product len
-        histogram = sorted(zip(histogram, histogram.values()), key=lambda x: x[1][1])
-        histogram = tuple((line[0], line[1][0]) for line in histogram)
-        #format histogram
-        return format_histogram(histogram, self._col_titles, hist_width)
+    def write_PCR_report(self):
+        #open report file
+        try:
+            ipcr_report = open(self._PCR_report_filename, 'w')
+        except Exception:
+            print('\nFailed to open iPCR report file for writing:\n   %s' % self._PCR_report_filename)
+            return
+        #format report
+        ipcr_report.write(time_hr())
+        #header
+        ipcr_report.write(wrap_text('All hits are filtered by number of mismatches '
+                                     'and, if --no-exonuclease option was '
+                                     'provided, hits with mismatches on '
+                                     "3'-end are also filtered.\n"
+                                     'Then hits are sorted into "forward" and '
+                                     '"reverse" groups. Pairs of forward and reverse '
+                                     'hits comprise possible PCR products which are '
+                                     'in their turn filtered by amplicon size.\n'))
+        ipcr_report.write('\n')
+        if self._max_mismatches:
+            ipcr_report.write('Number of mismatches allowed: %d\n' % self._max_mismatches)
+        #filter parameters
+        ipcr_report.write(hr(' filtration parameters '))
+        if self._no_exonuclease:
+            ipcr_report.write("DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n")
+        else: ipcr_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
+        ipcr_report.write('Minimum amplicon size:      %d\n' % self._min_amplicon)
+        ipcr_report.write('Maximum amplicon size:      %d\n' % self._max_amplicon)
+        ipcr_report.write('Maximum dG of an alignment: %.2f\n' % self._quantity_threshold) #TODO: replace with conversion degree
+        ipcr_report.write('\n\n\n')
+        #if no PCR products have been found
+        if not self._PCR_products:
+            ipcr_report.write(hr(' No PCR products have been found ', symbol='!'))
+            ipcr_report.close()
+            return
+        #else...
+        #all products histogram
+        ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
+        ipcr_report.write(self._PCR_products.all_products_histogram())
+#            ipcr_report.write(wrap_text('"relative concentration" of a product is a normalized '
+#                                         'number of primer pairs that yield this particular product.\n'))
+#TODO: write description of a relative concentration
+        ipcr_report.write('\n\n\n')
+        #all products electrophoresis
+        ipcr_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
+        ipcr_report.write(self._PCR_products.all_products_electrophoresis())
+        ipcr_report.write('\n\n')
+        #PCR products by hit, if there more than one hit 
+        if len(self._PCR_products.hits()) > 1:
+            ipcr_report.write(hr(' the same grouped by target sequence ', symbol='='))
+            ipcr_report.write(self._PCR_products.all_graphs_grouped_by_hit())
+        ipcr_report.close()
+        print '\niPCRess report was written to:\n   ',self._PCR_report_filename
     #end def
     
     
-    def _write_summary(self):
-        try:
-            ipcr_summary = open(self._summary_filename, 'w')
-        except Exception, e:
-            print('\nFailed to open iPCR summary file for writing:\n   %s' % self._summary_filename)
-            print_exception(e)
-            return
-        #format report
-        summary_text  = ''
-        summary_text += time_hr()
-        summary_text += 'A summary report of the in silica PCR simulation.\n'
-        summary_text += 'Number of mismatches allowed: %d\n' % self._max_mismatches
-        summary_text += '\n'
-        summary_text += hr(' iPCR products histogram ')
-        summary_text += self._results_histogram()
-        summary_text += wrap_text('"relative concentration" of a product is a normalized '
-                                  'number of primer pairs that yield this particular product.\n')
-        summary_text += '\n'
-        summary_text += hr(' iPCR products electrophoresis ')
-        summary_text += print_electrophoresis(self._results)
-        #write report
-        ipcr_summary.write(summary_text)
-        ipcr_summary.close()
-        print '\nShort ipcress report was written to:\n   ',self._summary_filename
+    def register_reports(self, args):
+        args.register_report('iPCR report', self._PCR_report_filename)
     #end def
 #end class
         

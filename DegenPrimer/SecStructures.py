@@ -18,9 +18,9 @@ Created on Jun 23, 2012
 
 @author: Allis Tauri <allista@gmail.com>
 '''
-from copy import deepcopy
 from TD_Functions import dimer_dG, hairpin_dG
 from StringTools import hr
+
     
 def all_combinations(lst):
     if not lst: return []
@@ -32,6 +32,72 @@ def all_combinations(lst):
         combinations.append([lst[0]]+comb)
     return combinations
 #end def
+
+
+class Dimer(object):
+    '''
+    Structure of a dimer:
+    forward matches is a list of nucleotide indices of forward sequence directed 5'->3'
+    reverse matches is a list of nucleotide indices of reverse sequence directed 3'->5'
+    nucleotide fwd_match[n] canonically matches nucleotide rev_matches[n]
+    e.g. fwd_matches = 5'-[2,4,7, 9]-3'
+         rev_matches = 3'-[4,6,9,11]-5'
+    '''
+    def __init__(self, fwd_matches=None, rev_matches=None, dG=0):
+        if fwd_matches:
+            self._fwd_matches = set(fwd_matches)
+        else:
+            self._fwd_matches = set()    
+        if rev_matches:
+            self._rev_matches = set(rev_matches)
+        else:
+            self._rev_matches = set()
+        self.dG = 0
+    
+    def __nonzero__(self):
+        if  len(self._fwd_matches) > 0 \
+        and len(self._rev_matches) == len(self._fwd_matches):
+            return True
+        else: return False
+    
+    def __getitem__(self, i):
+        if   i == 0: return self._fwd_matches
+        elif i == 1: return self._rev_matches
+        elif i == 2: return self.dG
+        else: raise IndexError('SecStructures.Dimer: index out of bounds.')
+        
+    def fwd_matches(self):
+        l = list(self._fwd_matches)
+        l.sort()
+        return l
+    
+    def rev_matches(self):
+        l = list(self._rev_matches)
+        l.sort()
+        return l
+        
+    def add(self, fwd, rev):
+        self._fwd_matches.add(fwd)
+        self._rev_matches.add(rev)
+#end class
+
+
+class Hairpin(Dimer):
+    '''
+    Structure of a hairpin:
+    described sequence directed 5'->3' 
+    forward matches is a list of near-5'-end nucleotide indices
+    reverse matches is a *reversed* list of near-3'-end nucleotide indices
+    nucleotide fwd_match[n] canonically matches nucleotide rev_matches[n]
+    e.g. fwd_matches = 5'-[2, 4, 7,  9]...-3'
+         rev_matches = 3'-[22,20,17,15]...-5'
+    '''        
+    def rev_matches(self):
+        l = list(self._rev_matches)
+        l.sort(reverse=True)
+        return l 
+#end class
+
 
 class SecStructures(object):
     '''
@@ -64,9 +130,9 @@ class SecStructures(object):
     
     def dimerMin_dG(self):
         if self._seq2 and self._cross_dimers:
-            return self._cross_dimers[0][2][0]
+            return self._cross_dimers[0].dG
         elif self._seq1_dimers:
-            return self._seq1_dimers[0][2][0]
+            return self._seq1_dimers[0].dG
         else: return None
     #end def
     
@@ -79,7 +145,7 @@ class SecStructures(object):
     def hairpinMin_dG(self):
         if self._seq2 or not self._seq1_hairpins: 
             return None
-        else: return self._seq1_hairpins[0][2][0]
+        else: return self._seq1_hairpins[0].dG
     #end def
     
     def hairpinMin_3prim_dG(self):
@@ -145,14 +211,12 @@ class SecStructures(object):
             self._cross_dimers   = None
     #end def        
     
-    def _remove_loops(self, structure):
-        """remove terminal internal loops one by one in all possible combinations
-        to produce a bunch of new structures"""
-        structures  = [structure]
-        fwd_matches = list(structure[0])
-        rev_matches = list(structure[1])
-        fwd_matches.sort()
-        rev_matches.sort()
+    def _remove_loops(self, dimer):
+        """remove terminal internal loops from a dimer one by one in all 
+        possible combinations to produce a bunch of new structures"""
+        dimers  = [dimer]
+        fwd_matches = dimer.fwd_matches()
+        rev_matches = dimer.rev_matches()
         #scan for loops from both ends
         left_loops  = []
         right_loops = []
@@ -173,23 +237,23 @@ class SecStructures(object):
                 right_loops.append((right_margin, fwd_matches[j]-fwd_matches[j-1]-1))
                 right_margin = (set(),set())
         #of no loops have been found, return original structure
-        if not left_loops: return structures
+        if not left_loops: return dimers
         #else, remove boundary loops one by one
-        l_structure = structure
+        l_dimer = dimer
         for l in range(len(left_loops)):
-            r_structure = l_structure
+            r_dimer = l_dimer
             for r in range(len(right_loops)-l):
-                r_structure = (r_structure[0]-right_loops[r][0][0],
-                               r_structure[1]-right_loops[r][0][1],[])
-                structures.append(r_structure)
-            l_structure = (l_structure[0]-left_loops[l][0][0],
-                           l_structure[1]-left_loops[l][0][1],[])
-            structures.append(l_structure)
-        return structures
+                r_dimer = Dimer(r_dimer[0]-right_loops[r][0][0],
+                               r_dimer[1]-right_loops[r][0][1])
+                dimers.append(r_dimer)
+            l_dimer = Dimer(l_dimer[0]-left_loops[l][0][0],
+                           l_dimer[1]-left_loops[l][0][1])
+            dimers.append(l_dimer)
+        return dimers
     #end def
     
     def _find_dimers(self, seq1, seq2):
-        """Search for all secondary structures"""
+        """Search for all dimers"""
         all_structures = {'dimers': [], 'hairpins': []}
         self_dimers = str(seq1) == str(seq2)
         dimers   = all_structures['dimers']
@@ -216,30 +280,29 @@ class SecStructures(object):
             if front >= rev_len:
                 rev_right = rev_len
             #scan for matches
-            structure = (set(), set(), [])
+            dimer = Dimer()
             for fwd,rev in zip(range(fwd_left,fwd_right),range(rev_left,rev_right)):
                 if(fwd_str[fwd] == rev_str[rev]):
-                    structure[0].add(fwd)
-                    structure[1].add(rev)
+                    dimer.add(fwd, rev)
             #if found some
-            if structure[0]:
-                if self_dimers and structure not in hairpins: 
-                    hairpins.append(structure)
+            if dimer[0]:
+                if self_dimers and dimer not in hairpins: 
+                    hairpins.append(dimer)
                 min_dG = 0
                 min_dG_structure = None
-                new_structures = self._remove_loops(structure)
+                new_structures = self._remove_loops(dimer)
                 for struct in new_structures:
-                    #calculate dG for every structure
+                    #calculate dG for every dimer
                     dG = dimer_dG(struct, seq1, seq2)
-                    struct[2].append(dG)
+                    struct.dG = dG
                     #find the most stable
                     if min_dG > dG:
                         min_dG = dG
                         min_dG_structure = struct
-                #if there is a stable structure, append it
+                #if there is a stable dimer, append it
                 if min_dG_structure and min_dG_structure not in dimers:
                     dimers.append(min_dG_structure)
-                    #check for 3' structure
+                    #check for 3' dimer
                     if max(min_dG_structure[0]) > len(seq1)-4 \
                     or min(min_dG_structure[1]) < 3:
                         self._3prim_dimers += 1
@@ -247,7 +310,7 @@ class SecStructures(object):
                             self._min_3prim_dimer_dG = min_dG
                             self._min_3prim_dimer    = min_dG_structure 
         #sort by dG
-        dimers.sort(key=lambda x: x[2][0])
+        dimers.sort(key=lambda x: x.dG)
         return all_structures
     #end def
 
@@ -257,8 +320,8 @@ class SecStructures(object):
         hairpins   = []
         if not dimers: return hairpins
         for dimer in dimers:
-            fwd_matches = deepcopy(dimer[0])
-            rev_matches = deepcopy(dimer[0])
+            fwd_matches = dimer.fwd_matches()
+            rev_matches = dimer.fwd_matches()
             while (rev_matches and fwd_matches)       and \
                   (min(rev_matches) < max(fwd_matches) or \
                    min(rev_matches) - max(fwd_matches) < 4): #at least 3 bases separation
@@ -267,11 +330,11 @@ class SecStructures(object):
             if fwd_matches:
                 min_dG = 0
                 min_dG_hairpin = None
-                new_dimers = self._remove_loops((fwd_matches, set(seq_len-1-m for m in rev_matches), []))
+                new_dimers = self._remove_loops(Dimer(fwd_matches, set(seq_len-1-m for m in rev_matches)))
                 for new_dimer in new_dimers:
-                    hairpin = (deepcopy(new_dimer[0]), set(seq_len-1-m for m in new_dimer[1]), [])
+                    hairpin = Hairpin(new_dimer[0], set(seq_len-1-m for m in new_dimer[1]))
                     dG = hairpin_dG(hairpin, seq)
-                    hairpin[2].append(dG)
+                    hairpin.dG = dG
                     #find the most stable
                     if min_dG > dG:
                         min_dG = dG
@@ -285,14 +348,14 @@ class SecStructures(object):
                         if self._min_3prim_hairpin_dG > min_dG:
                             self._min_3prim_hairpin_dG = min_dG
                             self._min_3prim_hairpin    = min_dG_hairpin 
-        hairpins.sort(key=lambda x: x[2][0])
+        hairpins.sort(key=lambda x: x.dG)
         return hairpins
     #end def
 
-    def _format_dimer(self, structure, seq1, seq2):
+    def _format_dimer(self, dimer, seq1, seq2):
         structure_string = ''
-        fwd_matches = list(structure[0])
-        rev_matches = list(structure[1])
+        fwd_matches = dimer.fwd_matches()
+        rev_matches = dimer.rev_matches()
         fwd_matches.sort()
         rev_matches.sort()
         #construct matches string
@@ -320,7 +383,7 @@ class SecStructures(object):
             % {'spacer2':spacer2,
                'seq2'   :str(seq2[::-1])}
         #dG
-        structure_string += 'dG(37C) = %.2f kcal/mol\n' % structure[2][0]
+        structure_string += 'dG(37C) = %.2f kcal/mol\n' % dimer.dG
         #check for 3' dimer
         if fwd_matches[-1] > len(seq1)-4 or \
            rev_matches[0]  < 3:
@@ -329,56 +392,54 @@ class SecStructures(object):
         return structure_string
     #end def
 
-    def _format_dimers_header(self, structures, seq1, seq2):
+    def _format_dimers_header(self, dimers, seq1, seq2):
         header_string  = ''
-        if not structures: return 'No dimers found.\n\n'
+        if not dimers: return 'No dimers found.\n\n'
         #dimers count
-        header_string += 'Dimers count: %d\n' % len(structures)
+        header_string += 'Dimers count: %d\n' % len(dimers)
         #3'-count
         if self._3prim_dimers: 
             header_string += '3\'-dimers count: %d\n' % self._3prim_dimers
         #minimum dG
-        header_string += 'Most stable dimer: %.2f kcal/mol\n' % structures[0][2][0]
+        header_string += 'Most stable dimer: %.2f kcal/mol\n' % dimers[0].dG
         if self._3prim_dimers: 
             header_string += 'Most stable 3\' dimer: %.2f kcal/mol\n' % self._min_3prim_dimer_dG
         header_string += '\n'
         return header_string
     #end def
 
-    def _format_dimers_short(self, structures, seq1, seq2):
+    def _format_dimers_short(self, dimers, seq1, seq2):
         """short plain text representation of dimers"""
-        structures_string  = ''
-        if not structures: return 'No dimers found.\n\n'
+        dimers_string  = ''
+        if not dimers: return 'No dimers found.\n\n'
         #print header
-        structures_string += self._format_dimers_header(structures, seq1, seq2)
+        dimers_string += self._format_dimers_header(dimers, seq1, seq2)
         #print the most stable dimer
         if self.dimerMin_dG() and self.dimerMin_dG() < self._dG_threshold:
-            if structures[0] != self._min_3prim_dimer: #if it is the 3' the next block will print it
-                structures_string += self._format_dimer(structures[0], seq1, seq2)
+            if dimers[0] != self._min_3prim_dimer: #if it is the 3' the next block will print it
+                dimers_string += self._format_dimer(dimers[0], seq1, seq2)
         #print the most stable 3'-dimer
         if self.dimerMin_3prim_dG() and self.dimerMin_3prim_dG() < self._dG_threshold+1:
-            structures_string += self._format_dimer(self._min_3prim_dimer, seq1, seq2)
-        return structures_string
+            dimers_string += self._format_dimer(self._min_3prim_dimer, seq1, seq2)
+        return dimers_string
     #end def
 
-    def _format_dimers(self, structures, seq1, seq2):
+    def _format_dimers(self, dimers, seq1, seq2):
         """plain text representation of dimers"""
-        structures_string  = ''
-        if not structures: return 'No dimers found.\n\n'
+        dimers_string  = ''
+        if not dimers: return 'No dimers found.\n\n'
         #print header
-        structures_string += self._format_dimers_header(structures, seq1, seq2)
+        dimers_string += self._format_dimers_header(dimers, seq1, seq2)
         #print dimers
-        for struct in structures:
-            structures_string += self._format_dimer(struct, seq1, seq2)
-        return structures_string
+        for dimer in dimers:
+            dimers_string += self._format_dimer(dimer, seq1, seq2)
+        return dimers_string
     #end def
 
     def _format_hairpin(self, hairpin, seq):
         hairpin_string = ''
-        fwd_matches = list(hairpin[0])
-        rev_matches = list(hairpin[1])
-        fwd_matches.sort()
-        rev_matches.sort()
+        fwd_matches = hairpin.fwd_matches()
+        rev_matches = hairpin.rev_matches()
         loop        = (min(rev_matches) - max(fwd_matches)) - 1
         fwd_loop    = loop/2
         rev_loop    = loop - fwd_loop
@@ -413,9 +474,9 @@ class SecStructures(object):
         hairpin_string += "%(spacer2)s3' %(rev)s\n" \
             % {'spacer2':spacer2,
                'rev'    :str((seq[break_pos:])[::-1])}
-        hairpin_string += 'dG(37C) = %.2f kcal/mol\n' % hairpin[2][0]
+        hairpin_string += 'dG(37C) = %.2f kcal/mol\n' % hairpin.dG
         #check for 3' hairpin
-        if rev_matches[-1] > len(seq)-4:
+        if rev_matches[0] > len(seq)-4:
             hairpin_string += '(3\'-hairpin)\n'
         hairpin_string += '\n'
         return hairpin_string
@@ -428,7 +489,7 @@ class SecStructures(object):
         if self._3prim_hairpins: 
             header_string += '3\'-hairpins count: %d\n' % self._3prim_hairpins
         #minimum dG
-        header_string += 'Most stable hairpin: %.2f kcal/mol\n' % hairpins[0][2][0]
+        header_string += 'Most stable hairpin: %.2f kcal/mol\n' % hairpins[0].dG
         if self._3prim_hairpins: 
             header_string += 'Most stable 3\' hairpin: %.2f kcal/mol\n' % self._min_3prim_hairpin_dG
         header_string += '\n'

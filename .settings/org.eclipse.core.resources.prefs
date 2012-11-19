@@ -4,6 +4,7 @@ encoding//DegenPrimer/DegenPrimerConfig.py=utf-8
 encoding//DegenPrimer/DegenPrimerConfigCLI.py=utf-8
 encoding//DegenPrimer/Electrophoresis.py=utf-8
 encoding//DegenPrimer/OligoFunctions.py=utf-8
+encoding//DegenPrimer/PCR_Results.py=utf-8
 encoding//DegenPrimer/StringTools.py=utf-8
 encoding//DegenPrimer/TD_Functions.py=utf-8
 encoding//DegenPrimer/Tri_Tetra_Loops.py=utf-8

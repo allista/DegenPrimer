@@ -30,38 +30,38 @@ from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
 from DegenPrimer.DegenPrimerPipeline import degen_primer_pipeline
 ###############################################################################    
 
-
-args = DegenPrimerConfigCLI()
-try:
-    #parse command line arguments and/or configuration file
-    args.parse_configuration()
-except ValueError, e:
-    #if not in batch mode, consider incorrect values as errors
-    if not args.batch():
-        print_exception(e)
-        sys.exit(1)
-    #in batch mode all values except do_blast flag are ignored anyway
-    else: pass
-
-print ''
-if not args.batch():
-    #single analysis mode
-    sys.exit(degen_primer_pipeline(args))
-else:
-    #batch analysis mode
-    print wrap_text('Batch mode enabled. All command-line arguments '
-                    'except "--do-blast" are discarded.\n')
-    return_code = 0
-    for config_file in args.config_files:
-        config = DegenPrimerConfig()
-        try:
-            config.parse_configuration(config_file)
-        except ValueError, e:
-            print '\nUnable to perform analysis with the set of values given in "%s"' % config_file
+if __name__ == '__main__':
+    args = DegenPrimerConfigCLI()
+    try:
+        #parse command line arguments and/or configuration file
+        args.parse_configuration()
+    except ValueError, e:
+        #if not in batch mode, consider incorrect values as errors
+        if not args.batch():
             print_exception(e)
-            continue
-        config.do_blast = args.do_blast
-        print hr(' Repeating analysis for %s ' % config_file)
-        return_code |= degen_primer_pipeline(config)
-        print hr('')
-    sys.exit(return_code)
+            sys.exit(1)
+        #in batch mode all values except do_blast flag are ignored anyway
+        else: pass
+    
+    print ''
+    if not args.batch():
+        #single analysis mode
+        sys.exit(degen_primer_pipeline(args))
+    else:
+        #batch analysis mode
+        print wrap_text('Batch mode enabled. All command-line arguments '
+                        'except "--do-blast" are discarded.\n')
+        return_code = 0
+        for config_file in args.config_files:
+            config = DegenPrimerConfig()
+            try:
+                config.parse_configuration(config_file)
+            except ValueError, e:
+                print '\nUnable to perform analysis with the set of values given in "%s"' % config_file
+                print_exception(e)
+                continue
+            config.do_blast = args.do_blast
+            print hr(' Repeating analysis for %s ' % config_file)
+            return_code |= degen_primer_pipeline(config)
+            print hr('')
+        sys.exit(return_code)
