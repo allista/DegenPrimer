@@ -25,3 +25,4 @@ dist
 ./packages_DegenPrymer.pdf
 RE:(?i).*\.csv
 ./discriminant-test.R
+RE:(?i).*\.ods#

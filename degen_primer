@@ -28,7 +28,7 @@ from DegenPrimer.StringTools import hr, wrap_text, print_exception
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
 from DegenPrimer.DegenPrimerPipeline import degen_primer_pipeline
-###############################################################################    
+###############################################################################
 
 if __name__ == '__main__':
     args = DegenPrimerConfigCLI()

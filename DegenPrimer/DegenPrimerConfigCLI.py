@@ -67,7 +67,11 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
                      '    value_override = self._args.%(option)s\n'
         else: #if option represents a single argument, pass this argument, not a list with it
             exec_line += \
-                     '    value_override = self._args.%(option)s[0]\n'
+                     '    if type(self._args.%(option)s) == list:\n'
+            exec_line += \
+                     '        value_override = self._args.%(option)s[0]\n'
+            exec_line += \
+                     '    else: value_override = self._args.%(option)s\n'
         exec (exec_line % option)
         return value_override
     #end def

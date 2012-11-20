@@ -228,6 +228,24 @@ class DegenPrimerConfig(object):
                                #default value
                                'default'   :0,
                                'limits'    :(0, 100)},
+               {'option':'PCR_T',
+                               'section'   :'PCR',
+                               #command-line arguments 
+                               'args'      :('--PCR-T',),
+                               #number of arguments
+                               'nargs'     :1,
+                               #metavar
+                               'metavar'   :'C',
+                               #help string
+                               'help'      :'Temperature at which primer annealing '
+                               'will be performed during PCR (def. 60 C).',
+                               #type
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
+                               #default value
+                               'default'   :60.0,
+                               'limits'    :(20, 80)},
                {'option':'sec_dG',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -306,25 +324,6 @@ class DegenPrimerConfig(object):
                                #default value
                                'default'   :None,
                                'limits'    :(0, 1000000000)},
-               {'option':'hsp_dG',
-                               'section'   :'iPCR',
-                               #command-line arguments 
-                               'args'      :('--hsp-dG',),
-                               #number of arguments
-                               'nargs'     :1,
-                               #metavar
-                               'metavar'   :'kcal/mol',
-                               #help string
-                               'help'      :'HSPs with free energy ABOVE this threshold '
-                               'will be considered unstable, not yielding PCR products '
-                               '(default -10 kcal/mol). Applies only to blast results parsing.',
-                               #type
-                               'py_type'   :float, #for argparse
-                               'str_type'  :'f', #for string formatting
-                               'field_type':'float', #for gui
-                               #default value
-                               'default'   :-10.0,
-                               'limits'    :(-1000, 0)},
                {'option':'no_exonuclease',
                                'section'   :'iPCR',
                                #command-line arguments 
@@ -353,15 +352,34 @@ class DegenPrimerConfig(object):
                                #metavar
                                'metavar'   :'path',
                                #help string
-                               'help'      :'Path(s) to fasta file(s) containing target sequences. '
-                               'If fasta files are provided, ipcress simulation will be '
-                               'launched automatically. Applies only to ipcress simulation.',
+                               'help'      :'Path(s) to fasta file(s) containing '
+                               'target sequences for ipcress simulation.',
                                #type
                                'py_type'   :str, #for argparse
                                'str_type'  :'s', #for string formatting
                                'field_type':'file', #for gui
                                #default value
                                'default'   :None,
+                               'limits'    :(None, None)},
+                
+               {'option':'run_ipcress',
+                               'section'   :'iPCR',
+                               #command-line arguments 
+                               'args'      :('--run-ipcress',),
+                               #number of arguments
+                               'nargs'     :1,
+                               #metavar
+                               'metavar'   :None,
+                               #help string
+                               'help'      :'If true, run the ipcress programm to '
+                               'search for possible PCR products in the sequences '
+                               'given as fasta files (see --fasta-files argument).',
+                               #type
+                               'py_type'   :bool, #for argparse
+                               'str_type'  :'d',  #for string formatting
+                               'field_type':'boolean', #for gui
+                               #default value
+                               'default'   :True,
                                'limits'    :(None, None)},
                #BLAST
                {'option':'do_blast',

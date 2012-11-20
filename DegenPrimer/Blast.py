@@ -25,7 +25,7 @@ import os
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
 from SecStructures import Dimer
-from TD_Functions import dimer_dG
+from TD_Functions import dimer_dG, format_PCR_conditions
 from PCR_Results import PCR_Results
 try:
     from Bio.Blast import NCBIWWW, NCBIXML 
@@ -178,11 +178,11 @@ class Blast(object):
     #end def 
         
     
-    def _find_PCR_products(self, min_amplicon, max_amplicon, quantity_threshold, no_exonuclease):
+    def _find_PCR_products(self, min_amplicon, max_amplicon, no_exonuclease):
         self._PCR_products = dict()
         sorted_hits = []
         for record in self._blast_results:
-            self._PCR_products[record.query] = PCR_Results(min_amplicon, max_amplicon, no_exonuclease, 0.0) #TODO: add quantity threshold parameter 
+            self._PCR_products[record.query] = PCR_Results(min_amplicon, max_amplicon, no_exonuclease) 
             sorted_hits.append(dict())
             record_hits = sorted_hits[-1]
             for alignment in record.alignments:
@@ -228,23 +228,25 @@ class Blast(object):
     #end def
     
 
-    def write_PCR_report(self, min_amplicon, max_amplicon, max_dG, no_exonuclease):
+    def write_PCR_report(self, min_amplicon, max_amplicon, no_exonuclease):
         if not self._blast_results: return
         #parse results
-        self._find_PCR_products(min_amplicon, max_amplicon, max_dG, no_exonuclease)
+        self._find_PCR_products(min_amplicon, max_amplicon, no_exonuclease)
         #
         self._blast_PCR_report_filename = self._job_id + '-blast-PCR-report.txt'
         blast_report = open(self._blast_PCR_report_filename, 'w')
         blast_report.write(time_hr())
         #header
-        blast_report.write(wrap_text('All hits are filtered by number of mismatches '
-                                     'and, if --no-exonuclease option was '
-                                     'provided, hits with mismatches on '
-                                     "3'-end are also filtered.\n"
-                                     'Then hits are sorted into "forward" and '
-                                     '"reverse" groups. Pairs of forward and reverse '
-                                     'hits comprise possible PCR products which are '
-                                     'in their turn filtered by amplicon size.\n'))
+        blast_report.write(wrap_text('All hits are sorted into "forward" and ' 
+                                     '"reverse" groups. Pairs of forward and reverse ' 
+                                     'hits comprise possible PCR products which are ' 
+                                     'filtered by amplicon size.\n'
+                                     'If --no-exonuclease option was '
+                                     'provided, hits with mismatches on ' 
+                                     "3'-end are ignored.\n"
+                                     'Relative quantities of the remaining products '
+                                     'are estimated using equilibrium equations and ' 
+                                     'current PCR parameters.\n'))
         blast_report.write('\n')
         #filter parameters
         blast_report.write(hr(' filtration parameters '))
@@ -253,7 +255,9 @@ class Blast(object):
         else: blast_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
         blast_report.write('Minimum amplicon size:      %d\n' % min_amplicon)
         blast_report.write('Maximum amplicon size:      %d\n' % max_amplicon)
-        blast_report.write('Maximum dG of an alignment: %.2f\n' % max_dG) #TODO: replace with conversion degree
+        blast_report.write('\n')
+        blast_report.write(hr(' PCR conditions '))
+        blast_report.write(format_PCR_conditions()+'\n')
         blast_report.write('\n\n\n')
         #if no PCR products have been found
         if not self._PCR_products:
@@ -263,12 +267,10 @@ class Blast(object):
         #else...
         for record_name in self._PCR_products:
             blast_report.write(hr(' query ID: %s ' % record_name, symbol='#'))
+            blast_report.write(self._PCR_products[record_name].format_quantity_explanation())
             #all products histogram
             blast_report.write(hr(' histogram of all possible PCR products ', symbol='='))
             blast_report.write(self._PCR_products[record_name].all_products_histogram())
-#            blast_report.write(wrap_text('"relative concentration" of a product is a normalized '
-#                                         'number of primer pairs that yield this particular product.\n'))
-#TODO: write description of a relative concentration
             blast_report.write('\n\n\n')
             #all products electrophoresis
             blast_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))

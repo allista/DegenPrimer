@@ -27,6 +27,7 @@ from StringTools import print_exception, wrap_text, time_hr, hr
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from PCR_Results import PCR_Results
+from TD_Functions import format_PCR_conditions
 
 class iPCR(object):
     '''Wrapper for ipcress process and parser for it's results'''
@@ -41,8 +42,7 @@ class iPCR(object):
                  rev_primers, 
                  min_amplicon, 
                  max_amplicon, 
-                 no_exonuclease, 
-                 quantity_threshold):
+                 no_exonuclease):
         #files
         self._program_filename    = job_id+'.ipcr'
         self._raw_report_filename = job_id+'-ipcr-raw-report.txt'
@@ -54,12 +54,10 @@ class iPCR(object):
         self._min_amplicon       = min_amplicon
         self._max_amplicon       = max_amplicon
         self._no_exonuclease     = no_exonuclease
-        self._quantity_threshold = quantity_threshold
         #results
         self._PCR_products = PCR_Results(self._min_amplicon,
                                         self._max_amplicon,
-                                        self._no_exonuclease,
-                                        self._quantity_threshold)
+                                        self._no_exonuclease)
         self._results     = None
         self._hits        = None
         self.have_results = False
@@ -210,17 +208,15 @@ class iPCR(object):
         #format report
         ipcr_report.write(time_hr())
         #header
-        ipcr_report.write(wrap_text('All hits are filtered by number of mismatches '
-                                     'and, if --no-exonuclease option was '
-                                     'provided, hits with mismatches on '
-                                     "3'-end are also filtered.\n"
-                                     'Then hits are sorted into "forward" and '
-                                     '"reverse" groups. Pairs of forward and reverse '
-                                     'hits comprise possible PCR products which are '
-                                     'in their turn filtered by amplicon size.\n'))
+        ipcr_report.write(wrap_text('All possible PCR products are ' 
+                                     'filtered by amplicon size.\n'
+                                     'If --no-exonuclease option was ' 
+                                     'provided, products formed by primers with ' 
+                                     "mismatches on 3'-end are ignored.\n"
+                                     'Relative quantities of the remaining products ' 
+                                     'are estimated using equilibrium equations and '
+                                     'current PCR parameters.\n'))
         ipcr_report.write('\n')
-        if self._max_mismatches:
-            ipcr_report.write('Number of mismatches allowed: %d\n' % self._max_mismatches)
         #filter parameters
         ipcr_report.write(hr(' filtration parameters '))
         if self._no_exonuclease:
@@ -228,7 +224,11 @@ class iPCR(object):
         else: ipcr_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
         ipcr_report.write('Minimum amplicon size:      %d\n' % self._min_amplicon)
         ipcr_report.write('Maximum amplicon size:      %d\n' % self._max_amplicon)
-        ipcr_report.write('Maximum dG of an alignment: %.2f\n' % self._quantity_threshold) #TODO: replace with conversion degree
+        if self._max_mismatches:
+            ipcr_report.write('Number of mismatches allowed: %d\n' % self._max_mismatches)
+        ipcr_report.write('\n')
+        ipcr_report.write(hr(' PCR conditions '))
+        ipcr_report.write(format_PCR_conditions()+'\n')
         ipcr_report.write('\n\n\n')
         #if no PCR products have been found
         if not self._PCR_products:
@@ -236,12 +236,10 @@ class iPCR(object):
             ipcr_report.close()
             return
         #else...
+        ipcr_report.write(self._PCR_products.format_quantity_explanation())
         #all products histogram
         ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
         ipcr_report.write(self._PCR_products.all_products_histogram())
-#            ipcr_report.write(wrap_text('"relative concentration" of a product is a normalized '
-#                                         'number of primer pairs that yield this particular product.\n'))
-#TODO: write description of a relative concentration
         ipcr_report.write('\n\n\n')
         #all products electrophoresis
         ipcr_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))

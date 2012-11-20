@@ -1,5 +1,5 @@
 * add T to PCR parameters in order to filter products by thermostability in current PCR conditions 
 * dG, dH, dS T-correction calculation for stability prediction using current PCR parameters
-* ipcress output parser should parse sequences
-* ipcress report should filter results by thermodynamic stability
 * add configuration file as a command line argument to DegenPrimerGUI
+* add equilibrium_constant_threshold parameter to control accuracy of product quantity prediction; or compute it dynamically
+* use some graphics library to make PDF plots of PCR phoresis (pyplot?) 

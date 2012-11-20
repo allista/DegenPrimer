@@ -23,43 +23,40 @@ Created on Nov 16, 2012
 
 from math import log, exp
 from itertools import chain
-from scipy.optimize import fmin_slsqp
+from scipy.optimize import fmin_slsqp, fmin_l_bfgs_b, fsolve
 from OligoFunctions import dimer
-from TD_Functions import dimer_dG, equilibrium_constant
+from TD_Functions import dimer_dG_corrected, equilibrium_constant, format_PCR_conditions
+from StringTools import wrap_text, hr
 import TD_Functions
 import StringTools
 
 class PCR_Results(object):
-    '''In silica PCR results standardization 
-    and methods for their visualization.'''
+    '''In silica PCR results filtration, computation and visualization.'''
 
     #histogram
     _all_products_title = 'PCR-product'
     _hist_column_title  = '---relative concentration---'
     _hist_width         = len(_hist_column_title)
     #electrophoresis
-    _window_percent     = 0.05
-    _precision          = 1e6
-    #quantity solution accuracy
-    _acc                = 1e-10
+    _window_percent     = 0.05#the same as below
+    _precision          = 1e6 #forgot what this is ^_^' Need to lock at the code and write a description
     #equilibrium constant ratio threshold
-    _constant_ratio_threshold = 1e-6
+    _constant_ratio_threshold = 1e-10 #TODO: convert it to a parameter or calculate in dynamically
 
     def __init__(self, 
                  min_amplicon,      #minimum amplicon length 
                  max_amplicon,      #maximum amplicon length
                  no_exonuclease,    #if polymerase does not have 3' exonuclease activity, products of primers with 3'-mismatches will be discarded   
-                 quantity_threshold #products with relative quantity (ranged [0,1]) lower than the threshold will be discarded
                  ):
         self._min_amplicon = min_amplicon
         self._max_amplicon = max_amplicon
         self._no_exonuclease = no_exonuclease
-        self._quantity_threshold = quantity_threshold
-        self._products  = dict()
+        self._products  = dict() #dictionary of all possible products
         self._constants = dict() #dictionary of all equilibrium constants 
         self._primers   = [] #list of all primers
         self._templates = [] #list of all template sequences
-        self._nonzero   = False
+        self._nonzero   = False #true if the class instance has some products with successfully calculated quantities
+        self.solution_objective_value = -1
     #end def
     
     
@@ -138,28 +135,28 @@ class PCR_Results(object):
             or rev_dimer.fwd_matches()[-1] < len(product['rev_primer'])-1:
                 return False
         #add primers and templates if nesessary
-        if not product['fwd_primer'] in self._primers:
-            self._primers.append(product['fwd_primer'])
-        if not product['rev_primer'] in self._primers:
-            self._primers.append(product['rev_primer'])
-        if not product['fwd_seq'] in self._templates:
-            self._templates.append(product['fwd_seq'])
-        if not product['rev_seq'] in self._templates:
-            self._templates.append(product['rev_seq'])
+        if not str(product['fwd_primer']) in self._primers:
+            self._primers.append(str(product['fwd_primer']))
+        if not str(product['rev_primer']) in self._primers:
+            self._primers.append(str(product['rev_primer']))
+        if not str(product['fwd_seq']) in self._templates:
+            self._templates.append(str(product['fwd_seq']))
+        if not str(product['rev_seq']) in self._templates:
+            self._templates.append(str(product['rev_seq']))
         #calculate equilibrium constants for each pair [primer*template]
-        fwd_dG = dimer_dG(fwd_dimer, product['fwd_primer'], product['fwd_seq'])
-        rev_dG = dimer_dG(rev_dimer, product['rev_primer'], product['rev_seq'])
+        fwd_dG = dimer_dG_corrected(fwd_dimer, product['fwd_primer'], product['fwd_seq'])
+        rev_dG = dimer_dG_corrected(rev_dimer, product['rev_primer'], product['rev_seq'])
         
-        fwd_hash = hash(str((product['fwd_primer']), str(product['fwd_seq'])))
-        rev_hash = hash(str((product['rev_primer']), str(product['rev_seq'])))
+        fwd_hash = hash((str(product['fwd_primer']), str(product['fwd_seq'])))
+        rev_hash = hash((str(product['rev_primer']), str(product['rev_seq'])))
         
         self._constants[fwd_hash] = equilibrium_constant(fwd_dG, TD_Functions.PCR_T)
         self._constants[rev_hash] = equilibrium_constant(rev_dG, TD_Functions.PCR_T)
         #prepare primer-template sets
-        product['fwd_primers']   = set(str(product['fwd_primer']))
-        product['rev_primers']   = set(str(product['rev_primer']))
-        product['fwd_templates'] = set(str(product['fwd_seq']))
-        product['rev_templates'] = set(str(product['rev_seq']))
+        product['fwd_primers']   = set([str(product['fwd_primer'])])
+        product['rev_primers']   = set([str(product['rev_primer'])])
+        product['fwd_templates'] = set([str(product['fwd_seq'])])
+        product['rev_templates'] = set([str(product['rev_seq'])])
         return True
     #end def
     
@@ -273,86 +270,121 @@ class PCR_Results(object):
     #end def
     
     
-    def _all_products(self):
-        return list(chain(*(p.values() for p in self._products.values())))
-    
     def hits(self):
         return list(self._products.keys())
     
     
     def compute_quantities(self):
         if not self._products: return
+        print '\nCalculating quantities of possible PCR products. This may take awhile...'
         #initial concentrations
         P    = TD_Functions.C_Prim*1e-6 #M
         D    = TD_Functions.C_DNA *1e-9 #M
         DUP  = min(P,D) #maximum concentration of a duplex
-        
-        #remove products with small constants
-        max_K    = max(chain(*(p['constants'] for p in self._all_products())))
-        filtered_hits = dict()
-        for hit in self._products:
-            filtered_products = dict()
-            for product_hash in self._products[hit]:
-                product = self._products[hit][product_hash]
-                filtered_constants = []
-                for c in product['constants']:
-                    if c/max_K >= self._constant_ratio_threshold:
-                        filtered_constants.append(c)
-                if filtered_constants:
-                    product['constants'] = filtered_constants
-                    filtered_products[product_hash] = product
-            if filtered_products:
-                filtered_hits[hit] = filtered_products
-        self._products = filtered_hits 
-        #all constants list            
-        K        = tuple(chain(*(p['constants'] for p in self._all_products())))
-        print 'K: %d items' % len(K)  #TODO: remove
-        print K     #TODO: remove
-        
-        #factory that generates left side function of the i-th's equation of the system
-        def function_factory(i):
+        #construct constants matrix, forward and reverse dictionaries of r indices
+        constants_matrix = []
+        fwd_r_dict = dict()
+        rev_r_dict = dict() 
+        ri    = 0
+        max_K = max(self._constants.values())
+        constant_threshold = self._constant_ratio_threshold*len(self._constants)
+        for p in range(len(self._primers)):
+            constants_matrix.append([])
+            for t in range(len(self._templates)):
+                K_hash = hash((self._primers[p], self._templates[t]))
+                if K_hash in self._constants \
+                and self._constants[K_hash]/max_K > constant_threshold:
+                    constants_matrix[p].append(self._constants[K_hash])
+                    fwd_r_dict[p*len(self._templates)+t] = ri
+                    rev_r_dict[K_hash] = ri
+                    ri += 1
+                else: constants_matrix[p].append(0)
+        #factory for left side functions of the system's equations
+        def function_factory(p, t):
+            Ki = constants_matrix[p][t]
+            if not Ki: return None
+            i = fwd_r_dict[p*len(self._templates)+t]
             def func(r):
                 DUPi = DUP*r[i]
-                return (DUPi-((P-sum(DUP*r[j] for j in range(len(r))))*(D-DUPi))*K[i])*1e8/(len(K)**4)
-            return func        
-        #all left-side functions
-        l_funcs  = list(function_factory(i) for i in range(len(K)))
-        #objective function
-        objective_function =  lambda(r): sum(l_funcs[i](r)**2 for i in range(len(K)))
-        #initial estimation of a solution
-        
-        r0    = tuple(k/max_K/3 for k in K)
-        print 'r0:'  #TODO: remove
-        print r0     #TODO: remove
-        print 'obj_func(r0):'   #TODO: remove
-        print objective_function(r0)   #TODO: remove
+                _P   = 0
+                for ti in range(len(self._templates)):
+                    if constants_matrix[p][ti]:
+                        _P += DUP*r[fwd_r_dict[p*len(self._templates)+ti]]
+                _D   = 0
+                for pi in range(len(self._primers)):
+                    if constants_matrix[pi][t]:
+                        _D += DUP*r[fwd_r_dict[pi*len(self._templates)+t]]
+                return (DUPi - ((P - _P)*(D - _D))*Ki)
+            return func
+        #all left-side functions, initial root estimation
+        l_funcs  = []
+        r0       = []
+        for p in range(len(self._primers)):
+            for t in range(len(self._templates)):
+                new_func = function_factory(p, t)
+                if new_func: 
+                    l_funcs.append(new_func)
+                    r0.append(constants_matrix[p][t]/max_K/3)
+        #objective function for fmin_
+        obj_multiplier     =  1e9/len(l_funcs)**2
+        objective_function =  lambda(r): sum((l_funcs[i](r)*obj_multiplier)**2 for i in range(len(l_funcs)))
+        #system function for fsolve
+        sys_func = lambda(r): \
+                    tuple(l_funcs[i](r) for i in range(len(l_funcs)))
         #solution bounds
-        bounds = ((0,1),)*len(K)
-        #try to find the solution
-        sol    = fmin_slsqp(objective_function, r0, acc=self._acc*len(K), bounds=bounds, full_output=True)#, disp=0)
-        print 'solution' #TODO: remove
-        print sol #TODO: remove
-        if sol[3] != 0 or sol[1] > self._acc*10*len(K): #TODO: need to handle this situation properly
-            raise UserWarning('''No solution for the set of converion degrees 
-            of all annealing products has been found''')
-        #else, compute quantities from the solution
-        print 'max %f; min %f' % (max(sol[0]), min(sol[0])) #TODO: remove 
-        sol = sol[0]
+        bounds = ((0,1),)*len(l_funcs)
+        #try to find the solution with iterations of increasing precision
+        factr = 1e15 #initial convergence precision
+        while factr > 1e5:
+            sol    = fmin_l_bfgs_b(objective_function, r0, factr = factr, bounds=bounds, approx_grad=True)
+            if sol[2]['warnflag'] != 0: break
+            if objective_function(r0)/objective_function(sol[0]) < 10:
+                r0 = sol[0] 
+                break
+            factr *= 1e-5
+            r0 = sol[0]
+        #try to fine-tune the solution using fsolve
+        sol = fsolve(sys_func, r0, full_output=True)
+        if sol[2] != 1 or min(sol[0]) < 0 or max(sol[0]) > 1:
+            #if not succeeded, try fine-tune with slsqp 
+            sol    = fmin_slsqp(objective_function, r0, acc=1e-10, bounds=bounds, full_output=True, disp=0)
+            if sol[3] == 0: r0 = sol[0]
+        else: r0 = sol[0]
+        #in any case use the best guess for the solution
+        self.solution_objective_value = objective_function(r0)
+        #now compute quantities of products and filter out those with low quantity
+        new_hits = dict()
         for hit in self._products:
+            new_products = dict()
             for product_hash in self._products[hit]:
                 product = self._products[hit][product_hash]
-                #calculate PCR product quantity as a sum 
-                #of conversion degrees of singular annealing products
-                for i in range(len(product['constants'])):
-                    if i == 0: product['quantity'] = sol.pop()
-                    else: product['quantity'] += sol.pop()
-                #if a quantity is smaller than a threshold, remove such product 
-                if product['quantity'] < self._quantity_threshold:
-                    del self._products[hit][product_hash]
-                    if not self._products[hit]:
-                        del self._products[hit]
-        #if there're stil some products left, set nonzero flag to True
-        if self._products: self._nonzero = True
+                #forward primer annealing:
+                product['fwd_quantity'] = 0
+                for fwd_primer in product['fwd_primers']:
+                    for fwd_seq in product['fwd_templates']:
+                        dimer_hash = hash((fwd_primer,fwd_seq))
+                        if dimer_hash in rev_r_dict:
+                            product['fwd_quantity'] += r0[rev_r_dict[dimer_hash]]
+                #reverse primer annealing:
+                product['rev_quantity'] = 0
+                for rev_primer in product['rev_primers']:
+                    for rev_seq in product['rev_templates']:
+                        dimer_hash = hash((rev_primer,rev_seq))
+                        if dimer_hash in rev_r_dict:
+                            product['rev_quantity'] += r0[rev_r_dict[dimer_hash]]
+                #PCR product quantity
+                product['quantity'] = min(product['fwd_quantity'], product['rev_quantity'])
+                #if quantity is not zero, add this product to the final list 
+                if product['quantity']:
+                    new_products[product_hash] = product
+            #if there're still some products for the current hit, add this hit to the final list
+            if new_products:
+                new_hits[hit] = new_products
+        #store new hits if there are any
+        if new_hits:
+            self._products = new_hits
+            self._nonzero  = True
+        else: self._products = dict()
     #end def
     
     def all_products_histogram(self):
@@ -395,6 +427,36 @@ class PCR_Results(object):
             all_graphs += self.per_hit_histogram(hit)
             all_graphs += self.per_hit_electrophoresis(hit)
         return all_graphs
+    
+    
+    def format_report_header(self):
+        header_string  = ''
+        header_string += hr(' filtration parameters ')
+        if self._no_exonuclease:
+            header_string += "DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n"
+        else: header_string += "DNA polymerase has 3'-5'-exonuclease activity\n"
+        header_string += 'Minimum amplicon size:      %d\n' % self._min_amplicon
+        header_string += 'Maximum amplicon size:      %d\n' % self._max_amplicon
+        header_string += '\n'
+        header_string += hr(' PCR conditions ')
+        header_string += format_PCR_conditions()+'\n'
+        header_string += '\n\n\n'
+        return header_string
+    #end def
+    
+    
+    def format_quantity_explanation(self):
+        expl_string  = ''
+        expl_string += hr(' estimation of PCR product quantities ')
+        expl_string += 'Value of an objective function at the solution ' + \
+                       '(the lower the better):\n   %e\n' % \
+                        self.solution_objective_value
+        expl_string += wrap_text('This value shows "distance" to the solution of '
+                           'the system of equilibrium equations which were used '
+                           'to calculate quantities of PCR products.\n')
+        expl_string += '\n'
+        return expl_string
+    #end def    
 #end class
 
 
@@ -438,7 +500,7 @@ if __name__ == '__main__':
     
     
     from Bio.Seq import Seq
-    PCR_res = PCR_Results(50, 3000, False, 0)
+    PCR_res = PCR_Results(50, 3000, False)
     PCR_res.add_product('Pyrococcus yayanosii CH1', 982243, 983644, 1420, 
                         Seq('ATATTCTACGACGGCTATCC').reverse_complement(), 
                         Seq('CAAGGGTTAGAAGCGGAAG').complement(), 

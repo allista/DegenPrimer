@@ -130,13 +130,15 @@ def format_PCR_conditions():
                  len(str(C_dNTP)),
                  len(str(C_DNA)),
                  len(str(C_Prim)),
-                 len(str(C_DMSO)))
+                 len(str(C_DMSO)),
+                 len(str(PCR_T)))
     conc_str += 'C(Na)     = ' + str(C_Na)  + ' '*(spacer-len(str(C_Na)))   +' mM\n'
     conc_str += 'C(Mg)     = ' + str(C_Mg)  + ' '*(spacer-len(str(C_Mg)))   +' mM\n'
     conc_str += 'C(dNTP)   = ' + str(C_dNTP)+ ' '*(spacer-len(str(C_dNTP))) +' mM\n'
     conc_str += 'C(DNA)    = ' + str(C_DNA) + ' '*(spacer-len(str(C_DNA)))  +' nM\n'
     conc_str += 'C(Primer) = ' + str(C_Prim)+ ' '*(spacer-len(str(C_Prim))) +' uM\n'
     conc_str += 'C(DMSO)   = ' + str(C_DMSO)+ ' '*(spacer-len(str(C_DMSO))) +' %\n'
+    conc_str += 'T         = ' + str(PCR_T) + ' '*(spacer-len(str(PCR_T)))  +' C\n'
     return conc_str
 #end_def
 
@@ -149,6 +151,7 @@ def add_PCR_conditions(feature):
         feature.qualifiers['C_DNA']     = str(C_DNA)+ ' nM'
         feature.qualifiers['C_Primer']  = str(C_Prim)+' uM'
         feature.qualifiers['C_DMSO']    = str(C_DMSO)+' %'
+        feature.qualifiers['T']         = str(PCR_T)+' C'
     except Exception, e:
         print 'add_PCR_conditions:'
         print_exception(e)
@@ -236,6 +239,13 @@ def dimer_dG(dimer, seq1, seq2):
 #end def
 
 
+def dimer_dG_corrected(dimer, seq1, seq2): #TODO: write proper implementation
+    '''calculate dG of a dimer corrected to current PCR conditions including 
+    salt concentrations and temperature. Dummy for now'''
+    return dimer_dG(dimer, seq1, seq2)
+#end def
+
+
 def hairpin_dG(hairpin, seq):
     fwd_matches = hairpin.fwd_matches()
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
@@ -296,6 +306,13 @@ def hairpin_dG(hairpin, seq):
             dG += Terminal_mismatch_mean
     else: dG += Terminal_mismatch_mean
     return dG
+#end def
+
+
+def hairpin_dG_corrected(hairpin, seq): #TODO: write proper implementation
+    '''calculate dG of a hairpin corrected to current PCR conditions including 
+    salt concentrations and temperature. Dummy for now'''
+    return hairpin_dG(hairpin, seq)
 #end def
 
 
