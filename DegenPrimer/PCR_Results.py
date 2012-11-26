@@ -27,8 +27,10 @@ from scipy.optimize import fmin_slsqp, fmin_l_bfgs_b, fsolve
 from OligoFunctions import dimer
 from TD_Functions import dimer_dG_corrected, equilibrium_constant, format_PCR_conditions
 from StringTools import wrap_text, hr
+from Equilibrium import Equilibrium
 import TD_Functions
 import StringTools
+
 
 class PCR_Results(object):
     '''In silica PCR results filtration, computation and visualization.'''
@@ -40,8 +42,8 @@ class PCR_Results(object):
     #electrophoresis
     _window_percent     = 0.05#the same as below
     _precision          = 1e6 #forgot what this is ^_^' Need to lock at the code and write a description
-    #equilibrium constant ratio threshold
-    _constant_ratio_threshold = 1e-10 #TODO: convert it to a parameter or calculate in dynamically
+    #number of PCR cycles emulated
+    _num_cycles         = 20
 
     def __init__(self, 
                  min_amplicon,      #minimum amplicon length 
@@ -52,7 +54,7 @@ class PCR_Results(object):
         self._max_amplicon = max_amplicon
         self._no_exonuclease = no_exonuclease
         self._products  = dict() #dictionary of all possible products
-        self._constants = dict() #dictionary of all equilibrium constants 
+        self._reactions = dict() #dictionary of all equilibrium constants 
         self._primers   = [] #list of all primers
         self._templates = [] #list of all template sequences
         self._nonzero   = False #true if the class instance has some products with successfully calculated quantities
@@ -150,8 +152,8 @@ class PCR_Results(object):
         fwd_hash = hash((str(product['fwd_primer']), str(product['fwd_seq'])))
         rev_hash = hash((str(product['rev_primer']), str(product['rev_seq'])))
         
-        self._constants[fwd_hash] = equilibrium_constant(fwd_dG, TD_Functions.PCR_T)
-        self._constants[rev_hash] = equilibrium_constant(rev_dG, TD_Functions.PCR_T)
+        self._reactions[fwd_hash] = equilibrium_constant(fwd_dG, TD_Functions.PCR_T)
+        self._reactions[rev_hash] = equilibrium_constant(rev_dG, TD_Functions.PCR_T)
         #prepare primer-template sets
         product['fwd_primers']   = set([str(product['fwd_primer'])])
         product['rev_primers']   = set([str(product['rev_primer'])])
@@ -237,7 +239,8 @@ class PCR_Results(object):
         for product in products:
             l = int(log(product['length'])*self._precision)
             p = (l - min_len_log)/window_log
-            phoresis[p][1] += product['quantity']
+            #fluorescence intensity is proportional to the length of a duplex
+            phoresis[p][1] += product['quantity']*product['length']
         phoresis = phoresis[::-1]
         #format electrophorogram
         return self._format_electrophoresis(window, phoresis)
@@ -246,7 +249,8 @@ class PCR_Results(object):
     
     def _format_electrophoresis(self, window, phoresis):
         text_width  = StringTools.text_width
-        max_line    = max(l[1] for l in phoresis)
+        max_line    = max(self._product_quantity(1, 1)*self._min_amplicon, 
+                          max(l[1] for l in phoresis))
         max_mark    = max(len(str(l[2])) for l in phoresis)*2
         line_width  = text_width - max_mark - 7 #mark b :###   :
         #format phoresis
@@ -273,6 +277,9 @@ class PCR_Results(object):
     def hits(self):
         return list(self._products.keys())
     
+    def _product_quantity(self, fwd_P, rev_P):
+        return fwd_P*rev_P*(4*2**self._num_cycles + self._num_cycles-1)
+    #end def
     
     def compute_quantities(self):
         if not self._products: return
@@ -286,15 +293,13 @@ class PCR_Results(object):
         fwd_r_dict = dict()
         rev_r_dict = dict() 
         ri    = 0
-        max_K = max(self._constants.values())
-        constant_threshold = self._constant_ratio_threshold*len(self._constants)
         for p in range(len(self._primers)):
             constants_matrix.append([])
             for t in range(len(self._templates)):
                 K_hash = hash((self._primers[p], self._templates[t]))
-                if K_hash in self._constants \
-                and self._constants[K_hash]/max_K > constant_threshold:
-                    constants_matrix[p].append(self._constants[K_hash])
+                if K_hash in self._reactions \
+                and self._reactions[K_hash] > 1000: #constants less than 1e3 are equivalent to conversion ration less than 1e-5
+                    constants_matrix[p].append(self._reactions[K_hash])
                     fwd_r_dict[p*len(self._templates)+t] = ri
                     rev_r_dict[K_hash] = ri
                     ri += 1
@@ -317,6 +322,7 @@ class PCR_Results(object):
                 return (DUPi - ((P - _P)*(D - _D))*Ki)
             return func
         #all left-side functions, initial root estimation
+        max_K    = max(self._reactions.values())
         l_funcs  = []
         r0       = []
         for p in range(len(self._primers)):
@@ -373,7 +379,8 @@ class PCR_Results(object):
                         if dimer_hash in rev_r_dict:
                             product['rev_quantity'] += r0[rev_r_dict[dimer_hash]]
                 #PCR product quantity
-                product['quantity'] = min(product['fwd_quantity'], product['rev_quantity'])
+                product['quantity'] = self._product_quantity(product['fwd_quantity'],
+                                                             product['rev_quantity'])
                 #if quantity is not zero, add this product to the final list 
                 if product['quantity']:
                     new_products[product_hash] = product
@@ -385,6 +392,13 @@ class PCR_Results(object):
             self._products = new_hits
             self._nonzero  = True
         else: self._products = dict()
+#        for hit in self._products.values(): #TODO: remove
+#            for p in hit.values():
+#                print p['title']
+#                print 'fwd_q:', p['fwd_quantity']
+#                print 'rev_q:', p['rev_quantity']
+#                print 'q:', p['quantity']
+#                print ''
     #end def
     
     def all_products_histogram(self):
@@ -463,6 +477,8 @@ class PCR_Results(object):
 
 #test
 if __name__ == '__main__':
+    import os
+    os.chdir('../')
 #    from scipy.optimize import fmin_slsqp, fsolve
 #
 #    k = [1,2,3,4,5]
@@ -517,8 +533,8 @@ if __name__ == '__main__':
                         Seq('ATATTCTACAACGTCTATCC'), 
                         Seq('CAAGGGCTAGAGACGGAAG'[::-1]))
     print 'products:'
-    print PCR_res._products
     PCR_res.compute_quantities()
+    print PCR_res._products
     print bool(PCR_res)
     print PCR_res.all_products_histogram()
     print ''

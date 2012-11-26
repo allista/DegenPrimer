@@ -32,6 +32,7 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
         #setup a list of options and a parser for command line arguments
         self._parser = argparse.ArgumentParser(description=self._description)
         #configuration file
+        self.config_files = None
         conf_group = self._parser.add_argument_group('Preset configuration')
         conf_group.add_argument('config_files', metavar='file.cfg', 
                                 type=str, nargs='*',
@@ -51,8 +52,7 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
                 arg_groups[option['section']] = self._parser.add_argument_group(self._groups[option['section']])
             if option['py_type'] == bool:
                 arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], 
-                                               help=option['help'], default=option['default'],
-                                               action='store_true')
+                                               help=option['help'], action='store_true')
             else:
                 arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], nargs=option['nargs'], 
                                                            type=option['py_type'], metavar=option['metavar'], help=option['help'])

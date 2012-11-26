@@ -131,53 +131,6 @@ def degen_primer_pipeline(args):
     #-----------------------------------------------------------------------------#
     
     
-    #ipcress program file and test for primers specificity by iPCR
-    #this is only available for pairs of primers
-    if args.sense_primer and args.antisense_primer:
-        fwd_primers  = pfam_primers(0)
-        rev_primers  = pfam_primers(1)
-        ipcr = iPCR(job_id, fwd_primers, rev_primers, args.min_amplicon, args.max_amplicon, args.no_exonuclease)
-        ipcr.writeProgram()
-        #if target sequences are provided and the run_icress flag is set, run iPCR...
-        if args.run_ipcress and args.fasta_files:
-            ipcr.executeProgram(args.fasta_files, args.max_mismatches)
-        else:
-            #load previously saved results
-            print '\nLoading raw iPCR results from the previous ipcress run.'
-            ipcr.load_results()
-        if ipcr.have_results:
-            ipcr.write_PCR_report()
-            ipcr.register_reports(args)
-    #-----------------------------------------------------------------------------#
-    
-    
-    #test for primers specificity by BLAST
-    blast = Blast(job_id)
-    #if --do-blast command was provided, make an actual query
-    if args.do_blast:
-        #construct Entrez query
-        entrez_query = ''
-        if args.organisms:
-            for organism in args.organisms:
-                if entrez_query: entrez_query += ' OR '
-                entrez_query += organism+'[organism]'
-        #do the blast
-        blast.blast_primers(all_primers(), entrez_query)
-    #otherwise, reparse previously saved results with current parameters
-    else:
-        #load blast results
-        blast.load_results()
-    if blast.have_results:
-        #report results in human readable form
-        blast.write_hits_report(args.sec_dG,
-                                args.no_exonuclease)
-        blast.write_PCR_report(args.min_amplicon, 
-                               args.max_amplicon, 
-                               args.no_exonuclease)
-        blast.register_reports(args)
-    #-----------------------------------------------------------------------------#
-    
-    
     #check for hairpins, dimers and cross-dimers
     #write full and short reports
     structures_full_report_filename  = job_id+'-full-report.txt'
@@ -255,8 +208,56 @@ def degen_primer_pipeline(args):
     short_structures_file.close()
     print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
     print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
-    #-----------------------------------------------------------------------------#
-    print '\nDone\n'
     args.register_report('Tm and secondary structures', structures_short_report_filename)
+    #-----------------------------------------------------------------------------#
+
+    
+    #ipcress program file and test for primers specificity by iPCR
+    #this is only available for pairs of primers
+    if args.sense_primer and args.antisense_primer:
+        fwd_primers  = pfam_primers(0)
+        rev_primers  = pfam_primers(1)
+        ipcr = iPCR(job_id, fwd_primers, rev_primers, args.min_amplicon, args.max_amplicon, args.no_exonuclease)
+        ipcr.writeProgram()
+        #if target sequences are provided and the run_icress flag is set, run iPCR...
+        if args.run_ipcress and args.fasta_files:
+            ipcr.executeProgram(args.fasta_files, args.max_mismatches)
+        else:
+            #load previously saved results
+            print '\nLoading raw iPCR results from the previous ipcress run.'
+            ipcr.load_results()
+        if ipcr.have_results:
+            ipcr.write_PCR_report()
+            ipcr.register_reports(args)
+    #-----------------------------------------------------------------------------#
+    
+    
+    #test for primers specificity by BLAST
+    blast = Blast(job_id)
+    #if --do-blast command was provided, make an actual query
+    if args.do_blast:
+        #construct Entrez query
+        entrez_query = ''
+        if args.organisms:
+            for organism in args.organisms:
+                if entrez_query: entrez_query += ' OR '
+                entrez_query += organism+'[organism]'
+        #do the blast
+        blast.blast_primers(all_primers(), entrez_query)
+    #otherwise, reparse previously saved results with current parameters
+    else:
+        #load blast results
+        blast.load_results()
+    if blast.have_results:
+        #report results in human readable form
+        blast.write_hits_report(args.sec_dG,
+                                args.no_exonuclease)
+        blast.write_PCR_report(args.min_amplicon, 
+                               args.max_amplicon, 
+                               args.no_exonuclease)
+        blast.register_reports(args)
+    #-----------------------------------------------------------------------------#
+    
+    print '\nDone\n'
     return 0
 #end def

@@ -12,13 +12,13 @@
 # 
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 '''
 Created on Jun 23, 2012
 
 @author: Allis Tauri <allista@gmail.com>
 '''
-from TD_Functions import dimer_dG, hairpin_dG
+import TD_Functions
+from TD_Functions import dimer_dG_corrected, hairpin_dG_corrected
 from StringTools import hr
 
     
@@ -293,7 +293,7 @@ class SecStructures(object):
                 new_structures = self._remove_loops(dimer)
                 for struct in new_structures:
                     #calculate dG for every dimer
-                    dG = dimer_dG(struct, seq1, seq2)
+                    dG = dimer_dG_corrected(struct, seq1, seq2)
                     struct.dG = dG
                     #find the most stable
                     if min_dG > dG:
@@ -333,7 +333,7 @@ class SecStructures(object):
                 new_dimers = self._remove_loops(Dimer(fwd_matches, set(seq_len-1-m for m in rev_matches)))
                 for new_dimer in new_dimers:
                     hairpin = Hairpin(new_dimer[0], set(seq_len-1-m for m in new_dimer[1]))
-                    dG = hairpin_dG(hairpin, seq)
+                    dG = hairpin_dG_corrected(hairpin, seq)
                     hairpin.dG = dG
                     #find the most stable
                     if min_dG > dG:
@@ -383,7 +383,7 @@ class SecStructures(object):
             % {'spacer2':spacer2,
                'seq2'   :str(seq2[::-1])}
         #dG
-        structure_string += 'dG(37C) = %.2f kcal/mol\n' % dimer.dG
+        structure_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, dimer.dG)
         #check for 3' dimer
         if fwd_matches[-1] > len(seq1)-4 or \
            rev_matches[0]  < 3:
@@ -474,7 +474,7 @@ class SecStructures(object):
         hairpin_string += "%(spacer2)s3' %(rev)s\n" \
             % {'spacer2':spacer2,
                'rev'    :str((seq[break_pos:])[::-1])}
-        hairpin_string += 'dG(37C) = %.2f kcal/mol\n' % hairpin.dG
+        hairpin_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, hairpin.dG)
         #check for 3' hairpin
         if rev_matches[0] > len(seq)-4:
             hairpin_string += '(3\'-hairpin)\n'

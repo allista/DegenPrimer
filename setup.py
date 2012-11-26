@@ -26,6 +26,8 @@ import os
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
+from DegenPrimer.UnifiedNN import UnifiedNN
+
 from distutils.core import setup
 setup(name='degen-primer',
       version='1.6',
@@ -45,4 +47,8 @@ setup(name='degen-primer',
       scripts=['degen_primer', 
                'parse_blast',
                'align_as_amino'],
+      data_files=[('share/degen_primer', [UnifiedNN._internal_NN_filename,
+                                          UnifiedNN._dangling_ends_filename,
+                                          UnifiedNN._loops_filename,
+                                          UnifiedNN._tri_tetra_hairpin_loops_filename])]
       )

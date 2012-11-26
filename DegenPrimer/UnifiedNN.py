@@ -20,124 +20,254 @@ Created on Jun 24, 2012
 @author: Allis Tauri <allista@gmail.com>
 
 All calculations and data are based on:
-﻿SantaLucia, J., & Hicks, D. (2004). 
+[1] ﻿SantaLucia, J., & Hicks, D. (2004). 
 The thermodynamics of DNA structural motifs. Annual review of biophysics and 
 biomolecular structure, 33, 415-40. doi:10.1146/annurev.biophys.32.110601.141800
 '''
 
 
+import os
+import csv
 from math import log
-from Tri_Tetra_Loops import Tri_Tetra_Loops
+###############################################################################
 
 
-#constants
-R                 =  1.9872 #Universal gas constant cal/(K*mol)
-K0                = -273.15 #Absolute temperature zero in degree Celsius
-dG_Na_coefficient_oligo = -0.114 #kcal/mol for oligomers with length =< 16
-dG_Na_coefficient_poly  = -0.175 #kcal/mol for longer polymers
-dS_Na_coefficient = +0.368 #e.u.
-Loop_coefficient  =  2.44
-#The NN stabilities at 37◦ C range from −1.23 to −0.21 kcal/mol 
-#for CG/GA and AC/TC, respectively
-Terminal_mismatch_mean  = (-1.23 + -0.21)/2
-
-
-UnifiedNN = {
-            #'NN' :{'dH': kcal/mol, 'dS': e.u., 'dG'(37C): kcal/mol},
-             'AA' :{'dH':  -7.6, 'dS': -21.3, 'dG': -1.00}, #TT
-             'AT' :{'dH':  -7.2, 'dS': -20.4, 'dG': -0.88}, #TA
-             'TA' :{'dH':  -7.2, 'dS': -21.3, 'dG': -0.58}, #AT
-             'CA' :{'dH':  -8.5, 'dS': -22.7, 'dG': -1.45},
-             'GT' :{'dH':  -8.4, 'dS': -22.4, 'dG': -1.44},
-             'CT' :{'dH':  -7.8, 'dS': -21.0, 'dG': -1.28},
-             'GA' :{'dH':  -8.2, 'dS': -22.2, 'dG': -1.30},
-             'CG' :{'dH': -10.6, 'dS': -27.2, 'dG': -2.17},
-             'GC' :{'dH':  -9.8, 'dS': -24.4, 'dG': -2.24},
-             'GG' :{'dH':  -8.0, 'dS': -19.9, 'dG': -1.84},
-             
-             'ini':{'dH':  +0.2, 'dS':  -5.7, 'dG': +1.96}, #initiation penalty
-             'ter':{'dH':  +2.2, 'dS':  +6.9, 'dG': +0.05}, #terminal A-T pair penalty
-             'sym':{'dH':   0.0, 'dS':  -1.4, 'dG': +0.43}, #self-complementary sequence penalty
-}
-
-
-MismatchNN = {
-             #dG(37C) for sequence with single mismatches
-             'GA' :{'CA':  0.17, 'CC':  0.81, 'CG': -0.25, 'CT':  UnifiedNN['CT']['dG']},
-             'GC' :{'CA':  0.47, 'CC':  0.79, 'CG':  UnifiedNN['CG']['dG'], 'CT':  0.62},
-             'GG' :{'CA': -0.52, 'CC':  UnifiedNN['GG']['dG'], 'CG': -1.11, 'CT':  0.08},
-             'GT' :{'CA':  UnifiedNN['CA']['dG'], 'CC':  0.98, 'CG': -0.59, 'CT':  0.45},
-             
-             'CA' :{'GA':  0.43, 'GC':  0.75, 'GG':  0.03, 'GT':  UnifiedNN['GT']['dG']},
-             'CC' :{'GA':  0.79, 'GC':  0.70, 'GG':  UnifiedNN['GG']['dG'], 'GT':  0.62},
-             'CG' :{'GA':  0.11, 'GC':  UnifiedNN['GC']['dG'], 'GG': -0.11, 'GT': -0.47},
-             'CT' :{'GA':  UnifiedNN['GA']['dG'], 'GC':  0.40, 'GG': -0.32, 'GT': -0.12},
-             
-             'AA' :{'TA':  0.61, 'TC':  0.88, 'TG':  0.14, 'TT':  UnifiedNN['AA']['dG']},
-             'AC' :{'TA':  0.77, 'TC':  1.33, 'TG':  UnifiedNN['CA']['dG'], 'TT':  0.64},
-             'AG' :{'TA':  0.02, 'TC':  UnifiedNN['GA']['dG'], 'TG': -0.13, 'TT':  0.71},
-             'AT' :{'TA':  UnifiedNN['TA']['dG'], 'TC':  0.73, 'TG':  0.07, 'TT':  0.69},
-             
-             'TA' :{'AA':  0.69, 'AC':  0.92, 'AG':  0.42, 'AT':  UnifiedNN['AT']['dG']},
-             'TC' :{'AA':  1.33, 'AC':  1.05, 'AG':  UnifiedNN['CT']['dG'], 'AT':  0.97},
-             'TG' :{'AA':  0.74, 'AC':  UnifiedNN['GT']['dG'], 'AG':  0.44, 'AT':  0.43},
-             'TT' :{'AA':  UnifiedNN['AA']['dG'], 'AC':  0.75, 'AG':  0.34, 'AT':  0.68},
-}
-
-
-DanglingNN = {
-             #dG(37C) kcal/mol for dangling terminals
-             #5' dangling ends
-             'XA' :{'A': -0.51, 'C': -0.42, 'G': -0.62, 'T': -0.71},
-             'XC' :{'A': -0.96, 'C': -0.52, 'G': -0.72, 'T': -0.58},
-             'XG' :{'A': -0.58, 'C': -0.34, 'G': -0.56, 'T': -0.61},
-             'XT' :{'A': -0.50, 'C': -0.02, 'G':  0.48, 'T': -0.10},
-             #3' dangling ends
-             'AX' :{'A': -0.12, 'C':  0.28, 'G': -0.01, 'T':  0.13},
-             'CX' :{'A': -0.82, 'C': -0.31, 'G': -0.01, 'T': -0.52},
-             'GX' :{'A': -0.92, 'C': -0.23, 'G': -0.44, 'T': -0.35},
-             'TX' :{'A': -0.48, 'C': -0.19, 'G': -0.50, 'T': -0.29},
-}
-
-
-LoopNN = {
-         #dG(37C) kcal/mol increment for loops of different size
-         3  : {'I': 3.2, 'H': 3.5},
-         4  : {'I': 3.6, 'H': 3.5},
-         5  : {'I': 4.0, 'H': 3.3},
-         6  : {'I': 4.4, 'H': 4.0},
-         7  : {'I': 4.6, 'H': 4.2},
-         8  : {'I': 4.8, 'H': 4.3},
-         9  : {'I': 4.9, 'H': 4.5},
-         10 : {'I': 4.9, 'H': 4.6},
-         12 : {'I': 5.2, 'H': 5.0},
-         14 : {'I': 5.4, 'H': 5.1},
-         16 : {'I': 5.6, 'H': 5.3},
-         18 : {'I': 5.8, 'H': 5.5},
-         20 : {'I': 5.9, 'H': 5.7},
-         25 : {'I': 6.3, 'H': 6.1},
-         30 : {'I': 6.6, 'H': 6.3},
-}
-
-
-def delta_Par(seq, rev_comp, par):
-    if seq in UnifiedNN:
-        return UnifiedNN[seq][par]
-    elif rev_comp in UnifiedNN:
-        return UnifiedNN[rev_comp][par]
+def _load_csv(filenames):
+    '''Load a csv (tab delimited, quoting character ") file into a dictionary of 
+    dicts, assuming that the first row and first column define names, and each cell 
+    contains float value. The file is loaded from the first existing file in the 
+    given list of paths'''
+    #check filepaths provided
+    csv_file = None
+    csv_filename = None
+    for filename in filenames:
+        if os.path.isfile(filename):
+            csv_file = open(filename, 'rb')
+            csv_filename = filename
+            break
+    if not csv_file:
+        raise ImportError('UnifiedNN._load_csv: file %s not found in the system.' \
+                          % os.path.basename(filenames[0]))
+    #try to load csv
+    try:
+        csv_reader = list(csv.reader(csv_file, delimiter='\t', quotechar='"'))
+    except:
+        print 'UnifiedNN._load_csv: exception occured while trying to load %s' \
+        % csv_filename
+        raise
+    #read csv and fill the dict
+    table_dict = dict()
+    #dictionary of column names
+    row_dict   = dict()
+    for ci in range(1,len(csv_reader[0])):
+        row_dict[ci] = csv_reader[0][ci]
+    #read row by row
+    for row in csv_reader[1:]: #skip the first row
+        table_dict[row[0]] = dict()
+        for ci in row_dict:
+            table_dict[row[0]][row_dict[ci]] = float(row[ci])
+    return table_dict
 #end def
 
-def delta_G(seq, rev_comp): return delta_Par(seq, rev_comp, 'dG')
-def delta_H(seq, rev_comp): return delta_Par(seq, rev_comp, 'dH')
-def delta_S(seq, rev_comp): return delta_Par(seq, rev_comp, 'dS')
+
+def _install_paths(possible_paths, filename):
+    return tuple(path+name for path,name in zip(possible_paths, (filename,)*len(possible_paths)))
 
 
-def loop_dG(length, loop_type):
-    if length > 30: raise ValueError('Loop length should not exceed 30')
-    if length in LoopNN:
-        return LoopNN[length][loop_type]
-    else:
-        exp_len = length
-        while exp_len not in LoopNN: exp_len += 1
-        return LoopNN[exp_len][loop_type] + Loop_coefficient * R * 310.15/1000 * log(float(length)/exp_len)
-#end def
+class UnifiedNN(object):
+    '''
+    Load thermodynamic data of Unified Nearest Neighbour model
+    and provide methods for convenient access to it.
+    '''
+    #class initialization flag
+    _inited = False
+    
+    #paths to the thermodynamic tables
+    _possible_paths = ('./', '/usr/local/share/degen_primer/', '/usr/share/degen_primer/')
+     
+    _internal_NN_filename             = 'internal-NN.csv'
+    internal_NN_paths                 = _install_paths(_possible_paths, _internal_NN_filename)
+    
+    _loops_filename                   = 'loops.csv'
+    loops_paths                       = _install_paths(_possible_paths, _loops_filename)
+    
+    _tri_tetra_hairpin_loops_filename = '3-4-hairpin-loops.csv'
+    tri_tetra_hairpin_loops_paths     = _install_paths(_possible_paths, _tri_tetra_hairpin_loops_filename)
+    
+    _dangling_ends_filename           = 'dangling-ends.csv'
+    dangling_ends_paths               = _install_paths(_possible_paths, _dangling_ends_filename)
+    ###############################################################################
+    
+    
+    #constants
+    R                  =  1.9872 #Universal gas constant cal/(K*mol)
+    K0                 = -273.15 #Absolute temperature zero in degree Celsius
+    K37                = 37 - K0 #37C
+    dG_Na_coefficient_oligo = -0.114 #kcal/mol for oligomers with length =< 16
+    dG_Na_coefficient_poly  = -0.175 #kcal/mol for longer polymers
+    dS_Na_coefficient  = +0.368 #e.u.
+    T_DMSP_coefficient = 0.75
+    Loop_coefficient   =  2.44
+    #The NN stabilities at 37◦ C range from −1.23 to −0.21 kcal/mol 
+    #for CG/GA and AC/TC, respectively
+    Terminal_mismatch_mean  = (-1.23 + -0.21)/2
+    
+    
+    #thermodynamic tables
+    internal_NN   = None #table of thermodynamic values for internal nearest neighbour nucleotide pairs
+    dangling_ends = None
+    loops         = None
+    tri_tetra_hairpin_loops = None
+    
+    
+    #constructor
+    def __init__(self):
+        if self._inited: return
+        self.load_tables()
+    #end def
+    
+    
+    #bool value of an instance
+    def __nonzero__(self):
+        return self._inited
+    
+    
+    @classmethod    
+    def load_tables(cls):
+        '''load thermodynamic tables'''
+        cls.internal_NN   = _load_csv(cls.internal_NN_paths)
+        cls.dangling_ends = _load_csv(cls.dangling_ends_paths)
+        cls.loops         = _load_csv(cls.loops_paths)
+        cls.tri_tetra_hairpin_loops = _load_csv(cls.tri_tetra_hairpin_loops_paths)
+        cls._inited       = True
+    #end def
+    
+    
+    #'standard' enthalpy, enthropy and Gibbs energy
+    @classmethod
+    def _pair_delta_par(cls, seq, rev, parameter):
+        '''return 'standard' parameter (henthalpy, enthropy or Gibbs energy) 
+        for the given dinucleotide duplex'''
+        fwd_key = seq+'/'+rev
+        rev_key = rev[::-1]+'/'+seq[::-1]
+        if not '-' in fwd_key: #if it's not a dangling end
+            if   fwd_key in cls.internal_NN:
+                return cls.internal_NN[fwd_key][parameter]
+            elif rev_key in cls.internal_NN:
+                return cls.internal_NN[rev_key][parameter]
+        else:
+            if   fwd_key in cls.dangling_ends:
+                return cls.dangling_ends[fwd_key][parameter]
+        #if not found anywhere
+        raise ValueError('UnifiedNN._delta_par: sequence is not in the database: %s' % fwd_key)
+    #end def
+
+    
+    @classmethod
+    def pair_dH_37(cls, seq, rev):
+        return cls._pair_delta_par(seq, rev, 'dH')
+    
+    @classmethod
+    def pair_dS_37(cls, seq, rev):
+        return cls._pair_delta_par(seq, rev, 'dS')
+    
+    @classmethod
+    def pair_dG_37(cls, seq, rev):
+        return cls._pair_delta_par(seq, rev, 'dG')
+
+
+    @classmethod
+    def _extrapolate_loop_dG_37(cls, length, loop_type):
+        if length < 30:
+            exp_len = length
+            while str(exp_len) not in cls.loops: exp_len += 1
+        else: exp_len = 30
+        return cls.loops[str(exp_len)][loop_type] + cls.Loop_coefficient * cls.R * cls.K37/1000 * log(float(length)/exp_len)
+    #end def
+    
+    
+    @classmethod
+    def internal_loop_dG_37(cls, length):
+        #check for loop length
+        if length > 30: 
+            print 'Warning: thermodynamic parameters for loops of length 30 and \
+            more are extrapolated from experimental data and may be erroneous.'
+        #if loop length is in the table
+        if str(length) in cls.loops:
+            loop_dG = cls.loops[str(length)]['internal']
+        else: #interpolate loop dG
+            loop_dG = cls._extrapolate_loop_dG_37(length, 'internal')
+        loop_dG += 2*cls.Terminal_mismatch_mean
+        return loop_dG
+    #end def
+    
+    
+    @classmethod
+    def hairpin_loop_dG_37(cls, seq):
+        length = len(seq) - 2 #two boundary nucleotides are not included
+        #check for loop length
+        if length > 30: 
+            print 'Warning: thermodynamic parameters for loops of length 30 and \
+            more are extrapolated from experimental data and may be erroneous.'
+        #if loop length is in the table
+        if str(length) in cls.loops:
+            loop_dG = cls.loops[str(length)]['hairpin']
+            if   length == 3:
+                if seq in cls.tri_tetra_hairpin_loops:
+                    #special tri-loop correction
+                    loop_dG += cls.tri_tetra_hairpin_loops[seq]['dG']
+                if seq[0] == 'A' or seq[0] == 'T':
+                    loop_dG += 0.5 #kcal/mol; AT-closing penalty
+            elif length == 4:
+                if seq in cls.tri_tetra_hairpin_loops:
+                    #special tri-loop correction
+                    loop_dG += cls.tri_tetra_hairpin_loops[seq]['dG']
+                loop_dG += cls.Terminal_mismatch_mean
+            else: loop_dG += cls.Terminal_mismatch_mean
+            return loop_dG
+        else: #interpolate loop dG
+            loop_dG  = cls._extrapolate_loop_dG_37(length, 'hairpin')
+            loop_dG += cls.Terminal_mismatch_mean
+            return loop_dG
+    #end def
+    
+    
+    @classmethod
+    def loop_dH_37(cls, seq, loop_type):
+        if loop_type == 'internal': 
+            return 0 # All loop dH◦ parameters are assumed to equal zero. [1]
+        length = len(seq) - 2 #two boundary nucleotides are not included
+        if length > 4: 
+            return 0 # All loop dH◦ parameters are assumed to equal zero. [1] 
+        elif seq in cls.tri_tetra_hairpin_loops:
+            return cls.tri_tetra_hairpin_loops[seq]['dH']
+        return 0
+    #end def
+    
+    
+    @classmethod
+    def loop_dS_37(cls, seq, loop_type):
+        if loop_type == 'internal':
+            loop_dG = cls.internal_loop_dG_37(len(seq) - 2)
+        else:
+            loop_dG = cls.hairpin_loop_dG_37(seq)
+        loop_dH = cls.loop_dH_37(seq, loop_type)
+        return (loop_dG - loop_dH)*-1000.0/cls.K37
+    #end def
+    
+    
+    #Gibbs energy at specified temperature
+    @classmethod
+    def temp_K(cls, temperature):
+        return temperature - cls.K0
+    
+    @classmethod
+    def dG_T(cls, dH, dS, temperature):
+        return dH - cls.temp_K(temperature)*dS/1000.0
+#end class
+    
+
+#tests
+if __name__ == '__main__':
+    UnifiedNN.load_tables()
+    print UnifiedNN.loops
