@@ -1,3 +1,3 @@
-* add configuration file as a command line argument to DegenPrimerGUI
+* add separate/mixed mode to iPCR (?)
 * use some graphics library to make PDF plots of PCR phoresis (apparently, mathplotlib)
-* add separate/mixed mode to iPCR 
+* fix filechooser in DegenPrimerGUI

@@ -24,13 +24,27 @@ Tool to compute degenerate primer parameters using BioPython
 
 #imports
 import sys
+import signal
 from DegenPrimer.StringTools import hr, wrap_text, print_exception
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
-from DegenPrimer.DegenPrimerPipeline import degen_primer_pipeline
+from DegenPrimer.DegenPrimerPipeline import DegenPrimerPipeline
 ###############################################################################
 
+#pipeline object
+degen_primer_pipeline = DegenPrimerPipeline()
+
+def sig_handler(signal, frame):
+    degen_primer_pipeline.terminate()
+    sys.exit(1)
+
+
 if __name__ == '__main__':
+    #setup signal handler
+    signal.signal(signal.SIGINT,  sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
+    signal.signal(signal.SIGQUIT, sig_handler)
+    ###
     args = DegenPrimerConfigCLI()
     try:
         #parse command line arguments and/or configuration file
@@ -46,7 +60,7 @@ if __name__ == '__main__':
     print ''
     if not args.batch():
         #single analysis mode
-        sys.exit(degen_primer_pipeline(args))
+        sys.exit(degen_primer_pipeline.run(args))
     else:
         #batch analysis mode
         print wrap_text('Batch mode enabled. All command-line arguments '
@@ -62,6 +76,6 @@ if __name__ == '__main__':
                 continue
             config.do_blast = args.do_blast
             print hr(' Repeating analysis for %s ' % config_file)
-            return_code |= degen_primer_pipeline(config)
+            return_code |= degen_primer_pipeline.run(config)
             print hr('')
         sys.exit(return_code)

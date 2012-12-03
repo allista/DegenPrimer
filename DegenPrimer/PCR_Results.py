@@ -23,9 +23,8 @@ Created on Nov 16, 2012
 
 from math import log, exp
 from itertools import chain
-from scipy.optimize import fmin_slsqp, fmin_l_bfgs_b, fsolve
 from OligoFunctions import dimer
-from TD_Functions import dimer_dG_corrected, equilibrium_constant, format_PCR_conditions
+from TD_Functions import dimer_dG_corrected, equilibrium_constant, format_PCR_conditions, C_Prim_M, C_DNA_M
 from StringTools import wrap_text, hr
 from Equilibrium import Equilibrium
 import TD_Functions
@@ -40,21 +39,27 @@ class PCR_Results(object):
     _hist_column_title  = '---relative concentration---'
     _hist_width         = len(_hist_column_title)
     #electrophoresis
-    _window_percent     = 0.05#the same as below
-    _precision          = 1e6 #forgot what this is ^_^' Need to lock at the code and write a description
+    _window_percent     = 0.05 #percentage of a length of the longest PCR product; it defines band width on electrophoresis
+    #indirectly defines to what extent should lengths 
+    #of two products differ in order of them to occupy 
+    #separate bands on the electrophoresis.
+    _precision          = 1e6   
     #number of PCR cycles emulated
     _num_cycles         = 20
+    #minimum equilibrium constant: reactions with EC less than this will not be taken into account
+    _min_K              = 1000
 
     def __init__(self, 
                  min_amplicon,      #minimum amplicon length 
                  max_amplicon,      #maximum amplicon length
-                 no_exonuclease,    #if polymerase does not have 3' exonuclease activity, products of primers with 3'-mismatches will be discarded   
+                 with_exonuclease,  #if polymerase does have have 3' exonuclease activity, products of primers with 3'-mismatches will also be icluded
                  ):
         self._min_amplicon = min_amplicon
         self._max_amplicon = max_amplicon
-        self._no_exonuclease = no_exonuclease
+        self._with_exonuclease = with_exonuclease
         self._products  = dict() #dictionary of all possible products
-        self._reactions = dict() #dictionary of all equilibrium constants 
+        self.reactions  = dict() #dictionary of all equilibrium constants
+        self.concentrations = dict() #dictionary of reactant concentrations
         self._primers   = [] #list of all primers
         self._templates = [] #list of all template sequences
         self._nonzero   = False #true if the class instance has some products with successfully calculated quantities
@@ -64,9 +69,12 @@ class PCR_Results(object):
     
     def __nonzero__(self):
         return self._nonzero
+    
+    def add_reactions(self, reactions, concentrations):
+        self.reactions.update(reactions)
+        self.concentrations.update(concentrations)
     #end def
-    
-    
+
     def add_product(self, 
                     hit,        #name of the target sequence
                     start,      #start position of the product on the target sequence
@@ -132,11 +140,11 @@ class PCR_Results(object):
         #3' mismatches
         fwd_dimer = dimer(product['fwd_primer'], product['fwd_seq'])
         rev_dimer = dimer(product['rev_primer'], product['rev_seq'])
-        if self._no_exonuclease:
+        if not self._with_exonuclease:
             if fwd_dimer.fwd_matches()[-1] < len(product['fwd_primer'])-1 \
             or rev_dimer.fwd_matches()[-1] < len(product['rev_primer'])-1:
                 return False
-        #add primers and templates if nesessary
+        #add primers and templates if necessary
         if not str(product['fwd_primer']) in self._primers:
             self._primers.append(str(product['fwd_primer']))
         if not str(product['rev_primer']) in self._primers:
@@ -148,12 +156,17 @@ class PCR_Results(object):
         #calculate equilibrium constants for each pair [primer*template]
         fwd_dG = dimer_dG_corrected(fwd_dimer, product['fwd_primer'], product['fwd_seq'])
         rev_dG = dimer_dG_corrected(rev_dimer, product['rev_primer'], product['rev_seq'])
-        
+        #compile two annealing reactions for Equilibrium
         fwd_hash = hash((str(product['fwd_primer']), str(product['fwd_seq'])))
         rev_hash = hash((str(product['rev_primer']), str(product['rev_seq'])))
-        
-        self._reactions[fwd_hash] = equilibrium_constant(fwd_dG, TD_Functions.PCR_T)
-        self._reactions[rev_hash] = equilibrium_constant(rev_dG, TD_Functions.PCR_T)
+        self.reactions[fwd_hash] = Equilibrium.compose_reaction(equilibrium_constant(fwd_dG, TD_Functions.PCR_T),
+                                                                 str(product['fwd_primer']),
+                                                                 str(product['fwd_seq']),
+                                                                 'AB') 
+        self.reactions[rev_hash] = Equilibrium.compose_reaction(equilibrium_constant(rev_dG, TD_Functions.PCR_T),
+                                                                 str(product['rev_primer']),
+                                                                 str(product['rev_seq']),
+                                                                 'AB')  
         #prepare primer-template sets
         product['fwd_primers']   = set([str(product['fwd_primer'])])
         product['rev_primers']   = set([str(product['rev_primer'])])
@@ -162,6 +175,66 @@ class PCR_Results(object):
         return True
     #end def
     
+    def hits(self):
+        return list(self._products.keys())
+    
+    def _product_quantity(self, fwd_P, rev_P):
+        return min(C_Prim_M(), C_DNA_M())*fwd_P*rev_P*(4*2**self._num_cycles + self._num_cycles-1)
+    #end def
+    
+    def compute_quantities(self):
+        if not self._products: return
+        #filter reactions by equilibrium constant value
+        reactions = dict()
+        for k_hash in self.reactions:
+            #for bimolecular association constants less than 1e3 
+            #are equivalent to conversion degrees less than 1e-5
+            if self.reactions[k_hash]['type'] == 'A' \
+            or self.reactions[k_hash]['constant'] > self._min_K: 
+                reactions[k_hash] = self.reactions[k_hash]
+        #use Equilibrium to compute dimer quantities
+        self.concentrations.update(dict.fromkeys(self._primers,   C_Prim_M()))
+        self.concentrations.update(dict.fromkeys(self._templates, C_DNA_M())) 
+        equilibrium = Equilibrium(reactions, self.concentrations)
+        solution, obj_value = equilibrium.calculate()
+        self.solution_objective_value = obj_value
+        self.solution = solution
+        #now compute quantities of products and filter out those with low quantity
+        new_hits = dict()
+        for hit in self._products:
+            new_products = dict()
+            for product_hash in self._products[hit]:
+                product = self._products[hit][product_hash]
+                #forward primer annealing:
+                product['fwd_quantity'] = 0
+                for fwd_primer in product['fwd_primers']:
+                    for fwd_seq in product['fwd_templates']:
+                        dimer_hash = hash((fwd_primer,fwd_seq))
+                        if dimer_hash in solution:
+                            product['fwd_quantity'] += solution[dimer_hash]
+                #reverse primer annealing:
+                product['rev_quantity'] = 0
+                for rev_primer in product['rev_primers']:
+                    for rev_seq in product['rev_templates']:
+                        dimer_hash = hash((rev_primer,rev_seq))
+                        if dimer_hash in solution:
+                            product['rev_quantity'] += solution[dimer_hash]
+                #PCR product quantity
+                product['quantity'] = self._product_quantity(product['fwd_quantity'],
+                                                             product['rev_quantity'])
+                #if quantity is not zero, add this product to the final list 
+                if product['quantity']:
+                    new_products[product_hash] = product
+            #if there're still some products for the current hit, add this hit to the final list
+            if new_products:
+                new_hits[hit] = new_products
+        #store new hits if there are any
+        if new_hits:
+            self._products = new_hits
+            self._nonzero  = True
+        else: self._products = dict()
+    #end def
+
     
     def _construct_histogram(self, main_title, products, with_titles=True):
         text_width = StringTools.text_width
@@ -259,11 +332,11 @@ class PCR_Results(object):
         phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
         for l in range(len(phoresis)):
             line = phoresis[l]
-            prev_mark   = str(phoresis[l-1][2]) if l > 0 else str(line[2]+window)
-            mark_spacer = max_mark - len(str(line[2])) - len(prev_mark)
+            prev_mark   = phoresis[l-1][2] if l > 0 else line[2]+window
+            mark_spacer = max_mark - len(str(line[2])) - len(str(prev_mark))
             line_value  = int(round((line_width*line[1])/max_line))
             line_spacer = line_width - line_value 
-            phoresis_text += '%s-%d%s bp :%s%s:\n' % (prev_mark,
+            phoresis_text += '%d-%d%s bp :%s%s:\n' % (prev_mark,
                                                       line[2], 
                                                       ' '*mark_spacer,
                                                       '#'*line_value,
@@ -273,134 +346,7 @@ class PCR_Results(object):
         return phoresis_text
     #end def
     
-    
-    def hits(self):
-        return list(self._products.keys())
-    
-    def _product_quantity(self, fwd_P, rev_P):
-        return fwd_P*rev_P*(4*2**self._num_cycles + self._num_cycles-1)
-    #end def
-    
-    def compute_quantities(self):
-        if not self._products: return
-        print '\nCalculating quantities of possible PCR products. This may take awhile...'
-        #initial concentrations
-        P    = TD_Functions.C_Prim*1e-6 #M
-        D    = TD_Functions.C_DNA *1e-9 #M
-        DUP  = min(P,D) #maximum concentration of a duplex
-        #construct constants matrix, forward and reverse dictionaries of r indices
-        constants_matrix = []
-        fwd_r_dict = dict()
-        rev_r_dict = dict() 
-        ri    = 0
-        for p in range(len(self._primers)):
-            constants_matrix.append([])
-            for t in range(len(self._templates)):
-                K_hash = hash((self._primers[p], self._templates[t]))
-                if K_hash in self._reactions \
-                and self._reactions[K_hash] > 1000: #constants less than 1e3 are equivalent to conversion ration less than 1e-5
-                    constants_matrix[p].append(self._reactions[K_hash])
-                    fwd_r_dict[p*len(self._templates)+t] = ri
-                    rev_r_dict[K_hash] = ri
-                    ri += 1
-                else: constants_matrix[p].append(0)
-        #factory for left side functions of the system's equations
-        def function_factory(p, t):
-            Ki = constants_matrix[p][t]
-            if not Ki: return None
-            i = fwd_r_dict[p*len(self._templates)+t]
-            def func(r):
-                DUPi = DUP*r[i]
-                _P   = 0
-                for ti in range(len(self._templates)):
-                    if constants_matrix[p][ti]:
-                        _P += DUP*r[fwd_r_dict[p*len(self._templates)+ti]]
-                _D   = 0
-                for pi in range(len(self._primers)):
-                    if constants_matrix[pi][t]:
-                        _D += DUP*r[fwd_r_dict[pi*len(self._templates)+t]]
-                return (DUPi - ((P - _P)*(D - _D))*Ki)
-            return func
-        #all left-side functions, initial root estimation
-        max_K    = max(self._reactions.values())
-        l_funcs  = []
-        r0       = []
-        for p in range(len(self._primers)):
-            for t in range(len(self._templates)):
-                new_func = function_factory(p, t)
-                if new_func: 
-                    l_funcs.append(new_func)
-                    r0.append(constants_matrix[p][t]/max_K/3)
-        #objective function for fmin_
-        obj_multiplier     =  1e9/len(l_funcs)**2
-        objective_function =  lambda(r): sum((l_funcs[i](r)*obj_multiplier)**2 for i in range(len(l_funcs)))
-        #system function for fsolve
-        sys_func = lambda(r): \
-                    tuple(l_funcs[i](r) for i in range(len(l_funcs)))
-        #solution bounds
-        bounds = ((0,1),)*len(l_funcs)
-        #try to find the solution with iterations of increasing precision
-        factr = 1e15 #initial convergence precision
-        while factr > 1e5:
-            sol    = fmin_l_bfgs_b(objective_function, r0, factr = factr, bounds=bounds, approx_grad=True)
-            if sol[2]['warnflag'] != 0: break
-            if objective_function(r0)/objective_function(sol[0]) < 10:
-                r0 = sol[0] 
-                break
-            factr *= 1e-5
-            r0 = sol[0]
-        #try to fine-tune the solution using fsolve
-        sol = fsolve(sys_func, r0, full_output=True)
-        if sol[2] != 1 or min(sol[0]) < 0 or max(sol[0]) > 1:
-            #if not succeeded, try fine-tune with slsqp 
-            sol    = fmin_slsqp(objective_function, r0, acc=1e-10, bounds=bounds, full_output=True, disp=0)
-            if sol[3] == 0: r0 = sol[0]
-        else: r0 = sol[0]
-        #in any case use the best guess for the solution
-        self.solution_objective_value = objective_function(r0)
-        #now compute quantities of products and filter out those with low quantity
-        new_hits = dict()
-        for hit in self._products:
-            new_products = dict()
-            for product_hash in self._products[hit]:
-                product = self._products[hit][product_hash]
-                #forward primer annealing:
-                product['fwd_quantity'] = 0
-                for fwd_primer in product['fwd_primers']:
-                    for fwd_seq in product['fwd_templates']:
-                        dimer_hash = hash((fwd_primer,fwd_seq))
-                        if dimer_hash in rev_r_dict:
-                            product['fwd_quantity'] += r0[rev_r_dict[dimer_hash]]
-                #reverse primer annealing:
-                product['rev_quantity'] = 0
-                for rev_primer in product['rev_primers']:
-                    for rev_seq in product['rev_templates']:
-                        dimer_hash = hash((rev_primer,rev_seq))
-                        if dimer_hash in rev_r_dict:
-                            product['rev_quantity'] += r0[rev_r_dict[dimer_hash]]
-                #PCR product quantity
-                product['quantity'] = self._product_quantity(product['fwd_quantity'],
-                                                             product['rev_quantity'])
-                #if quantity is not zero, add this product to the final list 
-                if product['quantity']:
-                    new_products[product_hash] = product
-            #if there're still some products for the current hit, add this hit to the final list
-            if new_products:
-                new_hits[hit] = new_products
-        #store new hits if there are any
-        if new_hits:
-            self._products = new_hits
-            self._nonzero  = True
-        else: self._products = dict()
-#        for hit in self._products.values(): #TODO: remove
-#            for p in hit.values():
-#                print p['title']
-#                print 'fwd_q:', p['fwd_quantity']
-#                print 'rev_q:', p['rev_quantity']
-#                print 'q:', p['quantity']
-#                print ''
-    #end def
-    
+        
     def all_products_histogram(self):
         if not self._nonzero: 
             return '\nNo PCR products found, or quantities have not been calculated.\n'
@@ -440,15 +386,16 @@ class PCR_Results(object):
         for hit in self._products.keys():
             all_graphs += self.per_hit_histogram(hit)
             all_graphs += self.per_hit_electrophoresis(hit)
+            all_graphs += '\n\n'
         return all_graphs
     
     
     def format_report_header(self):
         header_string  = ''
         header_string += hr(' filtration parameters ')
-        if self._no_exonuclease:
-            header_string += "DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n"
-        else: header_string += "DNA polymerase has 3'-5'-exonuclease activity\n"
+        if self._with_exonuclease:
+            header_string += "DNA polymerase HAS 3'-5'-exonuclease activity\n"
+        else: header_string += "DNA polymerase doesn't have 3'-5'-exonuclease activity\n"
         header_string += 'Minimum amplicon size:      %d\n' % self._min_amplicon
         header_string += 'Maximum amplicon size:      %d\n' % self._max_amplicon
         header_string += '\n'
@@ -479,42 +426,6 @@ class PCR_Results(object):
 if __name__ == '__main__':
     import os
     os.chdir('../')
-#    from scipy.optimize import fmin_slsqp, fsolve
-#
-#    k = [1,2,3,4,5]
-#    bounds = ((0,1),)*5
-#    a = 5
-#    b = -3
-#
-#    def f_factory(i):
-#        def func(r):
-#            global a,b,k
-#            return a*r[i]**2+(b+sum(r))*r[i]-k[i]
-#        return func
-#    
-#    functions = tuple(f_factory(i) for i in range(len(k)))
-#    
-#    sys_func = lambda(r): \
-#                    tuple(functions[i](r) for i in range(len(k)))
-#    
-#    obj_func = lambda(r): \
-#        sum(functions[i](r)**2 for i in range(len(k)))
-#    
-#    for i in range(5,10):
-#        r0 = (i/10.0,)*5
-#        acc=1e-10
-#        sol1 = fmin_slsqp(obj_func, r0, acc=acc, bounds=bounds, full_output=True)
-#        sol2 = fsolve(sys_func, r0).tolist()
-#        if sol1[3] == 0 and sol1[1] <= acc:
-#            print 'sol1:\n', sol1[0]
-#            print sys_func(sol1[0])
-#            print obj_func(sol1[0])
-#        print 'sol2:\n', sol2
-#        print sys_func(sol2)
-#        print obj_func(sol2)
-    
-    
-    
     from Bio.Seq import Seq
     PCR_res = PCR_Results(50, 3000, False)
     PCR_res.add_product('Pyrococcus yayanosii CH1', 982243, 983644, 1420, 
@@ -522,15 +433,15 @@ if __name__ == '__main__':
                         Seq('CAAGGGTTAGAAGCGGAAG').complement(), 
                         Seq('ATATTCTACAACGGCTATCC'), 
                         Seq('CAAGGGCTAGAAACGGAAG'[::-1]))
-    PCR_res.add_product('Pyrococcus yayanosii CH1', 962243, 963644, 1420, 
+    PCR_res.add_product('Pyrococcus yayanosii CH2', 962243, 963644, 1420, 
                         Seq('ATATGCTACGACGGCTATCC').reverse_complement(), 
                         Seq('GAAGGGTTAGACGCGGAAG').complement(), 
                         Seq('ATATTCTACAACGGTTATCC'), 
                         Seq('CAAGAGCTAGAAACGGAAG'[::-1]))
-    PCR_res.add_product('Pyrococcus yayanosii CH1', 922243, 923644, 1420, 
+    PCR_res.add_product('Pyrococcus yayanosii CH3', 922243, 923644, 1420, 
                         Seq('ATATTCTACGACAGCTATCC').reverse_complement(), 
                         Seq('CAAGGCTTAGAAGCGGAAG').complement(), 
-                        Seq('ATATTCTACAACGTCTATCC'), 
+                        Seq('ATATTCTACAACGGCTATCC'), 
                         Seq('CAAGGGCTAGAGACGGAAG'[::-1]))
     print 'products:'
     PCR_res.compute_quantities()

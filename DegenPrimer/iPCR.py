@@ -42,7 +42,9 @@ class iPCR(object):
                  rev_primers, 
                  min_amplicon, 
                  max_amplicon, 
-                 no_exonuclease):
+                 with_exonuclease,
+                 side_reactions=None,
+                 side_concentrations=None):
         #files
         self._program_filename    = job_id+'.ipcr'
         self._raw_report_filename = job_id+'-ipcr-raw-report.txt'
@@ -53,15 +55,21 @@ class iPCR(object):
         self._max_mismatches     = None
         self._min_amplicon       = min_amplicon
         self._max_amplicon       = max_amplicon
-        self._no_exonuclease     = no_exonuclease
+        self._with_exonuclease   = with_exonuclease
         #results
         self._PCR_products = PCR_Results(self._min_amplicon,
-                                        self._max_amplicon,
-                                        self._no_exonuclease)
-        self._results     = None
-        self._hits        = None
-        self.have_results = False
+                                         self._max_amplicon,
+                                         self._with_exonuclease)
+        if side_reactions and side_concentrations:
+            self._PCR_products.add_reactions(side_reactions, side_concentrations)
+        self._results      = None
+        self._hits         = None
+        self._have_results = False
+        self._have_report  = False
     #end def
+    
+    #property functions
+    def have_results(self): return self._have_results
     
     
     def writeProgram(self):
@@ -193,7 +201,7 @@ class iPCR(object):
         if not self._PCR_products:
             print('\nAll results found in raw iPCR report were filtered out\n')
             return False
-        self.have_results = True
+        self._have_results = True
         return True
     #end def
     
@@ -219,9 +227,9 @@ class iPCR(object):
         ipcr_report.write('\n')
         #filter parameters
         ipcr_report.write(hr(' filtration parameters '))
-        if self._no_exonuclease:
-            ipcr_report.write("DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n")
-        else: ipcr_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
+        if self._with_exonuclease:
+            ipcr_report.write("DNA polymerase HAS 3'-5'-exonuclease activity\n")
+        else: ipcr_report.write("DNA polymerase doesn't have 3'-5'-exonuclease activity\n")
         ipcr_report.write('Minimum amplicon size:      %d\n' % self._min_amplicon)
         ipcr_report.write('Maximum amplicon size:      %d\n' % self._max_amplicon)
         if self._max_mismatches:
@@ -250,12 +258,15 @@ class iPCR(object):
             ipcr_report.write(hr(' the same grouped by target sequence ', symbol='='))
             ipcr_report.write(self._PCR_products.all_graphs_grouped_by_hit())
         ipcr_report.close()
-        print '\niPCRess report was written to:\n   ',self._PCR_report_filename
+        print '\niPCR report was written to:\n   ',self._PCR_report_filename
+        self._have_report = True
     #end def
     
     
-    def register_reports(self, args):
-        args.register_report('iPCR report', self._PCR_report_filename)
+    def reports(self):
+        if self._have_report:
+            return ({'report_name': 'iPCR report', 'report_file': self._PCR_report_filename},)
+        else: return None
     #end def
 #end class
         

@@ -56,11 +56,16 @@ NN = UnifiedNN()
 if not NN:
     raise Exception('TD_Functions: Unable to initialize UnifiedNN.')
 
+#pseudo-concentration of Na equivalent to current concentration of Mg2+
 def C_Na_eq():
     """divalent cation correction (Ahsen et al., 2001)"""
     global C_Na, C_Mg, C_dNTP
     return C_Na + 120*sqrt(C_Mg - C_dNTP)
 #end def
+
+#concentrations of primer and DNA in mols
+def C_Prim_M(): return C_Prim*1e-6
+def C_DNA_M(): return C_DNA*1e-9
 
 
 def NN_Tr(seq, r):
@@ -78,8 +83,8 @@ def NN_Tr(seq, r):
     rev_str = str(seq.complement())
     dH, dS = 0, 0
     #concentrations
-    P   = C_Prim*1e-6
-    D   = C_DNA *1e-9
+    P   = C_Prim_M()
+    D   = C_DNA_M()
     DUP = r*min(P,D)
     #equilibrium constant 
     K   = DUP/((P-DUP)*(D-DUP))
@@ -467,19 +472,19 @@ def hairpin_dG_corrected(hairpin, seq):
 
 
 def equilibrium_constant(dG_T, T):
-    '''calculate equilibrium constant of the annealing reaction
-    at a given temperature, given standard dG at this temperature'''
+    '''calculate equilibrium constant of at a given temperature, 
+    given standard dG at this temperature'''
     global NN
     return exp(-1000*dG_T/(NN.R*NN.temp_K(T))) #annealing equilibrium constant
 
 
-def conversion_degree(dG_T, T):
-    '''calculate conversion degree at equilibrium
+def primer_DNA_conversion_degree(dG_T, T):
+    '''calculate conversion degree of Primer/DNA dimerisation
     given standard dG(kcal/mol) of annealing at T(C) temperature'''
     global C_Prim, C_DNA 
     K = equilibrium_constant(dG_T, T)
-    P = C_Prim*1e-6 #M
-    D = C_DNA *1e-9 #M
+    P = C_Prim_M()
+    D = C_DNA_M()
     #quadratic equation with respect to DUP = r*min(P,D), 
     #where 'r' is a conversion degree
     _b   = (K*P+K*D+1) #MINUS b; always positive
@@ -490,20 +495,28 @@ def conversion_degree(dG_T, T):
 
 
 def dimer_conversion_degree(dG_T, T):
-    '''calculate conversion degree at equilibrium
+    '''calculate conversion degree of Primer self-dimerisation
     given standard dG(kcal/mol) of annealing at T(C) temperature'''
-    global C_Prim, C_DNA 
     K = equilibrium_constant(dG_T, T)
-    P = C_Prim*1e-6 #M
-    #quadratic equation with respect to DUP = r*min(P,D), 
+    P = C_Prim_M()
+    #quadratic equation with respect to DUP = r*P, 
     #where 'r' is a conversion degree
     _b   = (2*K*P+1) #MINUS b; always positive
-    disc = _b*_b - 4*K*(K*P*P) #this should always be >= 0 given non-negative K, P and D
+    disc = _b*_b - 4*K*(K*P*P) #this should always be >= 0 given non-negative K and P
     DUP  = (_b-sqrt(disc))/(2*K) #take the smallest positive root
     return DUP/P
 #end def
 
 
+def hairpin_conversion_degree(dG_T, T):
+    '''calculate conversion degree of hairpin formation on Primer
+    given standard dG(kcal/mol) of annealing at T(C) temperature'''
+    K = equilibrium_constant(dG_T, T)
+    return K/(1+K)
+#end def
+
+
+#tests
 if __name__ == '__main__':
     from Bio.Seq import Seq
     from OligoFunctions import dimer
@@ -519,7 +532,14 @@ if __name__ == '__main__':
     C_dNTP   = 0.3 
     C_DNA    = 50.0
     C_Primer = 0.43
-    PCR_T = 37
+    PCR_T = 55
+    
+    _dG = 3
+    K = equilibrium_constant(_dG, PCR_T)
+    print 'Equilibrium constant:     ', K
+    print 'Hairpin conversion degree:', hairpin_conversion_degree(_dG, PCR_T)*100
+    print 'Dimer conversion degree:  ', dimer_conversion_degree(_dG, PCR_T)*100
+    print ''
     
     print seq1, seq2
     print dimer_dG(dim1, seq1, seq2)

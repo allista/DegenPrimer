@@ -20,7 +20,6 @@ Created on Nov 25, 2012
 
 @author: Allis Tauri <allista@gmail.com>
 '''
-
 from scipy.optimize import fmin_l_bfgs_b, fsolve
 from numpy.random import random_sample
 
@@ -28,135 +27,207 @@ class Equilibrium(object):
     '''
     Calculate equilibrium parameters in a system of concurrent reactions.
     The system is defined as a dictionary of dicts: 
-    {id: {'K': equilibrium_constant, 'Ai': Ai, 'Bi': Bi, 'type': reaction_type), ...}
-    Ai and Bi are reactant identifiers. 
-    All concentrations of Ai/Bi are equal to C_A/Bi initialization parameter
-    reaction_type is a string identifier of one of the five types of the reaction:
-    'AB'    A + B <--> AB
-    '2A'    2A    <--> A_2
-    '2B'    2B    <--> B_2
-    'A'     A     <--> A'
-    'B'     B     <--> B'
+    {id: {'K':    equilibrium_constant, 
+          'Ai':   first reactant_id, 
+          'Bi':   second reactant_id, 
+          'type': reaction_type), ...}
+    Initial concentrations of reactants are provided as a dict:
+    {reactant_id: concentration}
+    reaction_type is a string identifier of one of the following types of the reaction:
+    'AB'    A + B <--> AB    bimolecular association
+    '2A'    2A    <--> A_2   dimerization
+    'A'     A     <--> A'    transformation
     '''
+    
+    @staticmethod
+    def compose_reaction(K,     #equilibrium constant of the reaction
+                           Ai,    #identifier of the first reactant
+                           Bi,    #identifier of the second reactant, if present
+                           r_type #reaction type, one of the 'AB', '2A', 'A'
+                           ):
+        return {'constant'  : K,
+                'Ai'        : Ai,
+                'Bi'        : Bi,
+                'type'      : r_type}
+    #end def
+    
+    
+    @classmethod
+    def indexed_reaction(cls, reaction):
+        return [reaction['constant'],
+                reaction['Ai'],
+                reaction['Bi'],
+                reaction['type']]
+    #end def
+    
 
-    def __init__(self, C_A, C_B, reactions, precision = 1e-10):
+    def __init__(self, reactions, concentrations, precision = 1e-10):
         #system in parameters
-        self._precision = precision
-        self._A         = C_A
-        self._B         = C_B
-        self._AB        = min(C_A, C_B)
-        self._reactions = reactions
-        self._max_K     = max(r['constant'] for r in self._reactions.values())
+        self._precision     = precision
+        self.reactions      = reactions
+        self.concentrations = concentrations
         #dictionaries for 'navigation' within the system
-        ri = 0
-        self._fwd_r_dict = dict()
-        self._rev_r_dict = dict()
-        self._Ai_reactions = dict()
-        self._Bi_reactions = dict()
-        for r_hash in self._reactions:
-            #set up forward and reverse dictionaries between reaction hashes and numbers
-            self._fwd_r_dict[r_hash] = ri
-            self._rev_r_dict[ri] = r_hash
-            #set up dictionaries of reactions in which a particular reactant participates
-            R = self._reactions[r_hash]
-            if not R['Ai'] in self._Ai_reactions:
-                self._Ai_reactions[R['Ai']] = [ri]
-            else: self._Ai_reactions[R['Ai']].append(ri)
-            if not R['Bi'] in self._Bi_reactions:
-                self._Bi_reactions[R['Bi']] = [ri]
-            else: self._Bi_reactions[R['Bi']].append(ri)
+        reaction_i = 0 #reaction index
+        reactant_i = 0 #reactant index
+        self._rev_r_dict      = dict() #reaction hash by index
+        self._Ri_reactions    = list() #indexed list of reactions in which reactant Ri participates
+        self._ireactions      = list() #indexed list of reactions
+        self._iconcentrations = list() #indexed list of concentrations
+        self._reactants_dict  = dict() #dict of reactant indices
+        for r_hash in self.reactions:
+            #add reaction to the list and add it's hash to the reverse dicts
+            R  = self.reactions[r_hash]
+            Ri = self.indexed_reaction(R)
+            self._ireactions.append(Ri)
+            self._rev_r_dict[reaction_i] = r_hash
+            #index reactants
+            if R['Ai'] not in self._reactants_dict:
+                self._reactants_dict[R['Ai']] = reactant_i
+                self._iconcentrations.append(self.concentrations[R['Ai']])
+                self._Ri_reactions.append([])
+                reactant_i += 1
+            Ai = self._reactants_dict[R['Ai']]
+            Ri[1] = Ai
+            if R['Bi']:
+                if R['Bi'] not in self._reactants_dict:
+                    self._reactants_dict[R['Bi']] = reactant_i
+                    self._iconcentrations.append(self.concentrations[R['Bi']])
+                    self._Ri_reactions.append([])
+                    reactant_i += 1
+                Bi = self._reactants_dict[R['Bi']]
+                Ri[2] = Bi
+            else: Bi = None
+            #add reaction to the list of reactant's reactions
+            self._Ri_reactions[Ai].append(reaction_i)
+            if Bi != None: self._Ri_reactions[Bi].append(reaction_i)
             #next reaction
-            ri += 1
+            reaction_i += 1
         #solution
-        self.solution = None
+        self._solution = None #pure solver output
+        self.solution  = None #solution mapped to reaction hashes
+        self.solution_objective_value = -1
+    #end def
+    
+    
+    def get_conversion_degree(self, r_hash):
+        if self.solution == None:
+            raise Exception('No solution has been found yet. Call calculate() method prior to solution lookup.')
+        if not r_hash in self.reactions:
+            raise KeyError('There is no reaction in the system with the identifier "%s"' % str(r_hash))
+        return self.solution[r_hash]
+    #end def
+    
+    
+    def reactants_consumtion(self, Ai, Bi=None):
+        if self.solution == None:
+            raise Exception('No solution has been found yet. Call calculate() method prior to solution lookup.')
+        if not Ai in self._Ri_reactions:
+            return 0, 0
+        if Bi and not Bi in self._Ri_reactions:
+            return self._reactants_consumption(self._solution, Ai, None)
+        return self._reactants_consumption(self._solution, self._reactants_dict[Ai], self._reactants_dict[Bi])
     #end def
     
     
     def __getitem__(self, r_hash):
         if self.solution == None:
             raise Exception('No solution has been found yet. Call calculate() method prior to solution lookup.')
-        if not r_hash in self._fwd_r_dict:
+        if not r_hash in self.reactions:
             raise KeyError('There is no reaction in the system with the identifier "%s"' % str(r_hash))
-        r_type = self._reactions[r_hash]['type']
-        if   r_type == 'AB': return self._AB*self.solution[self._fwd_r_dict[r_hash]]
-        elif r_type == '2A': return self._A *self.solution[self._fwd_r_dict[r_hash]]/2.0
-        elif r_type == '2B': return self._B *self.solution[self._fwd_r_dict[r_hash]]/2.0
-        elif r_type == 'A':  return self._A *self.solution[self._fwd_r_dict[r_hash]]
-        elif r_type == 'B':  return self._B *self.solution[self._fwd_r_dict[r_hash]]
+        r_type = self.reactions[r_hash]['type']
+        if   r_type == 'AB': return min(self.concentrations[self.reactions[r_hash]['Ai']],
+                                        self.concentrations[self.reactions[r_hash]['Bi']])*self.solution[r_hash]
+        elif r_type == '2A': return self.concentrations[self.reactions[r_hash]['Ai']] *self.solution[r_hash]/2.0
+        elif r_type == 'A':  return self.concentrations[self.reactions[r_hash]['Ai']] *self.solution[r_hash]
     #end def
     
-    
-    def _reactants_consumption(self, r, Ai, Bi):
-        _A = 0
-        for ri in self._Ai_reactions[Ai]:
-            r_type = self._reactions[self._rev_r_dict[ri]]['type']
-            if   r_type == 'AB': _A += self._AB*r[ri]
-            elif r_type == '2A': _A += self._A *r[ri]
-            elif r_type == 'A':  _A += self._A *r[ri]
+        
+    def _reactants_consumption(self, r, Ai, Bi=None):
+        _A  = 0
+        C_A = self._iconcentrations[Ai]
+        for ri in self._Ri_reactions[Ai]:
+            reaction = self._ireactions[ri]
+            r_type   = reaction[3]
+            if   r_type == 'AB':
+                r_Ai = reaction[1]
+                r_Bi = reaction[2]
+                if Ai == r_Ai:
+                    C_B = self._iconcentrations[r_Bi]
+                else:
+                    C_B = self._iconcentrations[r_Ai]
+                C_AB = C_A if C_A < C_B else C_B
+                _A += C_AB*r[ri]
+            elif r_type == '2A': _A += C_A*r[ri]
+            elif r_type == 'A' : _A += C_A*r[ri]
         _B = 0
-        for ri in self._Bi_reactions[Bi]:
-            r_type = self._reactions[self._rev_r_dict[ri]]['type']
-            if   r_type == 'AB': _B += self._AB*r[ri]
-            elif r_type == '2B': _B += self._B *r[ri]
-            elif r_type == 'B':  _B += self._B *r[ri]
+        if Bi != None:
+            C_B = self._iconcentrations[Bi]
+            for ri in self._Ri_reactions[Bi]:
+                reaction = self._ireactions[ri]
+                r_type   = reaction[3]
+                if   r_type == 'AB':
+                    r_Ai = reaction[1]
+                    r_Bi = reaction[2]
+                    if Bi == r_Ai:
+                        C_A = self._iconcentrations[r_Bi]
+                    else:
+                        C_A = self._iconcentrations[r_Ai]
+                    C_AB = C_A if C_A < C_B else C_B
+                    _B += C_AB*r[ri]
+                elif r_type == '2A': _B += C_B*r[ri]
+                elif r_type == 'A':  _B += C_B*r[ri]
         return _A, _B
     #end def
     
     
     #factory for left side functions of the system's equations
     def _function_factory(self, i):
-        reaction = self._reactions[self._rev_r_dict[i]]
-        if reaction['type'] == 'AB':
+        reaction = self._ireactions[i]
+        r_type   = reaction[3]
+        Ai       = reaction[1]
+        C_A      = self._iconcentrations[Ai]
+        K        = reaction[0]
+        if r_type   == 'AB':
+            Bi   = reaction[2]
+            C_B  = self._iconcentrations[Bi]
+            C_AB = min(C_A, C_B) 
             def func(r):
-                ABi = self._AB*r[i]
-                _A, _B = self._reactants_consumption(r, reaction['Ai'], reaction['Bi'])
-                return (ABi - ((self._A - _A)*(self._B - _B))*reaction['constant'])
+                ABi = C_AB*r[i]
+                _A, _B = self._reactants_consumption(r, Ai, Bi)
+                return (ABi - (C_A - _A)*(C_B - _B)*K)
             return func
-        elif reaction['type'] == '2A':
+        elif r_type == '2A':
             def func(r):
-                Ai2 = self._A*r[i]/2.0
-                _A, _B = self._reactants_consumption(r, reaction['Ai'], reaction['Bi'])
-                return (Ai2 - ((self._A - _A)**2)*reaction['constant'])
+                Ai2 = C_A*r[i]/2.0
+                _A, _B = self._reactants_consumption(r, Ai)
+                return (Ai2 - ((C_A - _A)**2)*K)
             return func
-        elif reaction['type'] == '2B':
+        elif r_type == 'A':
             def func(r):
-                Bi2 = self._B*r[i]/2.0
-                _A, _B = self._reactants_consumption(r, reaction['Ai'], reaction['Bi'])
-                return (Bi2 - ((self._B - _B)**2)*reaction['constant'])
-            return func
-        elif reaction['type'] == 'A':
-            def func(r):
-                A1i = self._A*r[i]
-                _A, _B = self._reactants_consumption(r, reaction['Ai'], reaction['Bi'])
-                return (A1i - (self._A - _A)*reaction['constant'])
-            return func
-        elif reaction['type'] == 'B':
-            def func(r):
-                B1i = self._B*r[i]
-                _A, _B = self._reactants_consumption(r, reaction['Ai'], reaction['Bi'])
-                return (B1i - (self._B - _B)*reaction['constant'])
+                A1i = C_A*r[i]
+                _A, _B = self._reactants_consumption(r, Ai)
+                return (A1i - (C_A - _A)*K)
             return func
     #end def
+
 
     def _initial_estimation(self, obj_func, r0, bounds):
         '''try to estimate the solution roughly with iterations of increasing precision'''
         factr = 1e15 #initial convergence precision
-        while factr > 10:
-            sol    = fmin_l_bfgs_b(obj_func, r0, factr = factr, bounds=bounds, approx_grad=True)
-            objective_ratio = obj_func(r0)/obj_func(sol[0]) 
-            if objective_ratio < 10:
-                if objective_ratio > 1:
-                    r0 = sol[0] 
-                break
-            factr *= 1e-5
-            r0 = sol[0]
+        sol    = fmin_l_bfgs_b(obj_func, r0, factr = factr, bounds=bounds, approx_grad=True)
+        objective_ratio = obj_func(r0)/obj_func(sol[0]) 
+        if objective_ratio < 10:
+            if objective_ratio > 1:
+                r0 = sol[0] 
         return r0
-
+    #end def
+    
+    
     def calculate(self):
         #all left-side functions and initial root estimation
         l_funcs  = []
-        r0       = [1e-6,]*len(self._reactions)
-        for ri in range(len(self._reactions)):
+        r0       = [1e-6,]*len(self.reactions)
+        for ri in range(len(self.reactions)):
             l_funcs.append(self._function_factory(ri))
         #system function for fsolve and objective function for fmin_ 
         sys_func = lambda(r): tuple(l_funcs[i](r) for i in range(len(l_funcs)))
@@ -165,20 +236,10 @@ class Equilibrium(object):
         scaled_objective_function = lambda(r): sum((l_funcs[i](r))**2 for i in range(len(l_funcs)))*objective_scale
         #solution bounds
         bounds = ((0,1),)*len(l_funcs)
-        #try to estimate the solution roughly with iterations of increasing precision
+        #try to estimate the solution roughly
         r0 = self._initial_estimation(scaled_objective_function, r0, bounds)
-        print '\ninitial estimation'
-        print r0
-        print sys_func(r0)
-        print objective_function(r0)
-        print ''
         #try to fine-tune the solution using fsolve
         sol = fsolve(sys_func, r0, full_output=True)
-        print '\nfsolve'
-        print sol[0]
-        print sys_func(sol[0])
-        print objective_function(sol[0])
-        print ''
         #if failed for the first time, iterate fsolve while jitter r0 a little
         r0_value = objective_function(r0)
         while objective_function(sol[0]) >= r0_value \
@@ -186,12 +247,12 @@ class Equilibrium(object):
         or    min(sol[0]) < 0 \
         or    max(sol[0]) > 1:
             sol = fsolve(sys_func, [ri+(random_sample(1)[0]-0.5)*1e-1 for ri in r0], xtol=1e-10, full_output=True)
-            print sol[0]
-            print sys_func(sol[0])
-            print ''
         r0 = sol[0]
         #in any case use the best guess for the solution
-        self.solution = r0
+        self._solution = r0
+        self.solution  = dict()
+        for ri in range(len(r0)):
+            self.solution[self._rev_r_dict[ri]] = r0[ri]
         self.solution_objective_value = objective_function(r0)
         return self.solution, self.solution_objective_value
     #end def
@@ -200,41 +261,46 @@ class Equilibrium(object):
 
 #tests
 if __name__ == '__main__':
-    import sys
-    reactions = {'1': {'constant': 1e5,
+    from time import time
+    reactions = {'A1A2': {'constant': 1e15,
                        'Ai': 1,
-                       'Bi': 1,
+                       'Bi': 2,
                        'type': 'AB'},
-                 '2': {'constant': 1e6,
+                 '2A1': {'constant': 1e6,
                        'Ai': 1,
-                       'Bi': 1,
+                       'Bi': None,
                        'type': '2A'},
-                 '3': {'constant': 1e9,
+                 '2A2': {'constant': 1e9,
+                       'Ai': 2,
+                       'Bi': None,
+                       'type': '2A'},
+                 'A1*': {'constant': 1e3,
                        'Ai': 1,
-                       'Bi': 1,
-                       'type': '2B'},
-                 '4': {'constant': 1e3,
-                       'Ai': 1,
-                       'Bi': 1,
+                       'Bi': None,
                        'type': 'A'},
-                 '5': {'constant': 1e2,
-                       'Ai': 1,
-                       'Bi': 1,
-                       'type': 'B'},
+                 'A2*': {'constant': 1e2,
+                       'Ai': 2,
+                       'Bi': None,
+                       'type': 'A'},
                  }
 
 
     ov_sum = 0
-    size = 1000
+    size = 100
     scale = 1e-2/size
-    for C_A, C_B in zip(random_sample(size), random_sample(size)):
-        print 'A: %f, B: %f' % ((1+C_A*size)*scale, (1+C_B*size)*scale)
-        eq_system = Equilibrium(C_A*1e-2, C_B, reactions)
-        r0, obj = eq_system.calculate()
+    time0 = time()
+    for C_A1, C_A2 in zip(random_sample(size), random_sample(size)):
+        print 'A1: %f, A2: %f' % ((1+C_A1*size)*scale, (1+C_A2*size)*scale)
+        C_dict = {1: (1+C_A1*size)*scale, 2: (1+C_A2*size)*scale}
+        eq_system = Equilibrium(reactions, C_dict)
+        sol, obj = eq_system.calculate()
         ov_sum += obj
         print 'objective function value at the solution: %e' % obj
-        print 'solution:', r0
+        print 'solution:', sol
         for R in reactions:
             print 'Reaction %s [%s]: %e' % (R, reactions[R]['type'], eq_system[R])
         print ''
-    print 'OV_mean: %e' % (ov_sum/size)
+    time1 = time()
+    print 'Total time: %fs' %  (time1 - time0)
+    print 'Mean time:  %fs' % ((time1 - time0)/size)
+    print 'OV_mean:    %e'  % (ov_sum/size)

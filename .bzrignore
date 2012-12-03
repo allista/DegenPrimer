@@ -28,3 +28,4 @@ RE:(?i).*\.csv
 RE:(?i).*\.ods#
 ./old-output
 ./test.py
+*.profile

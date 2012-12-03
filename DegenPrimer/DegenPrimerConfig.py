@@ -246,27 +246,6 @@ class DegenPrimerConfig(object):
                                #default value
                                'default'   :60.0,
                                'limits'    :(20, 80)},
-               {'option':'sec_dG',
-                               'section'   :'PCR',
-                               #command-line arguments 
-                               'args'      :('--sec-dG',),
-                               #number of arguments
-                               'nargs'     :1,
-                               #metavar
-                               'metavar'   :'kcal/mol',
-                               #help string
-                               'help'      :'Dimers with free energy ABOVE this threshold will not '
-                               'be reported in SHORT report (default is -5 kcal/mol. '
-                               'For hairpins the threshold is grater by 2 kcal/mol. '
-                               'For 3\' structures corresponding thresholds are grater by '
-                               'another 1 kcal/mol',
-                               #type
-                               'py_type'   :float, #for argparse
-                               'str_type'  :'f', #for string formatting
-                               'field_type':'float', #for gui
-                               #default value
-                               'default'   :-5.0,
-                               'limits'    :(-1000, 0)},
                #in silica PCR
                {'option':'min_amplicon',
                                'section'   :'iPCR',
@@ -324,18 +303,17 @@ class DegenPrimerConfig(object):
                                #default value
                                'default'   :None,
                                'limits'    :(0, 1000000000)},
-               {'option':'no_exonuclease',
+               {'option':'with_exonuclease',
                                'section'   :'iPCR',
                                #command-line arguments 
-                               'args'      :('--no-exonuclease',),
+                               'args'      :('--with-exonuclease',),
                                #number of arguments
                                'nargs'     :1,
                                #metavar
                                'metavar'   :None,
                                #help string
-                               'help'      :"Set this flag if you are planning to use a "
-                               "DNA-polymerase without 3'-5'-exonuclease activity. "
-                               "Applies only to blast results parsing.",
+                               'help'      :"Set this flag to True if you are planning to use a "
+                               "DNA-polymerase with 3'-5'-exonuclease activity.",
                                #type
                                'py_type'   :bool, #for argparse
                                'str_type'  :'d', #for string formatting
@@ -371,7 +349,7 @@ class DegenPrimerConfig(object):
                                #metavar
                                'metavar'   :None,
                                #help string
-                               'help'      :'If true, run the ipcress programm to '
+                               'help'      :'If True, run the ipcress programm to '
                                'search for possible PCR products in the sequences '
                                'given as fasta files (see --fasta-files argument).',
                                #type
@@ -553,7 +531,7 @@ class DegenPrimerConfig(object):
         config_file = open(config_filename, 'wb')
         config.write(config_file)
         config_file.close()
-        print 'Configuration was written to:\n   ', config_filename
+        print '\nConfiguration was written to:\n   ', config_filename
         print 'NOTE: you may always re-run current analysis with this file \n' \
               '      or use it as a template to run the analysis with modified \n' \
               '      parameters.'

@@ -52,7 +52,7 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
                 arg_groups[option['section']] = self._parser.add_argument_group(self._groups[option['section']])
             if option['py_type'] == bool:
                 arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], 
-                                               help=option['help'], action='store_true')
+                                                           metavar='True/False', choices=('True', 'False'), help=option['help'])
             else:
                 arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], nargs=option['nargs'], 
                                                            type=option['py_type'], metavar=option['metavar'], help=option['help'])
@@ -73,6 +73,8 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
             exec_line += \
                      '    else: value_override = self._args.%(option)s\n'
         exec (exec_line % option)
+        if option['py_type'] == bool:
+            value_override = True if value_override == 'True' else False
         return value_override
     #end def
     

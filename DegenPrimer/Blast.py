@@ -24,7 +24,7 @@ Created on Jun 26, 2012
 import os
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
-from SecStructures import Dimer
+from SecStructures import Dimer, SecStructures
 from TD_Functions import dimer_dG, format_PCR_conditions
 from PCR_Results import PCR_Results
 try:
@@ -55,15 +55,23 @@ class Blast(object):
     _all_products_col_titles = ('PCR-product', 'relative concentration')
     
     
-    def __init__(self, job_id):
-        self._job_id        = job_id
-        self._blast_results = None
-        self._boundaries    = None
-        self._query         = None
-        self._PCR_products  = None
-        self.have_results   = False
+    def __init__(self, job_id, min_amplicon, max_amplicon, with_exonuclease):
+        self._job_id           = job_id
+        self._blast_results    = None
+        self._boundaries       = None
+        self._query            = None
+        self._min_amplicon     = min_amplicon
+        self._max_amplicon     = max_amplicon
+        self._with_exonuclease = with_exonuclease
+        self._PCR_products     = None
+        self._have_hits_report = False
+        self._have_PCR_report  = False
+        self._have_results     = False
     #end def
 
+    #property functions
+    def have_results(self): return self._have_results
+    
     
     def load_results(self):
         results_filename    = self._job_id+'-blast.xml'
@@ -83,7 +91,7 @@ class Blast(object):
             self._query      = SeqRecord(Seq(query_config.get('query', 'query'), 
                                              IUPAC.unambiguous_dna), self._job_id)
             self._boundaries = eval(query_config.get('query', 'boundaries'))
-            self.have_results = True
+            self._have_results = True
         except Exception, e:
             print '\nFailed to load blast results.'
     #end def
@@ -117,7 +125,7 @@ class Blast(object):
             print '\nFailed to obtain BLAST search results from NCBI.'
             print_exception(e)
             return
-        self.have_results = True
+        self._have_results = True
     #end def
 
 
@@ -155,7 +163,7 @@ class Blast(object):
     #end def
     
     
-    def _check_hsp(self, hsp, max_dG, no_exonuclease):
+    def _check_hsp(self, hsp):
         #check dG constraint
         dimer  = Dimer()
         query  = Seq(hsp.query, IUPAC.unambiguous_dna) #5'-3'
@@ -164,7 +172,7 @@ class Blast(object):
             if hsp.match[i] == '|':
                 dimer.add(i,i)
         dG    = dimer_dG(dimer, query, target)
-        if dG > max_dG: return False
+        if dG > SecStructures.max_dimer_dG: return False
         #check 3' constraint
         query_start  = hsp.query_start
         query_end    = hsp.query_end
@@ -172,17 +180,18 @@ class Blast(object):
             if query_start < primer[0] \
             or query_end  > primer[1]:
                 continue
-            if no_exonuclease and query_end < primer[1]:
+            if not self._with_exonuclease and query_end < primer[1]:
                 return False
         return True
     #end def 
         
     
-    def _find_PCR_products(self, min_amplicon, max_amplicon, no_exonuclease):
-        self._PCR_products = dict()
+    def find_PCR_products(self, side_reactions=None, side_concentrations=None):
+        self._PCR_products     = dict()
         sorted_hits = []
         for record in self._blast_results:
-            self._PCR_products[record.query] = PCR_Results(min_amplicon, max_amplicon, no_exonuclease) 
+            self._PCR_products[record.query] = PCR_Results(self._min_amplicon, self._max_amplicon, self._with_exonuclease) 
+            if side_reactions: self._PCR_products[record.query].add_reactions(side_reactions, side_concentrations)
             sorted_hits.append(dict())
             record_hits = sorted_hits[-1]
             for alignment in record.alignments:
@@ -225,14 +234,14 @@ class Blast(object):
             #remove empty query products dict
             if not self._PCR_products[record.query]: 
                 del self._PCR_products[record.query]
+        if not self._PCR_products:
+            print '\nNo possible PCR products have been found using BLAST hits.'
     #end def
     
 
-    def write_PCR_report(self, min_amplicon, max_amplicon, no_exonuclease):
+    def write_PCR_report(self):
         if not self._blast_results: return
-        #parse results
-        self._find_PCR_products(min_amplicon, max_amplicon, no_exonuclease)
-        #
+        if not self._PCR_products:  return
         self._blast_PCR_report_filename = self._job_id + '-blast-PCR-report.txt'
         blast_report = open(self._blast_PCR_report_filename, 'w')
         blast_report.write(time_hr())
@@ -250,21 +259,15 @@ class Blast(object):
         blast_report.write('\n')
         #filter parameters
         blast_report.write(hr(' filtration parameters '))
-        if no_exonuclease:
-            blast_report.write("DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n")
-        else: blast_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
-        blast_report.write('Minimum amplicon size:      %d\n' % min_amplicon)
-        blast_report.write('Maximum amplicon size:      %d\n' % max_amplicon)
+        if self._with_exonuclease:
+            blast_report.write("DNA polymerase HAS 3'-5'-exonuclease activity\n")
+        else: blast_report.write("DNA polymerase doesn't have 3'-5'-exonuclease activity\n")
+        blast_report.write('Minimum amplicon size:      %d\n' % self._min_amplicon)
+        blast_report.write('Maximum amplicon size:      %d\n' % self._max_amplicon)
         blast_report.write('\n')
         blast_report.write(hr(' PCR conditions '))
         blast_report.write(format_PCR_conditions()+'\n')
         blast_report.write('\n\n\n')
-        #if no PCR products have been found
-        if not self._PCR_products:
-            blast_report.write(hr(' No PCR products have been found ', symbol='!'))
-            blast_report.close()
-            return
-        #else...
         for record_name in self._PCR_products:
             blast_report.write(hr(' query ID: %s ' % record_name, symbol='#'))
             blast_report.write(self._PCR_products[record_name].format_quantity_explanation())
@@ -283,10 +286,11 @@ class Blast(object):
         blast_report.close()
         print '\nPossible PCR products defined by hits from BLAST search were written to:\n   ' + \
             self._blast_PCR_report_filename
+        self._have_PCR_report = True
     #end def
 
     
-    def write_hits_report(self, max_dG, no_exonuclease):
+    def write_hits_report(self):
         if not self._blast_results: return
         self._blast_report_filename = self._job_id + '-blast-hits-report.txt'
         blast_report = open(self._blast_report_filename, 'w')
@@ -299,10 +303,10 @@ class Blast(object):
         blast_report.write('\n')
         #filter parameters
         blast_report.write(hr(' filtration parameters '))
-        if no_exonuclease:
-            blast_report.write("DNA polymerase DOES NOT have 3'-5'-exonuclease activity\n")
-        else: blast_report.write("DNA polymerase has 3'-5'-exonuclease activity\n")
-        blast_report.write('Maximum dG of an alignment: %.2f\n' % max_dG)
+        if self._with_exonuclease:
+            blast_report.write("DNA polymerase HAS 3'-5'-exonuclease activity\n")
+        else: blast_report.write("DNA polymerase doesn't have 3'-5'-exonuclease activity\n")
+        blast_report.write('Maximum dG of an alignment: %.2f\n' % SecStructures.max_dimer_dG)
         blast_report.write('\n')
         blast_report.write(hr(''))
         blast_report.write('\n\n')
@@ -324,7 +328,7 @@ class Blast(object):
                 hsps_text    = ''
                 printed_hsps = 0
                 for hsp in alignment.hsps:
-                    if not self._check_hsp(hsp, max_dG, no_exonuclease):
+                    if not self._check_hsp(hsp):
                         continue
                     printed_hsps += 1
                     hsps_text += str(hsp)+'\n'
@@ -347,10 +351,16 @@ class Blast(object):
         blast_report.close()
         print '\nTop hits with top HSPs from BLAST results were written to:\n   ' + \
             self._blast_report_filename
+        self._have_hits_report = True
     #end def
     
     
-    def register_reports(self, args):
-        args.register_report('BLAST hits', self._blast_report_filename)
-        args.register_report('BLAST PCR', self._blast_PCR_report_filename)
+    def reports(self):
+        reports = []
+        if self._have_hits_report: 
+            reports.append({'report_name': 'BLAST hits', 'report_file': self._blast_report_filename})
+        if self._have_PCR_report:
+            reports.append({'report_name': 'BLAST PCR', 'report_file': self._blast_PCR_report_filename})
+        if reports: return reports
+        else: return None
 #end class
