@@ -120,10 +120,11 @@ def _subprocess(func, args, queue, p_entry, p_name=None):
 class DegenPrimerPipeline(object):
     def __init__(self):
         self._processes  = [] #list of launched processes with their managers and output queues
-        self._out_queue  = Queue()
         self._terminated = False #flag which is set when pipeline is terminated
     #end def
 
+    def __del__(self):
+        self.terminate()
 
     def generate_subprocess_entry(self, manager, queue):
         p_entry = {'process': None,
@@ -137,10 +138,12 @@ class DegenPrimerPipeline(object):
     def terminate(self):
         self._terminated = True
         for p_entry in self._processes:
-            del p_entry['manager']
-            del p_entry['queue']
-            if p_entry['process'] != None:
-                p_entry['process'].terminate()
+            try:
+                del p_entry['manager']
+                del p_entry['queue']
+                if  p_entry['process'] != None:
+                    p_entry['process'].terminate()
+            except: pass
         self._processes = []
     #end def
 
@@ -255,7 +258,7 @@ class DegenPrimerPipeline(object):
         with capture_to_queue() as out:
             p_entry = self.generate_subprocess_entry(AllSecStructures_Manager(), out.queue)
             p_entry['manager'].start()
-            all_sec_structures = p_entry['manager'].AllSecStructures(pfam_primers(0), pfam_primers(1))
+        all_sec_structures = p_entry['manager'].AllSecStructures(pfam_primers(0), pfam_primers(1))
         side_reactions       = deepcopy(all_sec_structures.reactions())
         side_concenctrations = deepcopy(all_sec_structures.concentrations())
         _subprocess(all_sec_structures.calculate_equilibrium, None, out.queue, p_entry,
@@ -272,12 +275,12 @@ class DegenPrimerPipeline(object):
             with capture_to_queue() as out:
                 p_entry = self.generate_subprocess_entry(iPCR_Manager(), out.queue)
                 p_entry['manager'].start()
-                ipcr = p_entry['manager'].iPCR(job_id, 
-                        fwd_primers, rev_primers, 
-                        args.min_amplicon, args.max_amplicon, 
-                        args.with_exonuclease, 
-                        side_reactions, 
-                        side_concenctrations)
+            ipcr = p_entry['manager'].iPCR(job_id, 
+                    fwd_primers, rev_primers, 
+                    args.min_amplicon, args.max_amplicon, 
+                    args.with_exonuclease, 
+                    side_reactions, 
+                    side_concenctrations)
             ipcr.writeProgram()
             #if target sequences are provided and the run_icress flag is set, run iPCR...
             if args.run_ipcress and args.fasta_files:
@@ -298,10 +301,10 @@ class DegenPrimerPipeline(object):
         with capture_to_queue() as out:
             p_entry = self.generate_subprocess_entry(Blast_Manager(), out.queue)
             p_entry['manager'].start()
-            blast = p_entry['manager'].Blast(job_id,
-                                            args.min_amplicon, 
-                                            args.max_amplicon, 
-                                            args.with_exonuclease)
+        blast = p_entry['manager'].Blast(job_id,
+                                        args.min_amplicon, 
+                                        args.max_amplicon, 
+                                        args.with_exonuclease)
         #if --do-blast command was provided, make an actual query
         if args.do_blast:
             #construct Entrez query
