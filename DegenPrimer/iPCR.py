@@ -23,6 +23,7 @@ Created on Jul 3, 2012
 
 import sys, os
 import subprocess
+from time import sleep
 from StringTools import print_exception, wrap_text, time_hr, hr
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
@@ -45,6 +46,7 @@ class iPCR(object):
                  with_exonuclease,
                  side_reactions=None,
                  side_concentrations=None):
+        self._ipcress_subprocess  = None
         #files
         self._program_filename    = job_id+'.ipcr'
         self._raw_report_filename = job_id+'-ipcr-raw-report.txt'
@@ -67,6 +69,14 @@ class iPCR(object):
         self._have_results = False
         self._have_report  = False
     #end def
+    
+    
+    def __del__(self):
+        if self._ipcress_subprocess != None:
+            self._ipcress_subprocess.terminate()
+            self._ipcress_subprocess.wait()
+    #end def
+    
     
     #property functions
     def have_results(self): return self._have_results
@@ -105,15 +115,16 @@ class iPCR(object):
             ipcr_cli += ' "'+fasta_file+'"'
         try:
             print '\nExecuting iPCR program. This may take awhile...'
-            child = subprocess.Popen(ipcr_cli,
-                                     stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     shell=(sys.platform!="win32"))
+            self._ipcress_subprocess = subprocess.Popen(ipcr_cli,
+                                                        stdin=subprocess.PIPE,
+                                                        stdout=subprocess.PIPE,
+                                                        stderr=subprocess.PIPE,
+                                                        shell=(sys.platform!="win32"))
             ipcr_report = open(self._raw_report_filename, 'w')
-            ipcr_report.write(child.stdout.read())
+            ipcr_report.write(self._ipcress_subprocess.stdout.read())
             ipcr_report.close()
             print '\nRaw ipcress report was written to:\n   ',self._raw_report_filename
+            self._ipcress_subprocess = None
         except OSError, e:
             print '\nFaild to execute ipcress'
             print_exception(e)

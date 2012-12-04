@@ -357,7 +357,7 @@ class DegenPrimerPipeline(object):
                         print 'Unhandled IOError:', e.message
                         self.terminate()
                         raise
-                except:
+                except Exception, e:
                     print 'Unhandled Exception:', e.message
                     self.terminate()
                     raise
