@@ -281,10 +281,9 @@ class DegenPrimerPipeline(object):
                     args.with_exonuclease, 
                     side_reactions, 
                     side_concenctrations)
-            ipcr.writeProgram()
             #if target sequences are provided and the run_icress flag is set, run iPCR...
             if args.run_ipcress and args.fasta_files:
-                #change name of the method to name the subprocess
+                ipcr.writeProgram()
                 _subprocess(ipcr.executeProgram, 
                             (args.fasta_files, 
                              args.max_mismatches), out.queue, p_entry,
@@ -343,7 +342,9 @@ class DegenPrimerPipeline(object):
                 try:
                     p_entry['output'].append(p_entry['queue'].get(True, 1))
                 except Empty:
-                    if not p_entry['process'].is_alive():
+                    if p_entry['process'].is_alive():
+                        processes_alive = True
+                    else:
                         p_entry['process'].join()
                         p_entry['process'] = None
                         print ''.join(message for message in p_entry['output'])
@@ -353,8 +354,13 @@ class DegenPrimerPipeline(object):
                         processes_alive = True 
                         continue
                     else:
+                        print 'Unhandled IOError:', e.message
                         self.terminate()
                         raise
+                except:
+                    print 'Unhandled Exception:', e.message
+                    self.terminate()
+                    raise
                 processes_alive = True
             if not processes_alive: break
         

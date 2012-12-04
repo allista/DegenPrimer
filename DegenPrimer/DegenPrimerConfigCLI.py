@@ -73,7 +73,8 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
             exec_line += \
                      '    else: value_override = self._args.%(option)s\n'
         exec (exec_line % option)
-        if option['py_type'] == bool:
+        if value_override != None \
+        and option['py_type'] == bool:
             value_override = True if value_override == 'True' else False
         return value_override
     #end def
