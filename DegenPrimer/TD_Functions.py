@@ -37,9 +37,9 @@ from UnifiedNN import UnifiedNN
 from StringTools import print_exception
 try:
     from Bio.SeqFeature import SeqFeature, FeatureLocation
-except Exception, e:
-    print_exception(e)
-    raise ImportError('The BioPython must be installed in your system.')
+except ImportError, e:
+    print 'The BioPython must be installed in your system.'
+    raise
 ###############################################################################
 
 #standard PCR conditions
@@ -59,7 +59,6 @@ if not NN:
 #pseudo-concentration of Na equivalent to current concentration of Mg2+
 def C_Na_eq():
     """divalent cation correction (Ahsen et al., 2001)"""
-    global C_Na, C_Mg, C_dNTP
     return C_Na + 120*sqrt(C_Mg - C_dNTP)
 #end def
 
@@ -78,7 +77,6 @@ def NN_Tr(seq, r):
     if r >=1 or r <=0:
         raise ValueError('TD_Functions.NN_Tr: equilibrium ratio should be in the (0;1) interval.')
     #definitions
-    global NN, C_Prim, C_DNA, C_DMSO
     seq_str = str(seq)
     rev_str = str(seq.complement())
     dH, dS = 0, 0
@@ -163,20 +161,20 @@ def add_PCR_conditions(feature):
 
 
 def calculate_Tr(seq_rec, r):
-        primer_Tr = NN_Tr(seq_rec.seq, r)
-        feature = source_feature(seq_rec)
-        add_PCR_conditions(feature)
-        feature.qualifiers['T-'+str(r)] = str(primer_Tr)
-        return primer_Tr
+    primer_Tr = NN_Tr(seq_rec.seq, r)
+    feature = source_feature(seq_rec)
+    add_PCR_conditions(feature)
+    feature.qualifiers['T-'+str(r)] = str(primer_Tr)
+    return primer_Tr
 #end def
 
 
 def calculate_Tm(seq_rec):
-        primer_Tm = NN_Tm(seq_rec.seq)
-        feature = source_feature(seq_rec)
-        add_PCR_conditions(feature)
-        feature.qualifiers['Tm'] = str(primer_Tm)
-        return primer_Tm
+    primer_Tm = NN_Tm(seq_rec.seq)
+    feature = source_feature(seq_rec)
+    add_PCR_conditions(feature)
+    feature.qualifiers['Tm'] = str(primer_Tm)
+    return primer_Tm
 #end def
 
 
@@ -184,7 +182,6 @@ def dimer_dG(dimer, seq1, seq2):
     '''Calculate 'standard' dG at 37C of dimer annealing process.
     dimer -- an instance of Dimer class which represents a dimer structure.
     seq1, seq2 -- sequences constituting a dimer, given in 5'->3' orientation.'''
-    global NN
     fwd_matches = dimer.fwd_matches()
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
     rev_matches = dimer.rev_matches()
@@ -259,7 +256,6 @@ def dimer_dG(dimer, seq1, seq2):
 def dimer_dG_corrected(dimer, seq1, seq2):
     '''calculate dG of a dimer corrected to current PCR conditions including 
     salt concentrations and temperature. Dummy for now'''
-    global NN, PCR_T
     fwd_matches = dimer.fwd_matches()
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
     rev_matches = dimer.rev_matches()
@@ -346,7 +342,6 @@ def hairpin_dG(hairpin, seq):
     '''Calculate 'standard' dG at 37C of hairpin annealing process.
     hairpin -- an instance of Hairpin class which represents a hairpin structure.
     seq -- sequence which folds into the hairpin, given in 5'->3' orientation.'''
-    global NN
     fwd_matches = hairpin.fwd_matches()
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
     rev_matches = hairpin.rev_matches()
@@ -405,7 +400,6 @@ def hairpin_dG(hairpin, seq):
 def hairpin_dG_corrected(hairpin, seq):
     '''calculate dG of a hairpin corrected to current PCR conditions including 
     salt concentrations and temperature.'''
-    global NN
     fwd_matches = hairpin.fwd_matches()
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
     rev_matches = hairpin.rev_matches()
@@ -474,14 +468,12 @@ def hairpin_dG_corrected(hairpin, seq):
 def equilibrium_constant(dG_T, T):
     '''calculate equilibrium constant of at a given temperature, 
     given standard dG at this temperature'''
-    global NN
     return exp(-1000*dG_T/(NN.R*NN.temp_K(T))) #annealing equilibrium constant
 
 
 def primer_DNA_conversion_degree(dG_T, T):
     '''calculate conversion degree of Primer/DNA dimerisation
     given standard dG(kcal/mol) of annealing at T(C) temperature'''
-    global C_Prim, C_DNA 
     K = equilibrium_constant(dG_T, T)
     P = C_Prim_M()
     D = C_DNA_M()
@@ -519,13 +511,13 @@ def hairpin_conversion_degree(dG_T, T):
 #tests
 if __name__ == '__main__':
     from Bio.Seq import Seq
-    from OligoFunctions import dimer
+    from OligoFunctions import compose_dimer
     seq1 = Seq('ATATTCTACGACGGCTATCC').reverse_complement()
     seq2 = Seq('ATATTCTACAACGGCTATCC') #
     seq3 = Seq('ATATTCTACAACGGCTATCC')
     seq4 = Seq('CCTATCGGCAACATCTTATA'[::-1])
-    dim1 = dimer(seq1, seq2) #Dimer((0,1,2,3), (16,17,18,19))
-    dim2 = dimer(seq3, seq4)
+    dim1 = compose_dimer(seq1, seq2) #Dimer((0,1,2,3), (16,17,18,19))
+    dim2 = compose_dimer(seq3, seq4)
     
     C_Na     = 50.0
     C_Mg     = 3.0 
@@ -535,8 +527,8 @@ if __name__ == '__main__':
     PCR_T = 55
     
     _dG = 3
-    K = equilibrium_constant(_dG, PCR_T)
-    print 'Equilibrium constant:     ', K
+    const = equilibrium_constant(_dG, PCR_T)
+    print 'Equilibrium constant:     ', const
     print 'Hairpin conversion degree:', hairpin_conversion_degree(_dG, PCR_T)*100
     print 'Dimer conversion degree:  ', dimer_conversion_degree(_dG, PCR_T)*100
     print ''

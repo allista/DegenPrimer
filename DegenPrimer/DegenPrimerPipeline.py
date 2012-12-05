@@ -21,7 +21,7 @@ Created on Jul 25, 2012
 #imports
 import sys
 import errno
-from time import time
+from time import time, sleep
 from datetime import timedelta
 from copy import deepcopy
 from Queue import Empty
@@ -33,13 +33,13 @@ from DegenPrimer import TD_Functions
 from DegenPrimer.TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
 from DegenPrimer.Blast import Blast
 from DegenPrimer.SecStructures import AllSecStructures
-from DegenPrimer.StringTools import hr, wrap_text, print_exception, time_hr
+from DegenPrimer.StringTools import hr, wrap_text, time_hr, print_exception
 from DegenPrimer.iPCR import iPCR
 try:
     from Bio import SeqIO
-except Exception, e:
-    print_exception(e)
-    raise ImportError('The BioPython must be installed in your system.')
+except ImportError:
+    print'The BioPython must be installed in your system.'
+    raise
 ################################################################################ 
 
 
@@ -82,7 +82,7 @@ def capture_to_queue(out_queue=None):
         sys.stdout = sys.stderr = out
         yield out
     except Exception, e:
-        print e.message
+        print_exception(e)
         raise
     finally:
         sys.stdout,sys.stderr = oldout, olderr
@@ -188,8 +188,8 @@ class DegenPrimerPipeline(object):
         for primer in primers:
             try:
                 if primer: primer[1] = generate_unambiguous(primer[0])
-            except Exception, e:
-                print_exception(e)
+            except ValueError, e:
+                print e.message
                 return 1
         #--------------------------------------------------------------------------#
         
@@ -260,11 +260,10 @@ class DegenPrimerPipeline(object):
             p_entry['manager'].start()
         all_sec_structures = p_entry['manager'].AllSecStructures(pfam_primers(0), pfam_primers(1))
         side_reactions       = deepcopy(all_sec_structures.reactions())
-        side_concenctrations = deepcopy(all_sec_structures.concentrations())
+        side_concentrations = deepcopy(all_sec_structures.concentrations())
         _subprocess(all_sec_structures.calculate_equilibrium, None, out.queue, p_entry,
                     'Calculate quantities of secondary structures.')
         #--------------------------------------------------------------------------#
-        
         
         #ipcress program file and test for primers specificity by iPCR
         #this is only available for pairs of primers
@@ -276,34 +275,32 @@ class DegenPrimerPipeline(object):
                 p_entry = self.generate_subprocess_entry(iPCR_Manager(), out.queue)
                 p_entry['manager'].start()
             ipcr = p_entry['manager'].iPCR(job_id, 
-                    fwd_primers, rev_primers, 
-                    args.min_amplicon, args.max_amplicon, 
-                    args.with_exonuclease, 
-                    side_reactions, 
-                    side_concenctrations)
+                                           fwd_primers, rev_primers, 
+                                           args.min_amplicon, args.max_amplicon, 
+                                           args.with_exonuclease, 
+                                           side_reactions, 
+                                           side_concentrations)
             #if target sequences are provided and the run_icress flag is set, run iPCR...
             if args.run_ipcress and args.fasta_files:
-                ipcr.writeProgram()
-                _subprocess(ipcr.executeProgram, 
+                ipcr.write_program()
+                _subprocess(ipcr.execute_and_analyze, 
                             (args.fasta_files, 
                              args.max_mismatches), out.queue, p_entry,
                             'Execute iPCRess program and calculate quantities of possible products.')
-            else:
-                #load previously saved results
-                print '\nLoading raw iPCR results from the previous ipcress run.'
-                _subprocess(ipcr.load_results, None, out.queue, p_entry,
+            #else, try to load previously saved results and analyze them with current parameters
+            elif ipcr.load_results():
+                _subprocess(ipcr.calculate_quantities, None, out.queue, p_entry,
                             'Calculate quantities of possible PCR products found by iPCRess.')
         #--------------------------------------------------------------------------#
-        
         
         #test for primers specificity by BLAST
         with capture_to_queue() as out:
             p_entry = self.generate_subprocess_entry(Blast_Manager(), out.queue)
             p_entry['manager'].start()
         blast = p_entry['manager'].Blast(job_id,
-                                        args.min_amplicon, 
-                                        args.max_amplicon, 
-                                        args.with_exonuclease)
+                                         args.min_amplicon, 
+                                         args.max_amplicon, 
+                                         args.with_exonuclease)
         #if --do-blast command was provided, make an actual query
         if args.do_blast:
             #construct Entrez query
@@ -313,25 +310,21 @@ class DegenPrimerPipeline(object):
                     if entrez_query: entrez_query += ' OR '
                     entrez_query += organism+'[organism]'
             #do the blast and analyze results
-            def blast_and_analyze():
-                blast.blast_primers(all_primers(), entrez_query)
-                if blast.have_results():
-                    blast.find_PCR_products(side_reactions,
-                                            side_concenctrations)
-            _subprocess(blast_and_analyze, None, out.queue, p_entry,
-                        'Make BLAST query and search for possible PCR products')
-        #otherwise, reparse previously saved results with current parameters
-        else:
-            #load blast results
-            blast.load_results()
-            if blast.have_results():
-                _subprocess(blast.find_PCR_products, 
-                            (side_reactions,
-                             side_concenctrations), 
-                            out.queue, p_entry,
-                            'Search for possible PCR products in BLAST results.')
+            _subprocess(blast.blast_and_analyze_primers, 
+                        (all_primers(),
+                         entrez_query,
+                         side_reactions,
+                         side_concentrations),
+                        out.queue, p_entry,
+                        'Make BLAST query and search for possible PCR products.')
+        #else, try to load previously saved results and analyze them with current parameters
+        elif blast.load_results():
+            _subprocess(blast.find_PCR_products, 
+                        (side_reactions,
+                         side_concentrations), 
+                        out.queue, p_entry,
+                        'Search for possible PCR products in BLAST results.')
         #--------------------------------------------------------------------------#
-        
         
         #collect processes output, write it to stdout, then join all processes
         while not self._terminated:
@@ -340,7 +333,7 @@ class DegenPrimerPipeline(object):
                 if p_entry['process'] == None:
                     continue
                 try:
-                    p_entry['output'].append(p_entry['queue'].get(True, 1))
+                    p_entry['output'].append(p_entry['queue'].get(True, 0.1))
                 except Empty:
                     if p_entry['process'].is_alive():
                         processes_alive = True
@@ -358,7 +351,8 @@ class DegenPrimerPipeline(object):
                         self.terminate()
                         raise
                 except Exception, e:
-                    print 'Unhandled Exception:', e.message
+                    print 'Unhandled Exception:'
+                    print_exception(e)
                     self.terminate()
                     raise
                 processes_alive = True

@@ -23,8 +23,7 @@ Created on Jul 3, 2012
 
 import sys, os
 import subprocess
-from time import sleep
-from StringTools import print_exception, wrap_text, time_hr, hr
+from StringTools import wrap_text, time_hr, hr, print_exception
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from PCR_Results import PCR_Results
@@ -65,7 +64,6 @@ class iPCR(object):
         if side_reactions and side_concentrations:
             self._PCR_products.add_reactions(side_reactions, side_concentrations)
         self._results      = None
-        self._hits         = None
         self._have_results = False
         self._have_report  = False
     #end def
@@ -82,8 +80,13 @@ class iPCR(object):
     def have_results(self): return self._have_results
     
     
-    def writeProgram(self):
-        ipcr_program = open(self._program_filename, 'w')
+    def write_program(self):
+        try:
+            ipcr_program = open(self._program_filename, 'w')
+        except IOError, e:
+            print '\nUnable to open %s' % self._program_filename
+            print e.message
+            return False
         for fwd_primer in self._fwd_primers:
             for rev_primer in self._rev_primers:
                 pcr_string  = fwd_primer.id + '-' + rev_primer.id
@@ -95,23 +98,27 @@ class iPCR(object):
                 ipcr_program.write(pcr_string)
         ipcr_program.close()
         print '\nThe ipcress program was written to:\n   ', self._program_filename
+        return True
     #end def
     
     
-    def executeProgram(self, fasta_files, max_mismatches):
+    def execute_program(self, fasta_files, max_mismatches):
+        #check if program file exists
+        if not os.path.isfile(self._program_filename):
+            print '\nFile with ipcress program was not found: %s' % self._program_filename 
+            return False
         #check if any of the fasta-files exists
-        have_fasta = False
+        existing_fasta_files = []
         for ffile in fasta_files:
             if os.path.isfile(ffile):
-                have_fasta = True
-                break
-        if not have_fasta: 
+                existing_fasta_files.append(ffile)
+        if not existing_fasta_files: 
             print '\nFailed to execute ipcress: no existing fasta files were provided.'
             return False
         #if so, execute a program
         self._max_mismatches = max_mismatches
         ipcr_cli = 'ipcress %s -m %d -s' % (self._program_filename, max_mismatches)
-        for fasta_file in fasta_files:
+        for fasta_file in existing_fasta_files:
             ipcr_cli += ' "'+fasta_file+'"'
         try:
             print '\nExecuting iPCR program. This may take awhile...'
@@ -126,19 +133,25 @@ class iPCR(object):
             print '\nRaw ipcress report was written to:\n   ',self._raw_report_filename
             self._ipcress_subprocess = None
         except OSError, e:
-            print '\nFaild to execute ipcress'
-            print_exception(e)
+            print '\nFaild to execute ipcress.'
+            print e.message
             print 'It seems that "ipcress" executable is not found in the PATH.'
             print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
             return False
         except Exception, e:
-            print '\nFaild to execute ipcress'
+            print '\nFaild to execute ipcress.'
             print_exception(e)
             return False
-        return self.load_results()
+        return True
     #end def
     
-    
+    def execute_and_analyze(self, fasta_files, max_mismatches):
+        return self.execute_program(fasta_files, max_mismatches) \
+        and    self.load_results() \
+        and    self.calculate_quantities()
+    #end def
+
+
     def _clear_target_string(self, target):
         clean_target = ''
         while target:
@@ -154,15 +167,19 @@ class iPCR(object):
     
     
     def load_results(self):
+        #check for file existence
+        if not os.path.isfile(self._raw_report_filename): return False
         #open results file
         try:
             ipcr_report = open(self._raw_report_filename, 'r')
-        except Exception:
-            print('\nFailed to open raw iPCR report file:\n   %s' % self._raw_report_filename)
+        except IOError, e:
+            print '\nFailed to open raw iPCR report file:\n   %s' % self._raw_report_filename
+            print e.message
             return False
+        print '\nLoading raw iPCR results from the previous ipcress run.'
         #parse results file
         self._results = []
-        self._hits = []
+        hits = []
         for line in ipcr_report:
             line = line.rstrip('\n')
             if not line: continue
@@ -176,8 +193,8 @@ class iPCR(object):
                     target_name = (''.join(w+' ' for w in words[1:])).strip()
                     target_name = self._clear_target_string(target_name)
                     self._results[-1]['hit'] = target_name
-                    if not target_name in self._hits:
-                        self._hits.append(target_name)
+                    if not target_name in hits:
+                        hits.append(target_name)
                 elif words[0] == 'Product:':
                     self._results[-1]['length']  = int(words[1])
                 elif words[0] == 'ipcress:':
@@ -194,23 +211,30 @@ class iPCR(object):
                     self._results[-1]['rev_seq'] = seq
         ipcr_report.close()
         if not self._results:
-            print('\nNo results found in raw iPCR report:\n   %s' % self._raw_report_filename)
+            print '\nNo results found in raw iPCR report:\n   %s' % self._raw_report_filename
             self._results = None
             return False
+        return True
+    #end def
+    
+    
+    def calculate_quantities(self):
+        if not self._results: return False
         #add results to PCR_Results object
         for result in self._results:
             self._PCR_products.add_product(result['hit'], 
-                                          result['start'], 
-                                          result['end']+len(result['rev_primer']), #ipcress defines end position as 3'-start of the reverse primer
-                                          result['length'], 
-                                          result['fwd_seq'], 
-                                          result['rev_seq'], 
-                                          result['fwd_primer'], 
-                                          result['rev_primer'])
+                                           result['start'], 
+                                           result['end']+len(result['rev_primer']), #ipcress defines end position as 3'-start of the reverse primer
+                                           result['length'], 
+                                           result['fwd_seq'], 
+                                           result['rev_seq'], 
+                                           result['fwd_primer'], 
+                                           result['rev_primer'])
         #compute PCR products quantities
-        self._PCR_products.compute_quantities()
+        print '\nCalculating quantities of possible PCR products.'
+        self._PCR_products.calculate_quantities()
         if not self._PCR_products:
-            print('\nAll results found in raw iPCR report were filtered out\n')
+            print '\nAll results found in raw iPCR report were filtered out'
             return False
         self._have_results = True
         return True
@@ -218,11 +242,13 @@ class iPCR(object):
     
     
     def write_PCR_report(self):
+        if not self._have_results: return
         #open report file
         try:
             ipcr_report = open(self._PCR_report_filename, 'w')
-        except Exception:
-            print('\nFailed to open iPCR report file for writing:\n   %s' % self._PCR_report_filename)
+        except IOError, e:
+            print '\nFailed to open iPCR report file for writing:\n   %s' % self._PCR_report_filename
+            print e.message
             return
         #format report
         ipcr_report.write(time_hr())

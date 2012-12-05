@@ -24,16 +24,15 @@ Created on Jul 11, 2012
 
 import os
 import re
-from StringTools import print_exception
 from SecStructures import Dimer
 try:
     from Bio.Alphabet import IUPAC
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
     from Bio import SeqIO
-except Exception, e:
-    print_exception(e)
-    raise ImportError('The BioPython must be installed in your system.')
+except ImportError:
+    print'The BioPython must be installed in your system.'
+    raise
 
 
 IUPAC_ambiguous={'R': ['A', 'G'],
@@ -51,7 +50,6 @@ IUPAC_ambiguous={'R': ['A', 'G'],
 
 def generate_unambiguous(seq_rec):
     '''generate a list of all possible combinations from an ambiguous sequence'''
-    global IUPAC_ambiguous
     unambiguous_strings = ['']
     #generate list of sequence strings
     for letter in seq_rec.seq:
@@ -90,8 +88,8 @@ def load_sequence(seq_string, rec_id=None, desc=None):
         elif fasta_pattern.match(filename): filetype = "fasta"
         else:
             print 'Unable to guess format of', filename
-            print '*it is expected that GenBank files have .gb or .gbk extension '
-            'and FASTA files have .fa or .fasta extension.'
+            print '*it is expected that GenBank files have .gb or .gbk extension ' \
+                + 'and FASTA files have .fa or .fasta extension.'
         #parse file
         print 'Parsing', filename
         #only the first record is loaded
@@ -114,14 +112,14 @@ def self_complement(seq_rec):
     return str(seq_rec.seq) == str(seq_rec.seq.reverse_complement())
 
 
-def dimer(seq1, seq2):
+def compose_dimer(seq1, seq2):
     '''form a simple dimer structure from two sequences of the same length;
     both sequences should be 5'->3' oriented'''
     if len(seq1) != len(seq2):
-        raise ValueError('OligoFunctions.dimer: sequences must be of the same length.')
+        raise ValueError('OligoFunctions.compose_dimer: sequences must be of the same length.')
     forward = seq1
     revcomp = seq2.reverse_complement()
-    dimer   =  Dimer()
+    dimer  =  Dimer()
     for i in range(len(seq1)):
         if forward[i] == revcomp[i]:
             dimer.add(i,i)

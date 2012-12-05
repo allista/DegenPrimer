@@ -29,39 +29,34 @@ from time import ctime
 text_width = 80
 
 def print_exception(e):
-    print '\nException occurred: %s\n%s\n' % (str(type(e)), e.message)
+    print '\n%s: %s\n' % (type(e).__name__, e.message or 'no message.')
     
     
 def random_text(length):
-    text = ''
-    for x in range(length):
-        text += random.choice(string.ascii_uppercase + string.digits)
-    return text 
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for i in range(length))
 #end def
 
 
-def hr(string, symbol='-'):
-    global text_width
-    left_hr  = (text_width - len(string))/2
-    right_hr = (text_width - len(string) - left_hr)
-    return symbol*left_hr + string + symbol*right_hr + '\n\n'
+def hr(s, symbol='-'):
+    left_hr  = (text_width - len(s))/2
+    right_hr = (text_width - len(s) - left_hr)
+    return symbol*left_hr + s + symbol*right_hr + '\n\n'
 #end def
 
 def time_hr(symbol='#'):
-    return hr(' %s ' % ctime())
+    return hr(' %s ' % ctime(), symbol)
 
 
-def wrap_text(text):
-    global text_width
+def wrap_text(_text):
     wrapped_text = ''
-    strings = text.split('\n')
-    for string in strings:
-        while len(string) > text_width:
-            new_line   = string[:text_width]
-            last_space = new_line.rfind(' ')
+    strings = _text.split('\n')
+    for s in strings:
+        while len(s) > text_width:
+            new_line      = s[:text_width]
+            last_space    = new_line.rfind(' ')
             wrapped_text += new_line[:last_space+1]+'\n'
-            string = string[last_space+1:]
-        wrapped_text += string+'\n'
+            s = s[last_space+1:]
+        wrapped_text += s+'\n'
     return wrapped_text[:-1]
 #end def
 
@@ -69,5 +64,5 @@ def wrap_text(text):
 #tests
 if __name__ == '__main__':
     text_width = 40
-    text = 'The quick broun fox jumped over a very, very lazy dog forty two times in a row!'
-    print wrap_text(text)
+    sample_text = 'The quick broun fox jumped over a very, very lazy dog forty two times in a row!'
+    print wrap_text(sample_text)

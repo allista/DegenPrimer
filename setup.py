@@ -46,8 +46,8 @@ setup(name='degen-primer',
       packages=['DegenPrimer'],
       scripts=['degen_primer', 
                'align_as_amino'],
-      data_files=[('share/degen_primer', [UnifiedNN._internal_NN_filename,
-                                          UnifiedNN._dangling_ends_filename,
-                                          UnifiedNN._loops_filename,
-                                          UnifiedNN._tri_tetra_hairpin_loops_filename])]
+      data_files=[('share/degen_primer', [UnifiedNN.internal_NN_filename,
+                                          UnifiedNN.dangling_ends_filename,
+                                          UnifiedNN.loops_filename,
+                                          UnifiedNN.tri_tetra_hairpin_loops_filename])]
       )

@@ -44,7 +44,7 @@ class Dimer(object):
     e.g. fwd_matches = 5'-[2,4,7, 9]-3'
          rev_matches = 3'-[4,6,9,11]-5'
     '''
-    def __init__(self, fwd_matches=None, rev_matches=None, dG=0):
+    def __init__(self, fwd_matches=None, rev_matches=None, dG=None):
         if fwd_matches:
             self._fwd_matches = set(fwd_matches)
         else:
@@ -53,7 +53,7 @@ class Dimer(object):
             self._rev_matches = set(rev_matches)
         else:
             self._rev_matches = set()
-        self.dG = None
+        self.dG = dG
         self.conversion_degree = None
     
     def __nonzero__(self):
@@ -121,14 +121,29 @@ class SecStructures(object):
         conversion_threshold -- secondary structures with conversion degree below this value 
         will not be included into the short report. (default 0.01, i.e. 1%)
         '''
-        self._seq_rec1 = seq_rec1
-        self._seq1 = seq_rec1.seq
+        #attributes
+        #sequences
+        self._seq_rec1       = seq_rec1
+        self._seq1           = seq_rec1.seq
+        #self or cross
         if seq_rec2 and str(seq_rec1.seq) != str(seq_rec2.seq):
             self._seq_rec2 = seq_rec2
             self._seq2 = seq_rec2.seq
         else: 
             self._seq_rec2 = None
             self._seq2 = None
+        #structures
+        self._seq1_dimers    = None
+        self._seq1_hairpins  = None
+        self._cross_dimers   = None
+        self._3prim_dimers   = 0
+        self._3prim_hairpins = 0
+        #minimum energy structures
+        self._min_3prim_dimer_dG   = None
+        self._min_3prim_dimer      = None
+        self._min_3prim_hairpin_dG = None
+        self._min_3prim_hairpin    = None
+        #find structures structures
         self._recalculate()
     #end def
     
@@ -355,7 +370,7 @@ class SecStructures(object):
     def _find_dimers(self, seq1, seq2):
         """Search for all dimers"""
         all_structures = {'dimers': dict(), 'hairpins': dict()}
-        self_dimers = str(seq1) == str(seq2)
+        self_dimers    = str(seq1) == str(seq2)
         dimers   = all_structures['dimers']
         hairpins = all_structures['hairpins']
         fwd_str  = str(seq1)
@@ -507,7 +522,7 @@ class SecStructures(object):
     #end def
 
 
-    def _format_dimers_header(self, dimers, seq1, seq2):
+    def _format_dimers_header(self, dimers):
         header_string  = ''
         if not dimers: return 'No dimers found.\n\n'
         #dimers count
@@ -529,7 +544,7 @@ class SecStructures(object):
         dimers_string  = ''
         if not dimers: return 'No dimers found.\n\n'
         #print header
-        dimers_string += self._format_dimers_header(dimers, seq1, seq2)
+        dimers_string += self._format_dimers_header(dimers)
         #print the most stable dimer
         if self.dimerMin_dG():
             if dimers[0] != self._min_3prim_dimer: #if it is the 3' the next block will print it
@@ -546,7 +561,7 @@ class SecStructures(object):
         dimers_string  = ''
         if not dimers: return 'No dimers found.\n\n'
         #print header
-        dimers_string += self._format_dimers_header(dimers, seq1, seq2)
+        dimers_string += self._format_dimers_header(dimers)
         #print dimers
         for dimer in dimers:
             dimers_string += self._format_dimer(dimer, seq1, seq2)
@@ -607,7 +622,7 @@ class SecStructures(object):
     #end def
 
 
-    def _format_hairpins_header(self, hairpins, seq):
+    def _format_hairpins_header(self, hairpins):
         header_string  = ''
         #hairpins count
         header_string += 'Hairpins count: %d\n' % len(hairpins)
@@ -626,7 +641,7 @@ class SecStructures(object):
         hairpins_string  = ''
         if not hairpins: return 'No hairpins found\n\n'
         #print header
-        hairpins_string += self._format_hairpins_header(hairpins, seq)
+        hairpins_string += self._format_hairpins_header(hairpins)
         if self.hairpinMin_dG():
             if hairpins[0] != self._min_3prim_hairpin: #if it is the 3' the next block will print it
                 hairpins_string += self._format_hairpin(hairpins[0], seq)
@@ -641,7 +656,7 @@ class SecStructures(object):
         hairpins_string  = ''
         if not hairpins: return 'No hairpins found\n\n'
         #print header
-        hairpins_string += self._format_hairpins_header(hairpins, seq)
+        hairpins_string += self._format_hairpins_header(hairpins)
         #print hairpins
         for hairpin in hairpins:
             hairpins_string += self._format_hairpin(hairpin, seq)
@@ -687,7 +702,7 @@ class AllSecStructures(object):
                 self._cross.append(SecStructures(self._all_primers[i],
                                                  self._all_primers[j]))
         for struct in self._cross:
-                self._reactions.update(struct.compose_reactions())
+            self._reactions.update(struct.compose_reactions())
         #concentrations
         self._concentrations = dict().fromkeys([str(p.seq) for p in self._all_primers], C_Prim_M())
         #equilibrium system

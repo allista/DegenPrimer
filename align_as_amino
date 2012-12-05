@@ -40,7 +40,7 @@ try:
     from Bio.SeqRecord import SeqRecord
     from Bio.Align.Applications import MuscleCommandline
     from Bio.Align import MultipleSeqAlignment
-except:
+except ImportError:
     print "The BioPython must be installed in your system for this script to work."
     sys.exit(1)
 from DegenPrimer.StringTools import print_exception

@@ -31,6 +31,7 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
         DegenPrimerConfig.__init__(self)
         #setup a list of options and a parser for command line arguments
         self._parser = argparse.ArgumentParser(description=self._description)
+        self._args   = None
         #configuration file
         self.config_files = None
         conf_group = self._parser.add_argument_group('Preset configuration')
@@ -80,7 +81,7 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
     #end def
     
     
-    def parse_configuration(self):
+    def parse_configuration(self, config_file = None):
         #parse command line arguments
         self._args = self._parser.parse_args()
         self.config_files = self._args.config_files

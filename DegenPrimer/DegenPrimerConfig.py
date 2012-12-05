@@ -401,22 +401,27 @@ class DegenPrimerConfig(object):
 
     #base class constructor, there's nothing to initialize yet
     def __init__(self):
+        self._config_file = None
+        self._config  = None
+        self.primers  = None
+        self.job_id   = ''
         self._reports = list()
         return
     
     
-    def _multiple_args(self, option):
+    @classmethod
+    def _multiple_args(cls, option):
         nargs = option['nargs']
         return nargs == '*' or nargs == '+'
     #end def
     
     
     #virtual
-    def _override_option(self, option):
-        return None
+    def _override_option(self, option): pass
     
     
-    def _check_limits(self, option, value):
+    @classmethod
+    def _check_limits(cls, option, value):
         if option['limits'][0] and value < option['limits'][0] \
         or option['limits'][1] and value > option['limits'][1]:
             raise ValueError(('The value of "%(option)s" parameter should be within' % option) + \
@@ -458,7 +463,7 @@ class DegenPrimerConfig(object):
                                    '    self.%(option)s = eval(self.%(option)s)\n')
                     exec (exec_line % option)
             except Exception, e:
-                print 'DegenPrimerConfig._fill_option:'
+                print '\nDegenPrimerConfig._fill_option:'
                 print_exception(e)
         #check if option value is within limits
         self._check_limits(option, eval('self.%(option)s' % option))
@@ -472,7 +477,7 @@ class DegenPrimerConfig(object):
         if self._config_file:
             self._config = SafeConfigParser()
             if not self._config.read(self._config_file):
-                print 'Unable to load configuration from', self._config_file
+                print '\nUnable to load configuration from', self._config_file
                 self._config = None
         
         #fill in the configuration

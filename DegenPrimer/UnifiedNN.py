@@ -85,17 +85,17 @@ class UnifiedNN(object):
     #paths to the thermodynamic tables
     _possible_paths = ('./', '/usr/local/share/degen_primer/', '/usr/share/degen_primer/')
      
-    _internal_NN_filename             = 'internal-NN.csv'
-    internal_NN_paths                 = _install_paths(_possible_paths, _internal_NN_filename)
+    internal_NN_filename             = 'internal-NN.csv'
+    _internal_NN_paths               = _install_paths(_possible_paths, internal_NN_filename)
     
-    _loops_filename                   = 'loops.csv'
-    loops_paths                       = _install_paths(_possible_paths, _loops_filename)
+    loops_filename                   = 'loops.csv'
+    _loops_paths                     = _install_paths(_possible_paths, loops_filename)
     
-    _tri_tetra_hairpin_loops_filename = '3-4-hairpin-loops.csv'
-    tri_tetra_hairpin_loops_paths     = _install_paths(_possible_paths, _tri_tetra_hairpin_loops_filename)
+    tri_tetra_hairpin_loops_filename = '3-4-hairpin-loops.csv'
+    _tri_tetra_hairpin_loops_paths   = _install_paths(_possible_paths, tri_tetra_hairpin_loops_filename)
     
-    _dangling_ends_filename           = 'dangling-ends.csv'
-    dangling_ends_paths               = _install_paths(_possible_paths, _dangling_ends_filename)
+    dangling_ends_filename           = 'dangling-ends.csv'
+    _dangling_ends_paths             = _install_paths(_possible_paths, dangling_ends_filename)
     ###############################################################################
     
     
@@ -135,10 +135,10 @@ class UnifiedNN(object):
     @classmethod    
     def load_tables(cls):
         '''load thermodynamic tables'''
-        cls.internal_NN   = _load_csv(cls.internal_NN_paths)
-        cls.dangling_ends = _load_csv(cls.dangling_ends_paths)
-        cls.loops         = _load_csv(cls.loops_paths)
-        cls.tri_tetra_hairpin_loops = _load_csv(cls.tri_tetra_hairpin_loops_paths)
+        cls.internal_NN   = _load_csv(cls._internal_NN_paths)
+        cls.dangling_ends = _load_csv(cls._dangling_ends_paths)
+        cls.loops         = _load_csv(cls._loops_paths)
+        cls.tri_tetra_hairpin_loops = _load_csv(cls._tri_tetra_hairpin_loops_paths)
         cls._inited       = True
     #end def
     

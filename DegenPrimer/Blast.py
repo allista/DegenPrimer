@@ -32,9 +32,9 @@ try:
     from Bio.SeqRecord import SeqRecord
     from Bio.Alphabet import IUPAC
     from Bio.Seq import Seq
-except Exception, e:
-    print_exception(e)
-    raise ImportError('The BioPython must be installed in your system.')
+except ImportError:
+    print'The BioPython must be installed in your system.'
+    raise
 
 
 class Blast(object):
@@ -60,33 +60,41 @@ class Blast(object):
         self._blast_results    = None
         self._boundaries       = None
         self._query            = None
+        #PCR parameters
         self._min_amplicon     = min_amplicon
         self._max_amplicon     = max_amplicon
         self._with_exonuclease = with_exonuclease
         self._PCR_products     = None
+        #flags
         self._have_hits_report = False
         self._have_PCR_report  = False
         self._have_results     = False
+        #results
+        self._results_filename = self._job_id+'-blast.xml'
+        self._query_filename   = self._job_id+'-blast.cfg'
+        #reports
+        self._blast_PCR_report_filename = ''
+        self._blast_report_filename     = ''
     #end def
 
     #property functions
-    def have_results(self): return self._have_results
+    def have_results(self): return self._have_results 
     
     
     def load_results(self):
-        results_filename    = self._job_id+'-blast.xml'
-        query_filename      = self._job_id+'-blast.cfg'
-        #if there's no saved results, quit silently
-        if not os.path.isfile(results_filename): return
+        #check for file existence
+        if  not os.path.isfile(self._results_filename) \
+        and not os.path.isfile(self._query_filename): return False
         #load blast results
-        print '\nLoading previously saved BLAST results:\n   ', results_filename
+        print '\nLoading previously saved BLAST results:\n   %s\n   %s' \
+              % (self._results_filename, self._query_filename)
         try:
-            results_file        = open(results_filename, 'r')
+            results_file        = open(self._results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
             results_file.close()
             #load query configuration
             query_config        = SafeConfigParser()
-            query_config.read(query_filename)
+            query_config.read(self._query_filename)
             #parse query configuration
             self._query      = SeqRecord(Seq(query_config.get('query', 'query'), 
                                              IUPAC.unambiguous_dna), self._job_id)
@@ -94,11 +102,14 @@ class Blast(object):
             self._have_results = True
         except Exception, e:
             print '\nFailed to load blast results.'
+            print_exception(e)
+            return False
+        return True
     #end def
     
 
     def blast_short(self, query, entrez_query=''):
-        if not query: return
+        if not query: return False
         print '\nStarting a BLAST search. This may take awhile...'
         try:
             blast_results = NCBIWWW.qblast('blastn', 
@@ -124,15 +135,16 @@ class Blast(object):
         except Exception, e:
             print '\nFailed to obtain BLAST search results from NCBI.'
             print_exception(e)
-            return
+            return False
         self._have_results = True
+        return True
     #end def
 
 
     def blast_primers(self, all_primers, entrez_query=''):
         #construct a concatenated query: primer1NNNNNNNprimer2NNNNNNprimer3...
         #also save primer boundaries positions in the concatenate
-        if not all_primers: return
+        if not all_primers: return False
         self._boundaries = [[1,1]]
         self._query      = ''
         for p in range(len(all_primers)):
@@ -159,34 +171,26 @@ class Blast(object):
         query_file.close()
         print '\nBlast query configuration was written to:\n   '+query_filename
         #do the blast
-        self.blast_short(self._query.format('fasta'), entrez_query)
+        return self.blast_short(self._query.format('fasta'), entrez_query)
     #end def
     
     
-    def _check_hsp(self, hsp):
-        #check dG constraint
-        dimer  = Dimer()
-        query  = Seq(hsp.query, IUPAC.unambiguous_dna) #5'-3'
-        target = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement() #revcomp(3'-5')
-        for i in range(len(hsp.match)):
-            if hsp.match[i] == '|':
-                dimer.add(i,i)
-        dG    = dimer_dG(dimer, query, target)
-        if dG > SecStructures.max_dimer_dG: return False
-        #check 3' constraint
-        query_start  = hsp.query_start
-        query_end    = hsp.query_end
-        for primer in self._boundaries:
-            if query_start < primer[0] \
-            or query_end  > primer[1]:
-                continue
-            if not self._with_exonuclease and query_end < primer[1]:
-                return False
-        return True
-    #end def 
-        
+    def blast_and_analyze(self, query, entrez_query='', 
+                            side_reactions=None, side_concentrations=None):
+        return self.blast_short(query, entrez_query) \
+        and    self.find_PCR_products(side_reactions, side_concentrations)
+    #end def
+    
+    
+    def blast_and_analyze_primers(self, all_primers, entrez_query='', 
+                                     side_reactions=None, side_concentrations=None):
+        return self.blast_primers(all_primers, entrez_query) \
+        and    self.find_PCR_products(side_reactions, side_concentrations)
+    #end def
+    
     
     def find_PCR_products(self, side_reactions=None, side_concentrations=None):
+        if not self._have_results: return False
         self._PCR_products     = dict()
         sorted_hits = []
         for record in self._blast_results:
@@ -230,17 +234,19 @@ class Blast(object):
                                                     fwd_hit['fwd_primer'],
                                                     rev_hit['rev_primer']) 
             #compute PCR products quantities
-            self._PCR_products[record.query].compute_quantities()
+            self._PCR_products[record.query].calculate_quantities()
             #remove empty query products dict
             if not self._PCR_products[record.query]: 
                 del self._PCR_products[record.query]
         if not self._PCR_products:
             print '\nNo possible PCR products have been found using BLAST hits.'
+            return False
+        return True
     #end def
     
 
     def write_PCR_report(self):
-        if not self._blast_results: return
+        if not self._have_results: return
         if not self._PCR_products:  return
         self._blast_PCR_report_filename = self._job_id + '-blast-PCR-report.txt'
         blast_report = open(self._blast_PCR_report_filename, 'w')
@@ -289,9 +295,32 @@ class Blast(object):
         self._have_PCR_report = True
     #end def
 
+
+    def _check_hsp(self, hsp):
+        #check dG constraint
+        dimer  = Dimer()
+        query  = Seq(hsp.query, IUPAC.unambiguous_dna) #5'-3'
+        target = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement() #revcomp(3'-5')
+        for i in range(len(hsp.match)):
+            if hsp.match[i] == '|':
+                dimer.add(i,i)
+        dG    = dimer_dG(dimer, query, target)
+        if dG > SecStructures.max_dimer_dG: return False
+        #check 3' constraint
+        query_start  = hsp.query_start
+        query_end    = hsp.query_end
+        for primer in self._boundaries:
+            if query_start < primer[0] \
+            or query_end  > primer[1]:
+                continue
+            if not self._with_exonuclease and query_end < primer[1]:
+                return False
+        return True
+    #end def 
     
+        
     def write_hits_report(self):
-        if not self._blast_results: return
+        if not self._have_results: return
         self._blast_report_filename = self._job_id + '-blast-hits-report.txt'
         blast_report = open(self._blast_report_filename, 'w')
         blast_report.write(time_hr())

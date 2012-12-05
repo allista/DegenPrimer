@@ -23,7 +23,7 @@ Created on Nov 16, 2012
 
 from math import log, exp
 from itertools import chain
-from OligoFunctions import dimer
+from OligoFunctions import compose_dimer
 from TD_Functions import dimer_dG_corrected, equilibrium_constant, format_PCR_conditions, C_Prim_M, C_DNA_M
 from StringTools import wrap_text, hr
 from Equilibrium import Equilibrium
@@ -63,6 +63,7 @@ class PCR_Results(object):
         self._primers   = [] #list of all primers
         self._templates = [] #list of all template sequences
         self._nonzero   = False #true if the class instance has some products with successfully calculated quantities
+        self.solution   = None
         self.solution_objective_value = -1
     #end def
     
@@ -138,8 +139,8 @@ class PCR_Results(object):
         or  product['length']   > self._max_amplicon:
             return False
         #3' mismatches
-        fwd_dimer = dimer(product['fwd_primer'], product['fwd_seq'])
-        rev_dimer = dimer(product['rev_primer'], product['rev_seq'])
+        fwd_dimer = compose_dimer(product['fwd_primer'], product['fwd_seq'])
+        rev_dimer = compose_dimer(product['rev_primer'], product['rev_seq'])
         if not self._with_exonuclease:
             if fwd_dimer.fwd_matches()[-1] < len(product['fwd_primer'])-1 \
             or rev_dimer.fwd_matches()[-1] < len(product['rev_primer'])-1:
@@ -175,14 +176,15 @@ class PCR_Results(object):
         return True
     #end def
     
+    
     def hits(self):
         return list(self._products.keys())
     
     def _product_quantity(self, fwd_P, rev_P):
         return min(C_Prim_M(), C_DNA_M())*fwd_P*rev_P*(4*2**self._num_cycles + self._num_cycles-1)
-    #end def
     
-    def compute_quantities(self):
+    
+    def calculate_quantities(self):
         if not self._products: return
         #filter reactions by equilibrium constant value
         reactions = dict()
@@ -444,7 +446,7 @@ if __name__ == '__main__':
                         Seq('ATATTCTACAACGGCTATCC'), 
                         Seq('CAAGGGCTAGAGACGGAAG'[::-1]))
     print 'products:'
-    PCR_res.compute_quantities()
+    PCR_res.calculate_quantities()
     print PCR_res._products
     print bool(PCR_res)
     print PCR_res.all_products_histogram()

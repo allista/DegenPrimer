@@ -25,7 +25,7 @@ Tool to compute degenerate primer parameters using BioPython
 #imports
 import sys
 import signal
-from DegenPrimer.StringTools import hr, wrap_text, print_exception
+from DegenPrimer.StringTools import hr, wrap_text
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
 from DegenPrimer.DegenPrimerPipeline import DegenPrimerPipeline
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     except ValueError, e:
         #if not in batch mode, consider incorrect values as errors
         if not args.batch():
-            print_exception(e)
+            print e.message
             sys.exit(1)
         #in batch mode all values except do_blast flag are ignored anyway
         else: pass
@@ -72,7 +72,7 @@ if __name__ == '__main__':
                 config.parse_configuration(config_file)
             except ValueError, e:
                 print '\nUnable to perform analysis with the set of values given in "%s"' % config_file
-                print_exception(e)
+                print e.message
                 continue
             config.do_blast = args.do_blast
             print hr(' Repeating analysis for %s ' % config_file)
