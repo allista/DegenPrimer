@@ -21,9 +21,8 @@ Created on Jul 25, 2012
 #imports
 import sys
 import errno
-from time import time, sleep
+from time import time
 from datetime import timedelta
-from copy import deepcopy
 from Queue import Empty
 from multiprocessing import Process, Queue
 from multiprocessing.managers import BaseManager
@@ -258,9 +257,9 @@ class DegenPrimerPipeline(object):
         with capture_to_queue() as out:
             p_entry = self.generate_subprocess_entry(AllSecStructures_Manager(), out.queue)
             p_entry['manager'].start()
-        all_sec_structures = p_entry['manager'].AllSecStructures(pfam_primers(0), pfam_primers(1))
-        side_reactions       = deepcopy(all_sec_structures.reactions())
-        side_concentrations = deepcopy(all_sec_structures.concentrations())
+        all_sec_structures  = p_entry['manager'].AllSecStructures(pfam_primers(0), pfam_primers(1))
+        side_reactions      = all_sec_structures.reactions()
+        side_concentrations = all_sec_structures.concentrations()
         _subprocess(all_sec_structures.calculate_equilibrium, None, out.queue, p_entry,
                     'Calculate quantities of secondary structures.')
         #--------------------------------------------------------------------------#
