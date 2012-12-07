@@ -1,3 +1,2 @@
 * add separate/mixed mode to iPCR (?)
 * use some graphics library to make PDF plots of PCR phoresis (apparently, mathplotlib)
-* fix filechooser in DegenPrimerGUI

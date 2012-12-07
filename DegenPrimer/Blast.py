@@ -86,8 +86,6 @@ class Blast(object):
         if  not os.path.isfile(self._results_filename) \
         and not os.path.isfile(self._query_filename): return False
         #load blast results
-        print '\nLoading previously saved BLAST results:\n   %s\n   %s' \
-              % (self._results_filename, self._query_filename)
         try:
             results_file        = open(self._results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
@@ -101,9 +99,12 @@ class Blast(object):
             self._boundaries = eval(query_config.get('query', 'boundaries'))
             self._have_results = True
         except Exception, e:
-            print '\nFailed to load blast results.'
+            print '\nFailed to load blast results:\n   %s\n   %s' \
+                % (self._results_filename, self._query_filename)
             print_exception(e)
             return False
+        print '\nPreviously saved BLAST results was loaded:\n   %s\n   %s' \
+              % (self._results_filename, self._query_filename)
         return True
     #end def
     

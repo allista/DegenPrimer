@@ -25,6 +25,7 @@ Tool to compute degenerate primer parameters using BioPython
 #imports
 import sys
 import signal
+from time import sleep
 from DegenPrimer.StringTools import hr, wrap_text
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
@@ -36,7 +37,9 @@ degen_primer_pipeline = DegenPrimerPipeline()
 
 def sig_handler(signal, frame):
     degen_primer_pipeline.terminate()
+    sleep(1)
     sys.exit(1)
+#end def
 
 
 if __name__ == '__main__':

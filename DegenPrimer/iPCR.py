@@ -21,7 +21,7 @@ Created on Jul 3, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import sys, os
+import os
 import subprocess
 from StringTools import wrap_text, time_hr, hr, print_exception
 from Bio.Seq import Seq
@@ -71,8 +71,29 @@ class iPCR(object):
     
     def __del__(self):
         if self._ipcress_subprocess != None:
-            self._ipcress_subprocess.terminate()
-            self._ipcress_subprocess.wait()
+            if self._ipcress_subprocess.poll() == None:
+                self._ipcress_subprocess.terminate()
+                self._ipcress_subprocess.wait()
+    #end def
+    
+    
+    @classmethod
+    def _ipcress_executable(cls):
+        path = os.environ.get('PATH', None)
+        if not path: return None
+        for p in os.environ.get('PATH', '').split(os.pathsep):
+            p = os.path.join(p, 'ipcress')
+            if os.access(p, os.X_OK):
+                return p
+        return None
+    #end def
+    
+    
+    def ipcress_pid(self):
+        if self._ipcress_subprocess != None:
+            if self._ipcress_subprocess.poll() == None:
+                return self._ipcress_subprocess.pid
+        return None
     #end def
     
     
@@ -115,28 +136,40 @@ class iPCR(object):
         if not existing_fasta_files: 
             print '\nFailed to execute ipcress: no existing fasta files were provided.'
             return False
-        #if so, execute a program
+        #find ipcress in the path
         self._max_mismatches = max_mismatches
-        ipcr_cli = 'ipcress %s -m %d -s' % (self._program_filename, max_mismatches)
+        ipcress_executable = self._ipcress_executable()
+        if ipcress_executable is None:
+            print '"ipcress" executable is not found in the PATH.'
+            print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
+            return False
+        #if found, construct command line and execute
+        ipcr_cli = [ipcress_executable]
+        ipcr_cli.append('--input')
+        ipcr_cli.append(self._program_filename)
+        ipcr_cli.append('--mismatch')
+        ipcr_cli.append(str(max_mismatches))
+        ipcr_cli.append('--sequence')
         for fasta_file in existing_fasta_files:
-            ipcr_cli += ' "'+fasta_file+'"'
+            ipcr_cli.append(fasta_file)
         try:
-            print '\nExecuting iPCR program. This may take awhile...'
             self._ipcress_subprocess = subprocess.Popen(ipcr_cli,
                                                         stdin=subprocess.PIPE,
                                                         stdout=subprocess.PIPE,
-                                                        stderr=subprocess.PIPE,
-                                                        shell=(sys.platform!="win32"))
+                                                        stderr=subprocess.PIPE)
             ipcr_report = open(self._raw_report_filename, 'w')
-            ipcr_report.write(self._ipcress_subprocess.stdout.read())
+            output = self._ipcress_subprocess.communicate()[0]
+            if self._ipcress_subprocess.returncode != 0:
+                print '\nipcress exited with error:\n'
+                print output
+                return False
+            ipcr_report.write(output)
             ipcr_report.close()
             print '\nRaw ipcress report was written to:\n   ',self._raw_report_filename
             self._ipcress_subprocess = None
         except OSError, e:
             print '\nFaild to execute ipcress.'
-            print e.message
-            print 'It seems that "ipcress" executable is not found in the PATH.'
-            print 'NOTE: it is provided by the "exonerate" package in debian-like distributions.'
+            print_exception(e)
             return False
         except Exception, e:
             print '\nFaild to execute ipcress.'
@@ -176,7 +209,6 @@ class iPCR(object):
             print '\nFailed to open raw iPCR report file:\n   %s' % self._raw_report_filename
             print e.message
             return False
-        print '\nLoading raw iPCR results from the previous ipcress run.'
         #parse results file
         self._results = []
         hits = []
@@ -231,7 +263,6 @@ class iPCR(object):
                                            result['fwd_primer'], 
                                            result['rev_primer'])
         #compute PCR products quantities
-        print '\nCalculating quantities of possible PCR products.'
         self._PCR_products.calculate_quantities()
         if not self._PCR_products:
             print '\nAll results found in raw iPCR report were filtered out'
