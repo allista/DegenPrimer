@@ -88,9 +88,7 @@ class WaitThread(Thread):
         
     def run(self):
         try:
-            print 'start thread'
             self._target(*self._args, **self._kwargs)
-            print 'thread finished'
         #Ctrl-C
         except KeyboardInterrupt: return
         #EOF means that target activity was terminated in the Manager process
@@ -304,7 +302,7 @@ class DegenPrimerPipeline(object):
                     entrez_query += organism+'[organism]'
             #do the blast and analyze results
             _subroutine(blast.blast_and_analyze_primers, 
-                        (all_primers(),
+                        (all_primers,
                          entrez_query,
                          side_reactions,
                          side_concentrations),

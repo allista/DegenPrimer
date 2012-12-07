@@ -1,2 +1,5 @@
 * add separate/mixed mode to iPCR (?)
+* more convenient BLAST hits report with Tm-s and/or dG, with a list of all hits in the header
+* PCR-products histogram should somehow show absolute product quantities
+* for filedialogs in GUI save sizes too
 * use some graphics library to make PDF plots of PCR phoresis (apparently, mathplotlib)
