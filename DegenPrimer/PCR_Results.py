@@ -37,7 +37,8 @@ class PCR_Results(object):
     #histogram
     _all_products_title = 'PCR-product'
     _hist_column_title  = '---relative concentration---'
-    _hist_width         = len(_hist_column_title)
+    #bar width should not be less than 2*len('100.00%')+1, or value will not fit
+    _hist_width         = max(2*len('100.00%')+1, len(_hist_column_title)) 
     #electrophoresis
     _window_percent     = 0.05 #percentage of a length of the longest PCR product; it defines band width on electrophoresis
     #indirectly defines to what extent should lengths 
@@ -180,8 +181,10 @@ class PCR_Results(object):
     def hits(self):
         return list(self._products.keys())
     
+    @classmethod
     def _product_quantity(self, fwd_P, rev_P):
-        return min(C_Prim_M(), C_DNA_M())*fwd_P*rev_P*(4*2**self._num_cycles + self._num_cycles-1)
+        return fwd_P*rev_P*100.0 #percent with respect to theoretical maximum
+        #return min(C_Prim_M(), C_DNA_M())*fwd_P*rev_P*(4*2**self._num_cycles + self._num_cycles-1) #in moles after _num_cycles
     
     
     def calculate_quantities(self):
@@ -238,7 +241,8 @@ class PCR_Results(object):
     #end def
 
     
-    def _construct_histogram(self, main_title, products, with_titles=True):
+    @classmethod
+    def _construct_histogram(cls, main_title, products, with_titles=True):
         text_width = StringTools.text_width
         #construct histogram
         histogram  = dict()
@@ -248,7 +252,7 @@ class PCR_Results(object):
         max_title  = 0
         if with_titles:
             max_title  = max(len(p['title']) for p in products)
-        spec_limit = text_width-self._hist_width-2
+        spec_limit = text_width-cls._hist_width-2
         for product in products:
             product_spec   = '%d%s bp [%d%s-%s%d]' % (product['length'],
                                                       ' '*(max_len-len(str(product['length']))),
@@ -268,35 +272,50 @@ class PCR_Results(object):
         histogram = sorted(zip(histogram, histogram.values()), key=lambda x: x[1][1], reverse=True)
         histogram = tuple((line[0], line[1][0]) for line in histogram)
         #format histogram
-        return self._format_histogram(main_title, histogram)
+        return cls._format_histogram(main_title, histogram)
     #end def
     
     
-    def _format_histogram(self, title, histogram):
+    @classmethod
+    def _format_histogram(cls, title, histogram):
         text_width = StringTools.text_width
         histogram_string = ''
         #maximum column name width and value
-        max_name  = text_width-self._hist_width-2
+        max_name  = text_width-cls._hist_width-2
         max_value = max(c[1] for c in histogram)
         #cut name column title if necessary 
         if len(title) > max_name:
             title = title[:max_name]
         #spacers
-        names_spacer = max_name - len(title)
+        names_spacer    = max_name - len(title)
+        coltitle_spacer = cls._hist_width-len(cls._hist_column_title)
         #column_titles 
         histogram_string += '-'*(names_spacer/2)+title        + \
-                            '-'*(names_spacer-names_spacer/2) + \
-                            '|'+self._hist_column_title+'|\n'
+                            '-'*(names_spacer-names_spacer/2) + '|'+ \
+                            ' '*(coltitle_spacer/2) + cls._hist_column_title + \
+                            ' '*(coltitle_spacer-coltitle_spacer/2)+'|\n'
         #histogram lines
         for col in histogram:
+            #line title
             if len(col[0]) > max_name:
                 name = col[0][:max_name]
             else: name = col[0]
             name_spacer = max_name - len(name)
-            hist_value  = int(round((self._hist_width*col[1])/max_value))
-            col_spacer  = self._hist_width - hist_value
             histogram_string += name + ' '*name_spacer
-            histogram_string += ':' + '#'*hist_value + ' '*col_spacer + ':' + '\n'
+            #line value
+            hist_value  = int(round((cls._hist_width*col[1])/max_value))
+            col_spacer  = cls._hist_width - hist_value
+            #value figure
+            value_str   = '%.2f%%' % col[1]
+            #value bar
+            if len(value_str) < col_spacer-1:
+                _spacer = col_spacer-len(value_str)
+                histogram_string += ':' + '#'*hist_value + ' '*_spacer 
+                histogram_string += value_str + ':' + '\n'
+            else:
+                _bar = hist_value-len(value_str)
+                histogram_string += ':' + '#'*(_bar/2) + value_str 
+                histogram_string += '#'*(_bar-_bar/2) + ' '*col_spacer + ':' + '\n'
         histogram_string += '\n'
         return histogram_string
     #end def
@@ -416,7 +435,10 @@ class PCR_Results(object):
                         self.solution_objective_value
         expl_string += wrap_text('This value shows "distance" to the solution of '
                            'the system of equilibrium equations which were used '
-                           'to calculate quantities of PCR products.\n')
+                           'to calculate quantities of PCR products.\n\n')
+        expl_string += wrap_text('Relative concentration (%) of a product is '
+                                 'the percentage of estimated quantity of this '
+                                 'product with respect to it\'s theoretical maximum.\n')
         expl_string += '\n'
         return expl_string
     #end def    

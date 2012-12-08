@@ -24,8 +24,10 @@ Created on Jun 26, 2012
 import os
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
-from SecStructures import Dimer, SecStructures
-from TD_Functions import dimer_dG, format_PCR_conditions
+from SecStructures import SecStructures
+from DegenPrimer.OligoFunctions import compose_dimer
+import TD_Functions
+from TD_Functions import dimer_dG, format_PCR_conditions, primer_DNA_conversion_degree
 from PCR_Results import PCR_Results
 try:
     from Bio.Blast import NCBIWWW, NCBIXML 
@@ -192,7 +194,7 @@ class Blast(object):
     
     def find_PCR_products(self, side_reactions=None, side_concentrations=None):
         if not self._have_results: return False
-        self._PCR_products     = dict()
+        self._PCR_products = dict()
         sorted_hits = []
         for record in self._blast_results:
             self._PCR_products[record.query] = PCR_Results(self._min_amplicon, self._max_amplicon, self._with_exonuclease) 
@@ -205,9 +207,11 @@ class Blast(object):
                 hits = record_hits[hit_title]
                 #check and sort all hsps 
                 for hsp in alignment.hsps:
+                    #this check is needed to filter real 3' mismatches
+                    if not self._check_hsp(hsp)[0]: continue 
                     #add hsp to corresponding dictionary
                     target_end   = hsp.sbjct_end
-                    primer_dir    = hsp.frame[0]
+                    primer_dir   = hsp.frame[0]
                     target_dir   = hsp.frame[1]
                     primer       = Seq(hsp.query, IUPAC.unambiguous_dna) #5'->3'
                     target       = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement() #5'->3'
@@ -298,25 +302,22 @@ class Blast(object):
 
 
     def _check_hsp(self, hsp):
-        #check dG constraint
-        dimer  = Dimer()
+        #check 3' constraint
+        if not self._with_exonuclease:
+            query_start  = hsp.query_start
+            query_end    = hsp.query_end
+            for primer in self._boundaries:
+                if query_start < primer[0] \
+                or query_end  > primer[1]:
+                    continue
+                if query_end < primer[1]:
+                    return False, None
+        #check annealing energy
         query  = Seq(hsp.query, IUPAC.unambiguous_dna) #5'-3'
         target = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement() #revcomp(3'-5')
-        for i in range(len(hsp.match)):
-            if hsp.match[i] == '|':
-                dimer.add(i,i)
-        dG    = dimer_dG(dimer, query, target)
-        if dG > SecStructures.max_dimer_dG: return False
-        #check 3' constraint
-        query_start  = hsp.query_start
-        query_end    = hsp.query_end
-        for primer in self._boundaries:
-            if query_start < primer[0] \
-            or query_end  > primer[1]:
-                continue
-            if not self._with_exonuclease and query_end < primer[1]:
-                return False
-        return True
+        dG     = dimer_dG(compose_dimer(query, target), query, target)
+        if dG > SecStructures.max_dimer_dG: return False, dG
+        return True, dG
     #end def 
     
         
@@ -326,8 +327,9 @@ class Blast(object):
         blast_report = open(self._blast_report_filename, 'w')
         blast_report.write(time_hr())
         #header
-        blast_report.write(wrap_text('All hits are filtered by number of mismatches '
-                                     'and, if --no-exonuclease option was '
+        blast_report.write(wrap_text('All hits are filtered by dG of the annealing '
+                                     'of alignments and, '
+                                     'if --no-exonuclease option was '
                                      'provided, hits with mismatches on '
                                      "3'-end are also filtered.\n"))
         blast_report.write('\n')
@@ -345,37 +347,69 @@ class Blast(object):
             blast_record = self._blast_results[r]
             num_hits = len(blast_record.alignments)
             blast_report.write(hr(' query ID: %s '  % blast_record.query, symbol='#'))
-            blast_report.write(hr(' %d hits ' % num_hits,  symbol='#'))
-            for a in range(num_hits):
-                alignment = blast_record.alignments[a]
-                blast_report.write(hr(' Hit #%d ' % (a+1), symbol='='))
-                blast_report.write(alignment.title+'\n')
-                blast_report.write('Length:     %d\n' % alignment.length)
-                blast_report.write('Max bits:   %d\n' % blast_record.descriptions[a].bits)
-                blast_report.write('Alignments: %d\n' % len(alignment.hsps))
-                blast_report.write('\n')
-                #print hsps
-                hsps_text    = ''
-                printed_hsps = 0
-                for hsp in alignment.hsps:
-                    if not self._check_hsp(hsp):
-                        continue
-                    printed_hsps += 1
-                    hsps_text += str(hsp)+'\n'
-                    hsps_text += 'Strand: '
+            #filter hits by alignments and format report text for each hit
+            hits = []
+            for h in range(num_hits):
+                hit  = blast_record.alignments[h]
+                desc = blast_record.descriptions[h] 
+                #check and format hsps
+                hsps = []
+                for hsp in hit.hsps:
+                    valid_hsp, dG = self._check_hsp(hsp) 
+                    if not valid_hsp: continue
+                    hsp_text    = ''
+                    hsp_text += str(hsp)+'\n'
+                    hsp_text += 'Strand: '
                     if hsp.frame[0] == 1:
-                        hsps_text += 'Plus/'
+                        hsp_text += 'Plus/'
                     elif hsp.frame[0] == -1:
-                        hsps_text += 'Minus/'
+                        hsp_text += 'Minus/'
                     if hsp.frame[1] == 1:
-                        hsps_text += 'Plus\n'
+                        hsp_text += 'Plus\n'
                     elif hsp.frame[1] == -1:
-                        hsps_text += 'Minus\n'
-                    hsps_text += '\n\n'
-                hsps_text = hr(' %d alignments after filtration ' % printed_hsps) + hsps_text[:-1]
-                blast_report.write(hsps_text)
-                blast_report.write(hr('', symbol='='))
-                if a < num_hits-1: blast_report.write('\n\n')
+                        hsp_text += 'Minus\n'
+                    hsp_text += 'Annealing dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, dG)
+                    hsp_text += 'Conversion degree = %.2f%%\n' % (primer_DNA_conversion_degree(dG, TD_Functions.PCR_T)*100)
+                    hsp_text += '\n\n'
+                    hsps.append((dG, hsp_text))
+                #no need to include weak hits to the report
+                if not hsps: continue 
+                #sort hsps by minimum dG
+                hsps.sort(key=lambda(x): x[0])
+                #format hit
+                hit_str  = wrap_text(hit.title)+'\n'
+                hit_str += 'Length:     %d\n' % hit.length
+                hit_str += 'Max bits:   %d\n' % desc.bits
+                hit_str += 'Alignments: %d\n' % len(hit.hsps)
+                hit_str += '\n'
+                hit_str += hr(' %d alignments after filtration ' % len(hsps))
+                hit_str += ''.join(_hsp[1] for _hsp in hsps)[:-1]
+                hits.append((hsps[0][0], desc.title, desc.score, desc.bits, desc.e, len(hsps), hit_str))
+            if not hits:
+                blast_report.write(wrap_text('All hits were filtered out.\n'))
+            #write report to the file
+            else:
+                blast_report.write(hr(' %d hits ' % len(hits),  symbol='#'))
+                #sort hits by minimum dG
+                hits.sort(key=lambda(x): x[0])
+                #print the short list of all hits
+                num_hits_len = len(str(len(hits)))
+                for h in range(len(hits)):
+                    hit = hits[h]
+                    spacer    = ' '*(num_hits_len-len(str(h)))
+                    blast_report.write(wrap_text('%d.%s %s\n' % (h+1, spacer, hit[1])))
+                    blast_report.write(('%s  min dG: %.2f; score: %d; bits: %d; '
+                                        'E-value: %.2e; alignments: %d\n\n') \
+                                       % (' '*num_hits_len, hit[0], hit[2], 
+                                          hit[3], hit[4], hit[5]))
+                blast_report.write('\n')
+                #print each formatted hit
+                for h in range(len(hits)):
+                    hit = hits[h]
+                    blast_report.write(hr(' Hit #%d ' % (h+1), symbol='='))
+                    blast_report.write(hit[6])
+                    blast_report.write(hr('', symbol='='))
+                    if h < len(hits)-1: blast_report.write('\n\n')
             blast_report.write(hr('', symbol='#'))
             if r < len(self._blast_results)-1: blast_report.write('\n\n')
         blast_report.close()

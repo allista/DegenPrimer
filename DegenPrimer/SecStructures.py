@@ -109,8 +109,8 @@ class SecStructures(object):
     >>> print str(MySecStructs)
     '''
     
-    max_dimer_dG   = -3 #kcal/mol #corresponds to conversion degree ~1e-3
-    max_hairpin_dG =  3 #kcal/mol #corresponds to conversion degree ~1e-2
+    max_dimer_dG   = -3 #kcal/mol #corresponds to equilibrium constant ~100  and conversion degree ~1e-3
+    max_hairpin_dG =  3 #kcal/mol #corresponds to equilibrium constant ~0.01 and conversion degree ~1e-2
 
     def __init__(self, seq_rec1, seq_rec2=None):
         '''

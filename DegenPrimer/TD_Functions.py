@@ -521,16 +521,17 @@ if __name__ == '__main__':
     
     C_Na     = 50.0
     C_Mg     = 3.0 
-    C_dNTP   = 0.3 
+    C_dNTP   = 0
     C_DNA    = 50.0
-    C_Primer = 0.43
+    C_Primer = 0.33
     PCR_T = 55
     
     _dG = 3
     const = equilibrium_constant(_dG, PCR_T)
     print 'Equilibrium constant:     ', const
     print 'Hairpin conversion degree:', hairpin_conversion_degree(_dG, PCR_T)*100
-    print 'Dimer conversion degree:  ', dimer_conversion_degree(_dG, PCR_T)*100
+    print 'Dimer conversion degree: %e' % (dimer_conversion_degree(_dG, PCR_T)*100)
+    print 'Primer conversion degree: %e' % (primer_DNA_conversion_degree(_dG, PCR_T)*100)
     print ''
     
     print seq1, seq2
