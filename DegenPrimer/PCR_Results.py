@@ -38,7 +38,7 @@ class PCR_Results(object):
     _all_products_title = 'PCR-product'
     _hist_column_title  = '---relative concentration---'
     #bar width should not be less than 2*len('100.00%')+1, or value will not fit
-    _hist_width         = max(2*len('100.00%')+1, len(_hist_column_title)) 
+    _hist_width         = max(2*len('100.00%')+2, len(_hist_column_title)) 
     #electrophoresis
     _window_percent     = 0.05 #percentage of a length of the longest PCR product; it defines band width on electrophoresis
     #indirectly defines to what extent should lengths 
@@ -308,7 +308,7 @@ class PCR_Results(object):
             #value figure
             value_str   = '%.2f%%' % col[1]
             #value bar
-            if len(value_str) < col_spacer-1:
+            if len(value_str) < col_spacer:
                 _spacer = col_spacer-len(value_str)
                 histogram_string += ':' + '#'*hist_value + ' '*_spacer 
                 histogram_string += value_str + ':' + '\n'
