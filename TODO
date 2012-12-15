@@ -1,4 +1,6 @@
-* PCR_Results need to treat equal template sequences from different hits separately!
-* add separate/mixed mode to iPCR (?)
+* concentration of each primer should be defined separately in the config
+* add number of PCR cycles as config option
+* try to vary parameters of BLAST query
+* PCR_Results<-Blast: add primer annealing regions which do not produce PCR product as side-reactions
 * for filedialogs in GUI save sizes too
 * use some graphics library to make PDF plots of PCR phoresis (apparently, mathplotlib)

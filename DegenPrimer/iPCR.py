@@ -23,11 +23,12 @@ Created on Jul 3, 2012
 
 import os
 import subprocess
-from StringTools import wrap_text, time_hr, hr, print_exception
+
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
+from StringTools import wrap_text, time_hr, hr, print_exception
 from PCR_Results import PCR_Results
-from TD_Functions import format_PCR_conditions
+from SecStructures import Duplex
 
 class iPCR(object):
     '''Wrapper for ipcress process and parser for it's results'''
@@ -38,11 +39,13 @@ class iPCR(object):
 
     def __init__(self, 
                  job_id, 
-                 fwd_primers, 
-                 rev_primers, 
+                 fwd_primer, 
+                 rev_primer, 
                  min_amplicon, 
                  max_amplicon, 
+                 polymerase, 
                  with_exonuclease,
+                 num_cycles,
                  side_reactions=None,
                  side_concentrations=None):
         self._ipcress_subprocess  = None
@@ -51,18 +54,25 @@ class iPCR(object):
         self._raw_report_filename = job_id+'-ipcr-raw-report.txt'
         self._PCR_report_filename = job_id+'-ipcr-PCR-report.txt'
         #parameters
-        self._fwd_primers        = fwd_primers
-        self._rev_primers        = rev_primers
+        self._fwd_primer         = fwd_primer
+        self._rev_primer         = rev_primer
         self._max_mismatches     = None
         self._min_amplicon       = min_amplicon
         self._max_amplicon       = max_amplicon
+        self._polymerase         = polymerase
         self._with_exonuclease   = with_exonuclease
+        self._num_cycles         = num_cycles
         #results
-        self._PCR_products = PCR_Results(self._min_amplicon,
+        self._PCR_products = PCR_Results([fwd_primer, rev_primer],
+                                         self._min_amplicon,
                                          self._max_amplicon,
-                                         self._with_exonuclease)
-        if side_reactions and side_concentrations:
-            self._PCR_products.add_reactions(side_reactions, side_concentrations)
+                                         self._polymerase,
+                                         self._with_exonuclease,
+                                         self._num_cycles)
+        if side_reactions:
+            self._PCR_products.add_side_reactions(side_reactions)
+        if side_concentrations:
+            self._PCR_products.add_side_concentrations(side_concentrations)
         self._results      = None
         self._have_results = False
         self._have_report  = False
@@ -108,8 +118,8 @@ class iPCR(object):
             print '\nUnable to open %s' % self._program_filename
             print e.message
             return False
-        for fwd_primer in self._fwd_primers:
-            for rev_primer in self._rev_primers:
+        for fwd_primer in self._fwd_primer.seq_records:
+            for rev_primer in self._rev_primer.seq_records:
                 pcr_string  = fwd_primer.id + '-' + rev_primer.id
                 pcr_string += ' '+str(fwd_primer.seq)
                 pcr_string += ' '+str(rev_primer.seq)
@@ -255,13 +265,10 @@ class iPCR(object):
         #add results to PCR_Results object
         for result in self._results:
             self._PCR_products.add_product(result['hit'], 
-                                           result['start'], 
-                                           result['end']+len(result['rev_primer']), #ipcress defines end position as 3'-start of the reverse primer
-                                           result['length'], 
-                                           result['fwd_seq'], 
-                                           result['rev_seq'], 
-                                           result['fwd_primer'], 
-                                           result['rev_primer'])
+                                           result['start']+len(result['fwd_primer']),#ipcress defines start position as 5'-end of the forward primer 
+                                           result['end'],
+                                           Duplex(result['fwd_primer'], result['fwd_seq']), 
+                                           Duplex(result['rev_primer'], result['rev_seq']))
         #compute PCR products quantities
         self._PCR_products.calculate_quantities()
         if not self._PCR_products:
@@ -294,18 +301,9 @@ class iPCR(object):
                                      'current PCR parameters.\n'))
         ipcr_report.write('\n')
         #filter parameters
-        ipcr_report.write(hr(' filtration parameters '))
-        if self._with_exonuclease:
-            ipcr_report.write("DNA polymerase HAS 3'-5'-exonuclease activity\n")
-        else: ipcr_report.write("DNA polymerase doesn't have 3'-5'-exonuclease activity\n")
-        ipcr_report.write('Minimum amplicon size:      %d\n' % self._min_amplicon)
-        ipcr_report.write('Maximum amplicon size:      %d\n' % self._max_amplicon)
-        if self._max_mismatches:
+        ipcr_report.write(self._PCR_products.format_report_header())
+        if self._max_mismatches != None:
             ipcr_report.write('Number of mismatches allowed: %d\n' % self._max_mismatches)
-        ipcr_report.write('\n')
-        ipcr_report.write(hr(' PCR conditions '))
-        ipcr_report.write(format_PCR_conditions()+'\n')
-        ipcr_report.write('\n\n\n')
         #if no PCR products have been found
         if not self._PCR_products:
             ipcr_report.write(hr(' No PCR products have been found ', symbol='!'))
@@ -313,20 +311,26 @@ class iPCR(object):
             return
         #else...
         ipcr_report.write(self._PCR_products.format_quantity_explanation())
-        #all products histogram
-        ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-        ipcr_report.write(self._PCR_products.all_products_histogram())
-        ipcr_report.write('\n\n\n')
-        #all products electrophoresis
-        ipcr_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
-        ipcr_report.write(self._PCR_products.all_products_electrophoresis())
-        ipcr_report.write('\n\n')
-        #PCR products by hit, if there more than one hit 
-        if len(self._PCR_products.hits()) > 1:
-            ipcr_report.write(hr(' the same grouped by target sequence ', symbol='='))
-            ipcr_report.write(self._PCR_products.all_graphs_grouped_by_hit())
+        #PCR products by hit 
+        if len(self._PCR_products.hits()) == 1:
+            #all products histogram
+            hit = self._PCR_products.hits()[0]
+            ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
+            ipcr_report.write(self._PCR_products.per_hit_header(hit))
+            ipcr_report.write(self._PCR_products.per_hit_histogram(hit))
+            ipcr_report.write('\n')
+            ipcr_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
+            ipcr_report.write(self._PCR_products.per_hit_electrophoresis(hit))
+        else:
+            #all products histogram
+            ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
+            ipcr_report.write(self._PCR_products.all_products_histogram())
+            ipcr_report.write('\n\n\n')
+            #per hit histogram and phoresis
+            ipcr_report.write(hr(' histograms electrophorograms of PCR products of each hit ', symbol='='))
+            ipcr_report.write(self._PCR_products.all_graphs_grouped_by_hit())            
         ipcr_report.close()
-        print '\niPCR report was written to:\n   ',self._PCR_report_filename
+        print 'iPCR report was written to:\n   ',self._PCR_report_filename
         self._have_report = True
     #end def
     

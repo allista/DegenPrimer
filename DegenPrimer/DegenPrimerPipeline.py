@@ -30,9 +30,8 @@ from multiprocessing import Queue
 from multiprocessing.managers import BaseManager
 from threading import Thread
 from contextlib import contextmanager
-from DegenPrimer.OligoFunctions import generate_unambiguous, self_complement
 from DegenPrimer import TD_Functions    
-from DegenPrimer.TD_Functions import calculate_Tm, source_feature, add_PCR_conditions, format_PCR_conditions
+from DegenPrimer.TD_Functions import format_PCR_conditions
 from DegenPrimer.Blast import Blast
 from DegenPrimer.SecStructures import AllSecStructures
 from DegenPrimer.StringTools import hr, wrap_text, time_hr, print_exception
@@ -205,7 +204,6 @@ class DegenPrimerPipeline(object):
         TD_Functions.C_Mg   = args.Mg
         TD_Functions.C_dNTP = args.dNTP
         TD_Functions.C_DNA  = args.DNA
-        TD_Functions.C_Prim = args.Primer
         TD_Functions.C_DMSO = args.DMSO
         TD_Functions.PCR_T  = args.PCR_T
         
@@ -215,9 +213,11 @@ class DegenPrimerPipeline(object):
             return False
         #test for self-complementarity
         for primer in primers:
-            if primer and self_complement(primer[0]):
-                print 'Error: %s primer "%s" [%s] is self-complementary.' % \
-                        (primer[0].description, primer[0].id, primer[0].seq)
+            if primer.self_complement:
+                print 'Error: %s primer "%s" [%s] is self-complementary.' \
+                    % (primer.master_sequence.description, 
+                       primer.master_sequence.id, 
+                       primer.master_sequence.seq)
                 print 'You should not use self-complementary oligonucleotides as primers.\n'
                 return False
         #save the configuration only after preliminary checks
@@ -228,15 +228,11 @@ class DegenPrimerPipeline(object):
         #zero time, used to calculate elapsed time in the end
         time0 = time()
         
-        #generate unambiguous primer sets and calculate melting temperatures
-        if not self._process_degenerate_primers(primers): return False
         #save primers 
         if not self._save_primers(primers, job_id): return False
         
-        #primer lists 
-        fwd_primers = self._pfam_primers(primers, 0)
-        rev_primers = self._pfam_primers(primers, 1)
-        all_primers = fwd_primers + rev_primers
+        fwd_primer  = primers[0]
+        rev_primer  = primers[1]
         #----------------------------------------------------------------------#
     
         #following computations are CPU intensive, so they need parallelization#
@@ -244,7 +240,7 @@ class DegenPrimerPipeline(object):
         with capture_to_queue() as out:
             p_entry = self._generate_subroutine_entry(out.queue)
             p_entry['manager'].start()
-        all_sec_structures  = p_entry['manager'].AllSecStructures(fwd_primers, rev_primers)
+        all_sec_structures  = p_entry['manager'].AllSecStructures(fwd_primer, rev_primer)
         side_reactions      = all_sec_structures.reactions()
         side_concentrations = all_sec_structures.concentrations()
         _subroutine(all_sec_structures.calculate_equilibrium, None, out.queue, p_entry,
@@ -259,9 +255,11 @@ class DegenPrimerPipeline(object):
                 p_entry = self._generate_subroutine_entry(out.queue)
                 p_entry['manager'].start()
             ipcr = p_entry['manager'].iPCR(job_id, 
-                                           fwd_primers, rev_primers, 
+                                           fwd_primer, rev_primer, 
                                            args.min_amplicon, args.max_amplicon, 
+                                           args.polymerase, 
                                            args.with_exonuclease, 
+                                           args.cycles,
                                            side_reactions, 
                                            side_concentrations)
             #if target sequences are provided and the run_icress flag is set, run iPCR...
@@ -293,30 +291,30 @@ class DegenPrimerPipeline(object):
                                          args.max_amplicon, 
                                          args.with_exonuclease)
         #if --do-blast command was provided, make an actual query
-        if args.do_blast:
-            #construct Entrez query
-            entrez_query = ''
-            if args.organisms:
-                for organism in args.organisms:
-                    if entrez_query: entrez_query += ' OR '
-                    entrez_query += organism+'[organism]'
-            #do the blast and analyze results
-            _subroutine(blast.blast_and_analyze_primers, 
-                        (all_primers,
-                         entrez_query,
-                         side_reactions,
-                         side_concentrations),
-                        out.queue, p_entry,
-                        'Make BLAST query and search for possible PCR products.')
-        #else, try to load previously saved results and analyze them with current parameters
-        elif blast.load_results():
-            print '\nFound saved BLAST results.'
-            _subroutine(blast.find_PCR_products, 
-                        (side_reactions,
-                         side_concentrations), 
-                        out.queue, p_entry,
-                        'Search for possible PCR products in BLAST results.')
-        else: self._print_queue(p_entry['queue'])
+#        if args.do_blast:
+#            #construct Entrez query
+#            entrez_query = ''
+#            if args.organisms:
+#                for organism in args.organisms:
+#                    if entrez_query: entrez_query += ' OR '
+#                    entrez_query += organism+'[organism]'
+#            #do the blast and analyze results
+#            _subroutine(blast.blast_and_analyze_primers, 
+#                        (primers,
+#                         entrez_query,
+#                         side_reactions,
+#                         side_concentrations),
+#                        out.queue, p_entry,
+#                        'Make BLAST query and search for possible PCR products.')
+#        #else, try to load previously saved results and analyze them with current parameters
+#        elif blast.load_results():
+#            print '\nFound saved BLAST results.'
+#            _subroutine(blast.find_PCR_products, 
+#                        (side_reactions,
+#                         side_concentrations), 
+#                        out.queue, p_entry,
+#                        'Search for possible PCR products in BLAST results.')
+#        else: self._print_queue(p_entry['queue'])
         #----------------------------------------------------------------------#
         
         #collect subroutines output, write it to stdout, wait for them to finish
@@ -333,19 +331,24 @@ class DegenPrimerPipeline(object):
         #write full and short reports
         structures_full_report_filename  = job_id+'-full-report.txt'
         structures_short_report_filename = job_id+'-short-report.txt'
-        full_structures_file  = open(structures_full_report_filename, 'w')
-        short_structures_file = open(structures_short_report_filename, 'w')
-        #write header
-        for f in (full_structures_file, short_structures_file):
-            f.write(self._format_primers_report_header(primers))
-        #write secondary structures information
-        full_structures_file.write(all_sec_structures.print_structures())
-        short_structures_file.write(all_sec_structures.print_structures_short())
-        full_structures_file.close()
-        short_structures_file.close()
-        print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
-        print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
-        args.register_report('Tm and secondary structures', structures_short_report_filename)
+        try:
+            full_structures_file  = open(structures_full_report_filename, 'w')
+            short_structures_file = open(structures_short_report_filename, 'w')
+        except IOError, e:
+            print 'Unable to open report file(s) for writing.'
+            print_exception(e)
+        else:
+            #write header
+            for f in (full_structures_file, short_structures_file):
+                f.write(self._format_primers_report_header(primers, args.polymerase))
+            #write secondary structures information
+            full_structures_file.write(all_sec_structures.print_structures())
+            short_structures_file.write(all_sec_structures.print_structures_short())
+            full_structures_file.close()
+            short_structures_file.close()
+            print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
+            print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
+            args.register_report('Tm and secondary structures', structures_short_report_filename)
     
         #write iPCR reports if they are available
         if ipcr != None and ipcr.have_results():
@@ -371,75 +374,25 @@ class DegenPrimerPipeline(object):
         #terminate managers and delete queues
         self.terminate()
         
-        print '\nDone. Total elapsed time: %s' % timedelta(seconds=time()-time0)
+        print 'Done. Total elapsed time: %s' % timedelta(seconds=time()-time0)
         return True
     #end def
 
 
-    @classmethod
-    def _pfam_primers(cls, primers, pfam):
-        '''Return a list of unambiguous primers:
-        if pfam=0, list of forward primers
-        if pfam=1, list of reverse primers'''
-        if not primers[pfam]: return [] 
-        if not primers[pfam][1]:
-            return [primers[pfam][0]]
-        else: return primers[pfam][1]
-    #end def
-        
-    
-    @classmethod
-    def _process_degenerate_primers(cls, primers):
-        '''Disambiguate primers and calculate their melting temperatures'''
-        for primer in primers:
-            if not primer: continue
-            #generate unambiguous primers 
-            try:
-                primer[1] = generate_unambiguous(primer[0])
-            except ValueError, e:
-                print e.message
-                return False
-            #calculate melting temperatures
-            #if original primer is not a degenerate
-            if not primer[1]: 
-                primer_Tm = calculate_Tm(primer[0])
-                primer[2]['Tm'] = primer_Tm
-                continue
-            #else...
-            n_primers = len(primer[1])
-            mean_Tm, min_Tm, max_Tm = 0, 10000, 0 
-            for p in range(n_primers):
-                primer_Tm = calculate_Tm(primer[1][p])
-                if primer_Tm:
-                    primer_Tm = primer_Tm
-                    mean_Tm  += primer_Tm
-                    if min_Tm >= primer_Tm: min_Tm = primer_Tm
-                    if max_Tm <  primer_Tm: max_Tm = primer_Tm
-                else: n_primers -= 1
-            feature = source_feature(primer[0])
-            add_PCR_conditions(feature)
-            feature.qualifiers['Tm_min']  = str(min_Tm)
-            feature.qualifiers['Tm_max']  = str(max_Tm)
-            feature.qualifiers['Tm_mean'] = str(mean_Tm/n_primers)
-            primer[2]['Tm_min']  = min_Tm
-            primer[2]['Tm_max']  = max_Tm
-            primer[2]['Tm_mean'] = mean_Tm/n_primers
-        return True
-    #end def
-    
-    
     @classmethod
     def _save_primers(cls, primers, job_id):
         fmt_filename = job_id+'.'+cls._fmt
         primers_list = list()
         for primer in primers:
             if not primer: continue
-            primers_list.append(primer[0])
-            primers_list += primer[1]
+            primers_list += primer.seq_records
         try:
             SeqIO.write(primers_list, fmt_filename, cls._fmt)
-        except: return False 
-        print '\nUnambiguous primers were written to:\n   ',fmt_filename
+        except Exception, e:
+            print 'Failed to write unambiguous primers to:\n   %s' % fmt_filename
+            print_exception(e)
+            return False 
+        print '\nUnambiguous primers were written to:\n   %s' % fmt_filename
         return True
     #end def
     
@@ -464,7 +417,7 @@ class DegenPrimerPipeline(object):
                 if p_entry['process'] == None:
                     continue
                 try:
-                    p_entry['output'].append(p_entry['queue'].get(False))
+                    while True: p_entry['output'].append(p_entry['queue'].get(False))
                 except Empty:
                     if p_entry['process'].is_alive():
                         processes_alive = True
@@ -475,7 +428,7 @@ class DegenPrimerPipeline(object):
                     continue
                 except IOError, e:
                     if e.errno == errno.EINTR:
-                        processes_alive = True 
+                        processes_alive = True
                         continue
                     else:
                         print 'Unhandled IOError:', e.message
@@ -491,7 +444,7 @@ class DegenPrimerPipeline(object):
     
     
     @classmethod
-    def _format_primers_report_header(cls, primers):
+    def _format_primers_report_header(cls, primers, polymerase):
         header_string  = ''
         header_string += time_hr()
         header_string += wrap_text('For each degenerate primer provided, a set '
@@ -506,37 +459,15 @@ class DegenPrimerPipeline(object):
                                    'provided, it is treated as a set with a '
                                    'single element.\n\n')
         header_string += hr(' PCR conditions ')
-        header_string += format_PCR_conditions()+'\n'
+        header_string += format_PCR_conditions(primers, polymerase)+'\n'
         header_string += hr(' primers and their melting temperatures ')
-        #print melting temperatures
-        temps  = []
-        if primers[0] and primers[1]:
-            max_id = max(len(primers[0][0].id), len(primers[1][0].id))
-        else: max_id = 0
         for primer in primers:
-            if not primer: continue
-            spacer = max_id-len(primer[0].id)
-            if not primer[1]: #not degenerate
-                header_string += '%s:%s  %02db  %s\n' % (primer[0].id, 
-                                                         ' '*spacer, 
-                                                         len(primer[0].seq), 
-                                                         str(primer[0].seq))
-                header_string += '   Tm:      %.1f C\n' % primer[2]['Tm']
-                temps.append(primer[2]['Tm'])
-            else:
-                header_string += '%s:%s  %02db  %s\n' % (primer[0].id, 
-                                                         ' '*spacer, 
-                                                         len(primer[0].seq), 
-                                                         str(primer[0].seq))
-                header_string += '   Tm max:  %.1f C\n' % primer[2]['Tm_max']
-                header_string += '   Tm mean: %.1f C\n' % primer[2]['Tm_mean']
-                header_string += '   Tm min:  %.1f C\n' % primer[2]['Tm_min']
-                temps.append(primer[2]['Tm_min'])
+            header_string += repr(primer) + '\n'
         #warning
-        if len(temps) == 2:
-            if abs(temps[0]-temps[1]) >= 5:
+        if len(primers) > 1:
+            if abs(primers[0].Tm_min - primers[1].Tm_min) >= 5:
                 header_string += '\nWarning: lowest melting temperatures of sense and antisense primes \n'
                 header_string += '         differ more then by 5C\n'
-        header_string += '\n\n'
+        header_string += '\n'
         return header_string
 #end class

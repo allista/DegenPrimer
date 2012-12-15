@@ -25,6 +25,7 @@ Created on Jun 30, 2012
 import string
 import random
 from time import ctime
+from math import log
 
 text_width = 80
 
@@ -61,8 +62,56 @@ def wrap_text(_text):
 #end def
 
 
-#tests
-if __name__ == '__main__':
-    text_width = 40
-    sample_text = 'The quick broun fox jumped over a very, very lazy dog forty two times in a row!'
-    print wrap_text(sample_text)
+def print_dict(_dict, delimiter=':'):
+    if not _dict: return ''
+    max_key_len   = max(len(key) for key in _dict.keys())
+    max_value_len = max(len(str(val)) for val in _dict.values())
+    dict_str = ''
+    for key in _dict:
+        val = _dict[key]
+        dict_str += '%s%s %s%s %s\n' % (key,
+                                        max_key_len-len(key), 
+                                        delimiter,
+                                        max_value_len-len(str(val)),
+                                        str(val))
+    return dict_str
+#end def
+
+
+def print_table(table, delimiter=':'):
+    if not table: return ''
+    if len(set(len(row) for row in table)) > 1: 
+        raise ValueError('StringTools.print_table: all rows in a table should be of equal size.')
+    max_col_len = [max(len(str(table[r][c])) for r in range(len(table))) for c in range(len(table[0]))]
+    table_str = ''
+    for row in table:
+        for c in range(len(row)):
+            if c == 0: #first column left-aligned
+                table_str += str(row[c]) #data
+                if len(row) > 1:
+                    table_str += ' '*(max_col_len[c]-len(row[c])) #spacer
+            else: #others right-aligned
+                table_str += ' '+delimiter
+                table_str += ' '*(max_col_len[c]-len(row[c])+1) #spacer
+                table_str += str(row[c]) #data
+        table_str += '\n'
+    return table_str
+#end def
+
+
+def format_quantity(quantity, unit='U'):
+    '''Given quantity in units, return it's string representation using 
+    prefixes m, u, n, p, etc.'''
+    if not quantity: return '0.0  %s' % unit
+    if quantity < 0: return 'N/A  %s' % unit
+    mag = -1*log(quantity, 10)
+    if 0  <  max < 1:  return '%.1f  %s' % (quantity,      unit)
+    if 1  <= mag < 3:  return '%.1f m%s' % (quantity*1e3,  unit)
+    if 3  <= mag < 6:  return '%.1f u%s' % (quantity*1e6,  unit)
+    if 6  <= mag < 9:  return '%.1f n%s' % (quantity*1e9,  unit)
+    if 9  <= mag < 12: return '%.1f p%s' % (quantity*1e12, unit)
+    if 12 <= mag < 15: return '%.1f f%s' % (quantity*1e15, unit)
+    if 15 <= mag:      return '%.1f a%s' % (quantity*1e18, unit)
+    #else, return concentration in M
+    
+#end def

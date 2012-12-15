@@ -34,22 +34,16 @@ comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-6
 
 from math import sqrt, log, exp
 from UnifiedNN import UnifiedNN
-from StringTools import print_exception
-try:
-    from Bio.SeqFeature import SeqFeature, FeatureLocation
-except ImportError, e:
-    print 'The BioPython must be installed in your system.'
-    raise
+import StringTools
 ###############################################################################
 
 #standard PCR conditions
-C_Mg   = 1.5  #mM
-C_Na   = 50   #mM; should be above 0.05M and below 1.1M
-C_dNTP = 0    #mM
-C_DNA  = 50   #nM; DNA template concentration
-C_Prim = 0.1  #uM; Primer concentration
-C_DMSO = 0    #percent
-PCR_T  = 37   #C;  temperature at which PCR is conducted. Default is 37 for dG tables contain values of standard Gibbs energy at 37C
+C_Mg   = 1.5e-3 #M
+C_Na   = 50e-3  #M
+C_dNTP = 0.1e-3 #M
+C_DNA  = 5e-9   #M; DNA template concentration
+C_DMSO = 0.0    #%; v/v-percent concentration of DMSO
+PCR_T  = 60.0   #C; temperature at which PCR is conducted
 
 #Unified Nearest Neighbour model initialization
 NN = UnifiedNN()
@@ -58,32 +52,29 @@ if not NN:
 
 #pseudo-concentration of Na equivalent to current concentration of Mg2+
 def C_Na_eq():
-    """divalent cation correction (Ahsen et al., 2001)"""
-    return C_Na + 120*sqrt(C_Mg - C_dNTP)
+    ''''divalent cation correction:
+    all concentrations should be in mM (Ahsen et al., 2001)'''
+    return (C_Na*1e3 + 120*sqrt((C_Mg - C_dNTP)*1e3))*1e-3
 #end def
 
-#concentrations of primer and DNA in mols
-def C_Prim_M(): return C_Prim*1e-6
-def C_DNA_M(): return C_DNA*1e-9
 
-
-def NN_Tr(seq, r):
-    '''Calculate temperature for primer-template association equilibrium 
-    with 'r' ratio using two-state equilibrium model and the Nearest Neighbor \
-    TD tables and from the paper of SantaLucia & Hicks (2004).
+def primer_template_Tr(sequence, concentration, conversion_degree):
+    '''Calculate temperature for primer-template annealing equilibrium 
+    with a given conversin_degree using two-state equilibrium model and 
+    the Nearest Neighbor thermodynamic tables (SantaLucia & Hicks, 2004).
     Note, that two-state equilibrium model used here is based on assumption, that 
     primer sequence is not self-complementary.'''
     #value constraints
-    if r >=1 or r <=0:
-        raise ValueError('TD_Functions.NN_Tr: equilibrium ratio should be in the (0;1) interval.')
+    if not( 0 < conversion_degree < 1):
+        raise ValueError('TD_Functions.primer_template_Tr: equilibrium ratio should be in the (0;1) interval.')
     #definitions
-    seq_str = str(seq)
-    rev_str = str(seq.complement())
+    seq_str = str(sequence)
+    rev_str = str(sequence.complement())
     dH, dS = 0, 0
     #concentrations
-    P   = C_Prim_M()
-    D   = C_DNA_M()
-    DUP = r*min(P,D)
+    P   = concentration
+    D   = C_DNA
+    DUP = conversion_degree*min(P,D)
     #equilibrium constant 
     K   = DUP/((P-DUP)*(D-DUP))
     #initial corrections
@@ -103,88 +94,41 @@ def NN_Tr(seq, r):
         dH += NN.pair_dH_37(pair, reverse)
         dS += NN.pair_dS_37(pair, reverse)
     #salt concentration correction
-    dS = dS + NN.dS_Na_coefficient * len(seq_str) * log(C_Na_eq()*1e-3) #C_Na mM
+    dS = dS + NN.dS_Na_coefficient * len(seq_str) * log(C_Na_eq()) #C_Na qM
     #final temperature calculation
     return NN.K0 + dH * 1000/(dS - NN.R * log(K)) - NN.T_DMSP_coefficient * C_DMSO #DMSO correction from [2]
 #end def
 
-def NN_Tm(seq): return NN_Tr(seq, 0.5)
+def primer_template_Tm(sequence, concentration): 
+    return primer_template_Tr(sequence, concentration, 0.5)
 
 
-def source_feature(seq_rec):
-    feature = None
-    for f in seq_rec.features:
-        if f.type == 'source':
-            feature = f
-            break
-    if not feature:
-        feature = SeqFeature(FeatureLocation(0,len(seq_rec.seq)),
-                             type = 'source')
-        seq_rec.features.append(feature)
-    return feature
-#end def
-
-
-def format_PCR_conditions():
-    conc_str  = ''
-    spacer = max(len(str(C_Na)), 
-                 len(str(C_Mg)), 
-                 len(str(C_dNTP)),
-                 len(str(C_DNA)),
-                 len(str(C_Prim)),
-                 len(str(C_DMSO)),
-                 len(str(PCR_T)))
-    conc_str += 'C(Na)     = ' + str(C_Na)  + ' '*(spacer-len(str(C_Na)))   +' mM\n'
-    conc_str += 'C(Mg)     = ' + str(C_Mg)  + ' '*(spacer-len(str(C_Mg)))   +' mM\n'
-    conc_str += 'C(dNTP)   = ' + str(C_dNTP)+ ' '*(spacer-len(str(C_dNTP))) +' mM\n'
-    conc_str += 'C(DNA)    = ' + str(C_DNA) + ' '*(spacer-len(str(C_DNA)))  +' nM\n'
-    conc_str += 'C(Primer) = ' + str(C_Prim)+ ' '*(spacer-len(str(C_Prim))) +' uM\n'
-    conc_str += 'C(DMSO)   = ' + str(C_DMSO)+ ' '*(spacer-len(str(C_DMSO))) +' %\n'
-    conc_str += 'T         = ' + str(PCR_T) + ' '*(spacer-len(str(PCR_T)))  +' C\n'
-    return conc_str
+def format_concentration(concentration):
+    return StringTools.format_quantity(concentration, 'M') 
+    
+    
+def format_PCR_conditions(primers, polymerase):
+    conditions = [['C(Na)',   ]+format_concentration(C_Na).split(),
+                  ['C(Mg)',   ]+format_concentration(C_Mg).split(),
+                  ['C(dNTP)', ]+format_concentration(C_dNTP).split(),
+                  ['C(DNA)',  ]+format_concentration(C_DNA).split(),
+                  ['C(DMSO)', '%.1f' % C_DMSO, '%'],
+                  ['C(Poly)', ]+StringTools.format_quantity(polymerase*1e-6, 'u/ul').split(),
+                  ['T', '%.1f' % PCR_T, 'C']]
+    if primers:
+        for primer in primers:
+            conditions.insert(4, ['C(%s)' % primer.id,]+format_concentration(primer.total_concentration).split())
+    return StringTools.print_table(conditions, delimiter='')
 #end_def
-
-
-def add_PCR_conditions(feature):
-    try:
-        feature.qualifiers['C_Na']      = str(C_Na)+  ' mM'
-        feature.qualifiers['C_Mg']      = str(C_Mg)+  ' mM'
-        feature.qualifiers['C_dNTP']    = str(C_dNTP)+' mM'
-        feature.qualifiers['C_DNA']     = str(C_DNA)+ ' nM'
-        feature.qualifiers['C_Primer']  = str(C_Prim)+' uM'
-        feature.qualifiers['C_DMSO']    = str(C_DMSO)+' %'
-        feature.qualifiers['T']         = str(PCR_T)+' C'
-    except Exception, e:
-        print 'add_PCR_conditions:'
-        print_exception(e)
-#end def
-
-
-def calculate_Tr(seq_rec, r):
-    primer_Tr = NN_Tr(seq_rec.seq, r)
-    feature = source_feature(seq_rec)
-    add_PCR_conditions(feature)
-    feature.qualifiers['T-'+str(r)] = str(primer_Tr)
-    return primer_Tr
-#end def
-
-
-def calculate_Tm(seq_rec):
-    primer_Tm = NN_Tm(seq_rec.seq)
-    feature = source_feature(seq_rec)
-    add_PCR_conditions(feature)
-    feature.qualifiers['Tm'] = str(primer_Tm)
-    return primer_Tm
-#end def
 
 
 def dimer_dG(dimer, seq1, seq2):
     '''Calculate 'standard' dG at 37C of dimer annealing process.
     dimer -- an instance of Dimer class which represents a dimer structure.
     seq1, seq2 -- sequences constituting a dimer, given in 5'->3' orientation.'''
-    fwd_matches = dimer.fwd_matches()
+    fwd_matches = dimer.fwd_matches
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
-    rev_matches = dimer.rev_matches()
+    rev_matches = dimer.rev_matches
     #e.g. 3-'(13,14,15,19,20)-5'
     seq_str = str(seq1)
     seq_len = len(seq_str)
@@ -248,7 +192,7 @@ def dimer_dG(dimer, seq1, seq2):
         else:
             dG += NN.internal_loop_dG_37(f_next-f_match-1)
     #dG salt correction
-    dG_Na   = NN.dG_Na_coefficient_oligo * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq()*1e-3)
+    dG_Na   = NN.dG_Na_coefficient_oligo * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
     return dG + dG_Na
 #end def
 
@@ -256,9 +200,9 @@ def dimer_dG(dimer, seq1, seq2):
 def dimer_dG_corrected(dimer, seq1, seq2):
     '''calculate dG of a dimer corrected to current PCR conditions including 
     salt concentrations and temperature. Dummy for now'''
-    fwd_matches = dimer.fwd_matches()
+    fwd_matches = dimer.fwd_matches
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
-    rev_matches = dimer.rev_matches()
+    rev_matches = dimer.rev_matches
     #e.g. 3-'(13,14,15,19,20)-5'
     seq_str = str(seq1)
     seq_len = len(seq_str)
@@ -333,7 +277,7 @@ def dimer_dG_corrected(dimer, seq1, seq2):
             loop_seq = seq_str[f_match:f_next+1]
             dS += NN.loop_dS_37(loop_seq, 'internal')
     #dS salt correction
-    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq()*1e-3)
+    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
     return dG + dH - NN.temp_K(PCR_T)*dS/1000.0
 #end def
 
@@ -342,9 +286,9 @@ def hairpin_dG(hairpin, seq):
     '''Calculate 'standard' dG at 37C of hairpin annealing process.
     hairpin -- an instance of Hairpin class which represents a hairpin structure.
     seq -- sequence which folds into the hairpin, given in 5'->3' orientation.'''
-    fwd_matches = hairpin.fwd_matches()
+    fwd_matches = hairpin.fwd_matches
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
-    rev_matches = hairpin.rev_matches()
+    rev_matches = hairpin.rev_matches
     #e.g  3'-(24,23,22,18,17)...-5'
     seq_str = str(seq)
     seq_len = len(seq_str)
@@ -392,7 +336,7 @@ def hairpin_dG(hairpin, seq):
     hp_str = seq_str[fwd_matches[-1]:rev_matches[-1]+1]
     dG += NN.hairpin_loop_dG_37(hp_str)
     #dG salt correction
-    dG_Na   = NN.dG_Na_coefficient_oligo * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq()*1e-3)
+    dG_Na   = NN.dG_Na_coefficient_oligo * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
     return dG + dG_Na
 #end def
 
@@ -400,9 +344,9 @@ def hairpin_dG(hairpin, seq):
 def hairpin_dG_corrected(hairpin, seq):
     '''calculate dG of a hairpin corrected to current PCR conditions including 
     salt concentrations and temperature.'''
-    fwd_matches = hairpin.fwd_matches()
+    fwd_matches = hairpin.fwd_matches
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
-    rev_matches = hairpin.rev_matches()
+    rev_matches = hairpin.rev_matches
     #e.g  3'-(24,23,22,18,17)...-5'
     seq_str = str(seq)
     seq_len = len(seq_str)
@@ -460,7 +404,7 @@ def hairpin_dG_corrected(hairpin, seq):
     dH += NN.loop_dH_37(hp_str, 'hairpin')
     dS += NN.loop_dS_37(hp_str, 'hairpin')
     #dS salt correction
-    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq()*1e-3)
+    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
     return dG + dH - NN.temp_K(PCR_T)*dS/1000.0
 #end def
 
@@ -469,102 +413,3 @@ def equilibrium_constant(dG_T, T):
     '''calculate equilibrium constant of at a given temperature, 
     given standard dG at this temperature'''
     return exp(-1000*dG_T/(NN.R*NN.temp_K(T))) #annealing equilibrium constant
-
-
-def primer_DNA_conversion_degree(dG_T, T):
-    '''calculate conversion degree of Primer/DNA dimerisation
-    given standard dG(kcal/mol) of annealing at T(C) temperature'''
-    K = equilibrium_constant(dG_T, T)
-    P = C_Prim_M()
-    D = C_DNA_M()
-    #quadratic equation with respect to DUP = r*min(P,D), 
-    #where 'r' is a conversion degree
-    _b   = (K*P+K*D+1) #MINUS b; always positive
-    disc = _b*_b - 4*K*(K*P*D) #this should always be >= 0 given non-negative K, P and D
-    DUP  = (_b-sqrt(disc))/(2*K) #take the smallest positive root
-    return DUP/min(P,D)
-#end def
-
-
-def dimer_conversion_degree(dG_T, T):
-    '''calculate conversion degree of Primer self-dimerisation
-    given standard dG(kcal/mol) of annealing at T(C) temperature'''
-    K = equilibrium_constant(dG_T, T)
-    P = C_Prim_M()
-    #quadratic equation with respect to DUP = r*P, 
-    #where 'r' is a conversion degree
-    _b   = (2*K*P+1) #MINUS b; always positive
-    disc = _b*_b - 4*K*(K*P*P) #this should always be >= 0 given non-negative K and P
-    DUP  = (_b-sqrt(disc))/(2*K) #take the smallest positive root
-    return DUP/P
-#end def
-
-
-def hairpin_conversion_degree(dG_T, T):
-    '''calculate conversion degree of hairpin formation on Primer
-    given standard dG(kcal/mol) of annealing at T(C) temperature'''
-    K = equilibrium_constant(dG_T, T)
-    return K/(1+K)
-#end def
-
-
-#tests
-if __name__ == '__main__':
-    from Bio.Seq import Seq
-    from OligoFunctions import compose_dimer
-    seq1 = Seq('ATATTCTACGACGGCTATCC').reverse_complement()
-    seq2 = Seq('ATATTCTACAACGGCTATCC') #
-    seq3 = Seq('ATATTCTACAACGGCTATCC')
-    seq4 = Seq('CCTATCGGCAACATCTTATA'[::-1])
-    dim1 = compose_dimer(seq1, seq2) #Dimer((0,1,2,3), (16,17,18,19))
-    dim2 = compose_dimer(seq3, seq4)
-    
-    C_Na     = 50.0
-    C_Mg     = 3.0 
-    C_dNTP   = 0
-    C_DNA    = 50.0
-    C_Primer = 0.33
-    PCR_T = 55
-    
-    _dG = 3
-    const = equilibrium_constant(_dG, PCR_T)
-    print 'Equilibrium constant:     ', const
-    print 'Hairpin conversion degree:', hairpin_conversion_degree(_dG, PCR_T)*100
-    print 'Dimer conversion degree: %e' % (dimer_conversion_degree(_dG, PCR_T)*100)
-    print 'Primer conversion degree: %e' % (primer_DNA_conversion_degree(_dG, PCR_T)*100)
-    print ''
-    
-    print seq1, seq2
-    print dimer_dG(dim1, seq1, seq2)
-    print dimer_dG_corrected(dim1, seq1, seq2)
-    print ''
-    print seq3, seq4
-    print dimer_dG(dim2, seq3, seq4)
-    print dimer_dG_corrected(dim2, seq3, seq4)
-    print ''
-#    for i in range(-200,-30):
-#        dG = i/10.0
-#        print 'dG: %f' % dG
-#        print 'K: %e'  % equilibrium_constant(dG, PCR_T)
-#        print 'r: %f%%'  % (dimer_conversion_degree(dG, PCR_T)*100)
-#        print ''
-        
-#    print
-#    Pa = 0.8
-#    Pb = 0.2
-#    PA = 2*Pa
-#    PB = 2*Pb
-#    PaPbA = Pa*Pb 
-#    PaPbB = Pa*Pb
-#    for i in range(3,30):
-#        PaPbA_cur = PaPbA 
-#        PaPbA += Pa*PB + PaPbB
-#        PaPbB += Pb*PA + PaPbA_cur
-#        PA += Pa
-#        PB += Pb
-#        print 'N: %d; PA: %f; PaPbA: %f; SUM: %f, exp(Pa*Pb)+PA: %f; %% %f' % (i, PA, PaPbA, PA+PaPbA, 4*(Pa*Pb)*2**(i-2)+Pa*Pb*(i-1), 4*(Pa*Pb)*2**(i-2)/(PA+PaPbA)*100)
-#        print 'N: %d; PB: %f; PaPbB: %f; SUM: %f, exp(Pa*Pb)+PB: %f; %% %f' % (i, PB, PaPbB, PB+PaPbB, 4*(Pa*Pb)*2**(i-2)+Pa*Pb*(i-1), 4*(Pa*Pb)*2**(i-2)/(PB+PaPbB)*100)
-#        print 'A-B%%: %f' % ((PA+PaPbA-(PB+PaPbB))/(PA+PaPbA)*100)
-#        print ''
-        
-        

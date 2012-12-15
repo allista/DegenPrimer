@@ -23,7 +23,7 @@ Created on Jul 1, 2012
 
 from ConfigParser import SafeConfigParser
 from StringTools import random_text, print_exception
-from OligoFunctions import load_sequence
+from Primer import Primer, load_sequence
 
 class DegenPrimerConfig(object):
     """
@@ -64,7 +64,9 @@ class DegenPrimerConfig(object):
                                'field_type':'file', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               #scale of a numerical argument
+                               'scale'     :None},
                {'option':'antisense_primer',
                                'section'   :'primers',
                                #command-line arguments 
@@ -84,7 +86,9 @@ class DegenPrimerConfig(object):
                                'field_type':'file', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               #scale of a numerical argument
+                               'scale'     :None},
                {'option':'sense_primer_id',
                                'section'   :'primers',
                                #command-line arguments 
@@ -101,7 +105,9 @@ class DegenPrimerConfig(object):
                                'field_type':'string', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               #scale of a numerical argument
+                               'scale'     :None},
                {'option':'antisense_primer_id',
                                'section'   :'primers',
                                #command-line arguments 
@@ -118,7 +124,9 @@ class DegenPrimerConfig(object):
                                'field_type':'string', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               #scale of a numerical argument
+                               'scale'     :None},
                 #Tm and dG calculations
                {'option':'Na',
                                'section'   :'PCR',
@@ -137,7 +145,9 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :50.0,
-                               'limits'    :(1, 5000)}, #5M max
+                               'limits'    :(1, 5000), #5M max
+                               #scale of a numerical argument
+                               'scale'     :1e-3},
                {'option':'Mg',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -155,7 +165,9 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :1.5,
-                               'limits'    :(0, 5000)}, #5M max
+                               'limits'    :(0, 5000), #5M max
+                               #scale of a numerical argument
+                               'scale'     :1e-3},
                {'option':'dNTP',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -173,7 +185,8 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :0,
-                               'limits'    :(0, 1000)}, #1M max
+                               'limits'    :(1e-3, 1000), #1M max
+                               'scale'     :1e-3},
                {'option':'DNA',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -184,18 +197,19 @@ class DegenPrimerConfig(object):
                                'metavar'   :'nM',
                                #help string
                                'help'      :'Concentration of target DNA in nM for '
-                               'Tm and dG correction (def=50)',
+                               'Tm and dG correction (def=1)',
                                #type
                                'py_type'   :float, #for argparse
                                'str_type'  :'f', #for string formatting
                                'field_type':'float', #for gui
                                #default value
-                               'default'   :50,
-                               'limits'    :(1, 1e9)}, #1M max
-               {'option':'Primer',
+                               'default'   :1,
+                               'limits'    :(1e-6, 1e9),  #1M max
+                               'scale'     :1e-9},
+               {'option':'S_primer',
                                'section'   :'PCR',
                                #command-line arguments 
-                               'args'      :('--Primer',),
+                               'args'      :('--sense-primer-concentration --sense-C',),
                                #number of arguments
                                'nargs'     :1,
                                #metavar
@@ -209,7 +223,27 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :0.25,
-                               'limits'    :(0.001, 1e6)}, #1M max
+                               'limits'    :(0.001, 1e6), #1M max
+                               'scale'     :1e-6},
+                {'option':'A_primer',
+                               'section'   :'PCR',
+                               #command-line arguments 
+                               'args'      :('--antisense-primer-concentration --anti-C',),
+                               #number of arguments
+                               'nargs'     :1,
+                               #metavar
+                               'metavar'   :'uM',
+                               #help string
+                               'help'      :'Concentration of primer (assume C(sense)=C(antisense)) '
+                               'in uM for Tm and dG correction (def=0.25)',
+                               #type
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
+                               #default value
+                               'default'   :0.25,
+                               'limits'    :(0.001, 1e6), #1M max
+                               'scale'     :1e-6},
                {'option':'DMSO',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -227,7 +261,8 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :0,
-                               'limits'    :(0, 100)},
+                               'limits'    :(0, 100),
+                               'scale'     :1},
                {'option':'PCR_T',
                                'section'   :'PCR',
                                #command-line arguments 
@@ -245,7 +280,8 @@ class DegenPrimerConfig(object):
                                'field_type':'float', #for gui
                                #default value
                                'default'   :60.0,
-                               'limits'    :(20, 80)},
+                               'limits'    :(20, 80),
+                               'scale'     :1},
                #in silica PCR
                {'option':'min_amplicon',
                                'section'   :'iPCR',
@@ -264,7 +300,8 @@ class DegenPrimerConfig(object):
                                'field_type':'integer', #for gui
                                #default value
                                'default'   :50,
-                               'limits'    :(1, 1000000000)},
+                               'limits'    :(1, 1000000000),
+                               'scale'     :1},
                {'option':'max_amplicon',
                                'section'   :'iPCR',
                                #command-line arguments 
@@ -282,7 +319,8 @@ class DegenPrimerConfig(object):
                                'field_type':'integer', #for gui
                                #default value
                                'default'   :3000,
-                               'limits'    :(1, 1000000000)},
+                               'limits'    :(1, 1000000000),
+                               'scale'     :1},
                {'option':'max_mismatches',
                                'section'   :'iPCR',
                                #command-line arguments 
@@ -302,7 +340,30 @@ class DegenPrimerConfig(object):
                                'field_type':'integer', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(0, 1000000000)},
+                               'limits'    :(0, 1000000000),
+                               'scale'     :1},
+                {'option':'polymerase',
+                               'section'   :'iPCR',
+                               #command-line arguments 
+                               'args'      :('--polymerase_activity',),
+                               #number of arguments
+                               'nargs'     :1,
+                               #metavar
+                               'metavar'   :'u/ul',
+                               #help string
+                               'help'      :'Concentration of polymerase in '
+                               'Units per microliter. A Unit of polimerase is '
+                               'the amount of enzyme which adds 10 nmol of dNTP '
+                               'in 30 minutes to the elongated strand ' 
+                               '(def. 0.05, i.e. 1u in 20ul)',
+                               #type
+                               'py_type'   :float, #for argparse
+                               'str_type'  :'f', #for string formatting
+                               'field_type':'float', #for gui
+                               #default value
+                               'default'   :0.05,
+                               'limits'    :(1e-3, 1),
+                               'scale'     :1e6},
                {'option':'with_exonuclease',
                                'section'   :'iPCR',
                                #command-line arguments 
@@ -320,7 +381,26 @@ class DegenPrimerConfig(object):
                                'field_type':'boolean', #for gui
                                #default value
                                'default'   :False,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               'scale'     :None},
+               {'option':'cycles',
+                               'section'   :'iPCR',
+                               #command-line arguments 
+                               'args'      :('--cycles',),
+                               #number of arguments
+                               'nargs'     :1,
+                               #metavar
+                               'metavar'   :None,
+                               #help string
+                               'help'      :'Number of PCR cycles in simulation (def. 30).',
+                               #type
+                               'py_type'   :int, #for argparse
+                               'str_type'  :'d', #for string formatting
+                               'field_type':'integer', #for gui
+                               #default value
+                               'default'   :30,
+                               'limits'    :(5, 1000),
+                               'scale'     :1},
                {'option':'fasta_files',
                                'section'   :'iPCR',
                                #command-line arguments 
@@ -338,7 +418,8 @@ class DegenPrimerConfig(object):
                                'field_type':'file', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               'scale'     :None},
                 
                {'option':'run_ipcress',
                                'section'   :'iPCR',
@@ -358,7 +439,8 @@ class DegenPrimerConfig(object):
                                'field_type':'boolean', #for gui
                                #default value
                                'default'   :True,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               'scale'     :None},
                #BLAST
                {'option':'do_blast',
                                'section'   :'BLAST',
@@ -377,7 +459,8 @@ class DegenPrimerConfig(object):
                                'field_type':'boolean', #for gui
                                #default value
                                'default'   :False,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               'scale'     :None},
                {'option':'organisms',
                                'section'   :'BLAST',
                                #command-line arguments 
@@ -395,7 +478,8 @@ class DegenPrimerConfig(object):
                                'field_type':'string', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(None, None)},
+                               'limits'    :(None, None),
+                               'scale'     :None},
               ]
 
 
@@ -406,7 +490,8 @@ class DegenPrimerConfig(object):
         self.primers  = None
         self.job_id   = ''
         self._reports = list()
-        return
+        self.max_mismatches = None
+    #end def
     
     
     @classmethod
@@ -432,11 +517,30 @@ class DegenPrimerConfig(object):
     #end def
     
     
+    def _scale_value(self, option):
+        value = None
+        exec ('value = self.%(option)s\n' % option)
+        if option['scale'] is None or value is None: return
+        value *= option['scale']
+        exec 'self.%(option)s = value\n' % option
+    #end def
+        
+    
+    def _unscale_value(self, option):
+        value = None
+        exec ('value = self.%(option)s' % option)
+        if option['scale'] is None or value is None: return value
+        return value/option['scale']
+    #end def
+    
+    
     def _fill_option(self, option):
         #setup class member for the option
-        if option['default'] == None: option_line = 'self.%(option)s = None'
-        else: option_line = 'self.%(option)s = %(default)'+('%(str_type)s\n' % option) 
-        exec (option_line % option)
+        if option['default'] is None: 
+            exec 'self.%(option)s = None' % option
+        else: 
+            value = option['default']
+            exec 'self.%(option)s = value\n' % option 
         #try to override default value
         value_override = self._override_option(option)
         if value_override != None:
@@ -467,6 +571,8 @@ class DegenPrimerConfig(object):
                 print_exception(e)
         #check if option value is within limits
         self._check_limits(option, eval('self.%(option)s' % option))
+        #scale option
+        self._scale_value(option)
     #end def
     
     
@@ -497,25 +603,25 @@ class DegenPrimerConfig(object):
 
         #load primers
         #if no primer ids are provided, generate a random ones
-        self.primers = [[],[]]
+        self.primers = [None, None]
         if self.sense_primer:
             seq_record = load_sequence(self.sense_primer, self.sense_primer_id, 'sense')
             if not seq_record.id:
                 seq_record.id = random_text(6)
-            self.primers[0] = [seq_record, [], dict()]
+            self.primers[0] = Primer(seq_record, self.S_primer)
         if self.antisense_primer:
             seq_record = load_sequence(self.antisense_primer, self.antisense_primer_id, 'antisense')
             if not seq_record.id:
                 seq_record.id = random_text(6)
-            self.primers[1] = [seq_record, [], dict()]
+            self.primers[1] = Primer(seq_record, self.A_primer)
             
         #set job_id
         self.job_id = ''
         for primer in self.primers:
             if not primer: continue
             if self.job_id != '': self.job_id += '-'
-            if primer[0].id:
-                self.job_id += primer[0].id
+            if primer.id:
+                self.job_id += primer.id
     #end def
     
     
@@ -528,9 +634,10 @@ class DegenPrimerConfig(object):
             #save all other
             if not config.has_section(option['section']):
                 config.add_section(option['section'])
+            value = self._unscale_value(option)
             exec 'config.set("%(section)s", "%(option)s", ' \
-                 'str(self.%(option)s))' % {'section': option['section'],
-                                            'option' : option['option']}
+                 'str(value))' % {'section': option['section'],
+                                  'option' : option['option']}
         #write output
         config_filename = self.job_id + '.cfg'
         config_file = open(config_filename, 'wb')
@@ -543,10 +650,17 @@ class DegenPrimerConfig(object):
     #end def
     
     
-    def print_options(self):
+    def __str__(self):
+        ret = ''
         for option in self._options:
-            exec 'print "%(option)s:", self.%(option)s' % {'option':option['option']}
-            
+            if hasattr(self, option['option']):
+                exec 'ret += "%(option)s: " + str(self.%(option)s)\n' % option
+                ret += '\n'
+        return ret
+    #end def
+    
+    def __repr__(self): return str(self)
+    
     
     def register_report(self, report_name, report_file):
         self._reports.append((report_name, report_file))
@@ -557,6 +671,6 @@ class DegenPrimerConfig(object):
 if __name__ == '__main__':
     conf = DegenPrimerConfig()
     conf.parse_configuration()
-    conf.print_options()
+    print conf
     print 'job_id:', conf.job_id
     conf.save_configuration()

@@ -88,15 +88,15 @@ class Equilibrium(object):
                 reactant_i += 1
             Ai = self._reactants_dict[R['Ai']]
             Ri[1] = Ai
-            if R['Bi']:
+            if R['Bi'] != None:
                 if R['Bi'] not in self._reactants_dict:
                     self._reactants_dict[R['Bi']] = reactant_i
                     self._iconcentrations.append(self.concentrations[R['Bi']])
                     self._Ri_reactions.append([])
                     reactant_i += 1
                 Bi = self._reactants_dict[R['Bi']]
-                Ri[2] = Bi
             else: Bi = None
+            Ri[2] = Bi
             #add reaction to the list of reactant's reactions
             self._Ri_reactions[Ai].append(reaction_i)
             if Bi != None: self._Ri_reactions[Bi].append(reaction_i)
@@ -118,13 +118,31 @@ class Equilibrium(object):
     #end def
     
     
-    def reactants_consumtion(self, Ai, Bi=None):
+    def get_product_concentration(self, r_hash):
         if self.solution == None:
             raise Exception('No solution has been found yet. Call calculate() method prior to solution lookup.')
-        if not Ai in self._Ri_reactions:
+        if not r_hash in self.reactions:
+            raise KeyError('There is no reaction in the system with the identifier "%s"' % str(r_hash))
+        reaction = self.reactions[r_hash]
+        r_type   = reaction['type']
+        C_A      = self.concentrations[reaction['Ai']]
+        r        = self.solution[r_hash]
+        if   r_type == 'AB':
+            C_B = self.concentrations[reaction['Bi']]
+            C_AB = C_A if C_A < C_B else C_B
+            return C_AB*r
+        elif r_type == '2A': return C_A/2.0*r
+        elif r_type == 'A' : return C_A*r
+    #end def
+    
+    
+    def reactants_consumption(self, Ai, Bi=None):
+        if self.solution == None:
+            raise Exception('No solution has been found yet. Call calculate() method prior to solution lookup.')
+        if not Ai in self._reactants_dict:
             return 0, 0
-        if Bi and not Bi in self._Ri_reactions:
-            return self._reactants_consumption(self._solution, Ai, None)
+        if Bi is None or not Bi in self._reactants_dict:
+            return self._reactants_consumption(self._solution, self._reactants_dict[Ai])
         return self._reactants_consumption(self._solution, self._reactants_dict[Ai], self._reactants_dict[Bi])
     #end def
     

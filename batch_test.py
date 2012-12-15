@@ -101,7 +101,7 @@ if __name__ == '__main__':
               'Dimers'     : [re.compile(' *(Dimers count): *(\d{1,3})$'), None],
               'Dimer_dG'   : [re.compile(' *(Most stable dimer): *(-\d{1,3}\.\d{2}) kcal/mol$'), None],
               'Hairpins'   : [re.compile(' *(Hairpins count): *(\d{1,3})$'), None],
-              'Hairpin_dG' : [re.compile(' *(Most stable hairpin): *(-\d{1,3}\.\d{2}) kcal/mol$'), None], 
+              'Hairpin_dG' : [re.compile(' *(Most stable hairpin): *(-?\d{1,3}\.\d{2}) kcal/mol$'), None], 
               }
     #test each data row
     db_cursor.execute('SELECT * FROM test_sequence')

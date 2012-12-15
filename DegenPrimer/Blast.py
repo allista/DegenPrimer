@@ -25,9 +25,8 @@ import os
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
 from SecStructures import SecStructures
-from DegenPrimer.OligoFunctions import compose_dimer
 import TD_Functions
-from TD_Functions import dimer_dG, format_PCR_conditions, primer_DNA_conversion_degree
+from TD_Functions import dimer_dG, format_PCR_conditions #, primer_DNA_conversion_degree
 from PCR_Results import PCR_Results
 try:
     from Bio.Blast import NCBIWWW, NCBIXML 
@@ -57,7 +56,15 @@ class Blast(object):
     _all_products_col_titles = ('PCR-product', 'relative concentration')
     
     
-    def __init__(self, job_id, min_amplicon, max_amplicon, with_exonuclease):
+    def __init__(self, 
+                 job_id, 
+                 #fwd_primer, 
+                 #rev_primer, 
+                 min_amplicon, 
+                 max_amplicon, 
+                 with_exonuclease, 
+                 #num_cycles
+                 ):
         self._job_id           = job_id
         self._blast_results    = None
         self._boundaries       = None
@@ -369,7 +376,7 @@ class Blast(object):
                     elif hsp.frame[1] == -1:
                         hsp_text += 'Minus\n'
                     hsp_text += 'Annealing dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, dG)
-                    hsp_text += 'Conversion degree = %.2f%%\n' % (primer_DNA_conversion_degree(dG, TD_Functions.PCR_T)*100)
+                    #hsp_text += 'Conversion degree = %.2f%%\n' % (primer_DNA_conversion_degree(dG, TD_Functions.PCR_T)*100)
                     hsp_text += '\n\n'
                     hsps.append((dG, hsp_text))
                 #no need to include weak hits to the report

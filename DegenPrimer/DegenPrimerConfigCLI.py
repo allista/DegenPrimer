@@ -104,6 +104,6 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
 if __name__ == '__main__':
     conf = DegenPrimerConfigCLI()
     conf.parse_configuration()
-    conf.print_options()
+    print conf
     print 'job_id:', conf.job_id
     conf.save_configuration()
