@@ -39,9 +39,7 @@ def random_text(length):
 
 
 def hr(s, symbol='-'):
-    left_hr  = (text_width - len(s))/2
-    right_hr = (text_width - len(s) - left_hr)
-    return symbol*left_hr + s + symbol*right_hr + '\n\n'
+    return s.center(text_width, symbol) + '\n\n'
 #end def
 
 def time_hr(symbol='#'):
@@ -50,15 +48,15 @@ def time_hr(symbol='#'):
 
 def wrap_text(_text):
     wrapped_text = ''
-    strings = _text.split('\n')
-    for s in strings:
-        while len(s) > text_width:
-            new_line      = s[:text_width]
+    lines = _text.splitlines()
+    for line in lines:
+        while len(line) > text_width:
+            new_line      = line[:text_width]
             last_space    = new_line.rfind(' ')
             wrapped_text += new_line[:last_space+1]+'\n'
-            s = s[last_space+1:]
-        wrapped_text += s+'\n'
-    return wrapped_text[:-1]
+            line = line[last_space+1:]
+        wrapped_text += line+'\n'
+    return wrapped_text
 #end def
 
 
@@ -112,6 +110,4 @@ def format_quantity(quantity, unit='U'):
     if 9  <= mag < 12: return '%.1f p%s' % (quantity*1e12, unit)
     if 12 <= mag < 15: return '%.1f f%s' % (quantity*1e15, unit)
     if 15 <= mag:      return '%.1f a%s' % (quantity*1e18, unit)
-    #else, return concentration in M
-    
 #end def

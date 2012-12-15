@@ -178,13 +178,13 @@ class DegenPrimerConfig(object):
                                'metavar'   :'mM',
                                #help string
                                'help'      :'Concentration of dNTP in mM for '
-                               'Tm and dG correction (def=0)',
+                               'Tm and dG correction (def=1)',
                                #type
                                'py_type'   :float, #for argparse
                                'str_type'  :'f', #for string formatting
                                'field_type':'float', #for gui
                                #default value
-                               'default'   :0,
+                               'default'   :1,
                                'limits'    :(1e-3, 1000), #1M max
                                'scale'     :1e-3},
                {'option':'DNA',
@@ -438,7 +438,7 @@ class DegenPrimerConfig(object):
                                'str_type'  :'d',  #for string formatting
                                'field_type':'boolean', #for gui
                                #default value
-                               'default'   :True,
+                               'default'   :False,
                                'limits'    :(None, None),
                                'scale'     :None},
                #BLAST
@@ -492,6 +492,37 @@ class DegenPrimerConfig(object):
         self._reports = list()
         self.max_mismatches = None
     #end def
+
+    def __str__(self):
+        ret = ''
+        for option in self._options:
+            if hasattr(self, option['option']):
+                ret += '%s: %s\n' % (option['option'], self._get_option(option))
+        return ret
+    #end def
+    
+    def __repr__(self): return str(self)    
+    
+    def __hash__(self):
+        values = []
+        for option in self._options:
+            if hasattr(self, option['option']):
+                value = getattr(self, option['option'])
+                if type(value) == list: value = tuple(value)
+                values.append(value)
+        return hash(tuple(values)) & 0xFFFFFFF
+    #end def
+    
+    
+    def _get_option(self, option):
+        if hasattr(self, option['option']):
+            value = getattr(self, option['option'])
+        else: value = None
+        return value
+    #end def
+    
+    def _set_option(self, option, value):
+        setattr(self, option['option'], value)
     
     
     @classmethod
@@ -505,30 +536,28 @@ class DegenPrimerConfig(object):
     def _override_option(self, option): pass
     
     
-    @classmethod
-    def _check_limits(cls, option, value):
+    def _check_limits(self, option):
+        value = self._get_option(option)
+        if value is None: return
         if option['limits'][0] and value < option['limits'][0] \
         or option['limits'][1] and value > option['limits'][1]:
             raise ValueError(('The value of "%(option)s" parameter should be within' % option) + \
                              (' [' + str(option['limits'][0]) + \
                               ', ' + str(option['limits'][1]) + \
                               '] ' + option['metavar']))
-        else: return True
     #end def
     
     
     def _scale_value(self, option):
-        value = None
-        exec ('value = self.%(option)s\n' % option)
+        value = self._get_option(option)
         if option['scale'] is None or value is None: return
         value *= option['scale']
-        exec 'self.%(option)s = value\n' % option
+        self._set_option(option, value)
     #end def
         
     
     def _unscale_value(self, option):
-        value = None
-        exec ('value = self.%(option)s' % option)
+        value = self._get_option(option)
         if option['scale'] is None or value is None: return value
         return value/option['scale']
     #end def
@@ -536,41 +565,29 @@ class DegenPrimerConfig(object):
     
     def _fill_option(self, option):
         #setup class member for the option
-        if option['default'] is None: 
-            exec 'self.%(option)s = None' % option
-        else: 
-            value = option['default']
-            exec 'self.%(option)s = value\n' % option 
+        self._set_option(option, option['default'])
         #try to override default value
         value_override = self._override_option(option)
         if value_override != None:
-            exec_line   = ('self.%(option)s = value_override\n')
-            exec (exec_line % option)
+            self._set_option(option, value_override)
         #if no value given, try to read in from config file
         elif self._config:
-            exec_line   = ('if  self._config.has_option("%(section)s","%(option)s") '
-                           'and self._config.get("%(section)s","%(option)s") != "None":\n')
-            if   option['py_type'] == str:
-                exec_line += '    self.%(option)s = self._config.get("%(section)s","%(option)s")\n'
-            elif option['py_type'] == float:
-                exec_line += '    self.%(option)s = self._config.getfloat("%(section)s","%(option)s")\n'
-            elif option['py_type'] == int:
-                exec_line += '    self.%(option)s = self._config.getint("%(section)s","%(option)s")\n'
-            elif option['py_type'] == bool:
-                exec_line += '    self.%(option)s = self._config.getboolean("%(section)s","%(option)s")\n'
-            try:
-                #read value from configuration 
-                exec (exec_line % option)
+            if  self._config.has_option(option['section'], option['option']) \
+            and self._config.get(option['section'], option['option']) != None:
+                #read value from configuration
+                if   option['py_type'] == str:
+                    self._set_option(option, self._config.get(option['section'], option['option']))
+                elif option['py_type'] == float:
+                    self._set_option(option, self._config.getfloat(option['section'], option['option']))
+                elif option['py_type'] == int:
+                    self._set_option(option, self._config.getint(option['section'], option['option']))
+                elif option['py_type'] == bool:
+                    self._set_option(option, self._config.getboolean(option['section'], option['option']))
                 #if it is a list, evaluate it
                 if self._multiple_args(option):
-                    exec_line   = ('if self.%(option)s:\n'
-                                   '    self.%(option)s = eval(self.%(option)s)\n')
-                    exec (exec_line % option)
-            except Exception, e:
-                print '\nDegenPrimerConfig._fill_option:'
-                print_exception(e)
+                    self._set_option(option, eval(self._get_option(option)))
         #check if option value is within limits
-        self._check_limits(option, eval('self.%(option)s' % option))
+        self._check_limits(option)
         #scale option
         self._scale_value(option)
     #end def
@@ -605,12 +622,14 @@ class DegenPrimerConfig(object):
         #if no primer ids are provided, generate a random ones
         self.primers = [None, None]
         if self.sense_primer:
-            seq_record = load_sequence(self.sense_primer, self.sense_primer_id, 'sense')
+            seq_record = load_sequence(self.sense_primer, 
+                                       self.sense_primer_id, 'sense')
             if not seq_record.id:
                 seq_record.id = random_text(6)
             self.primers[0] = Primer(seq_record, self.S_primer)
         if self.antisense_primer:
-            seq_record = load_sequence(self.antisense_primer, self.antisense_primer_id, 'antisense')
+            seq_record = load_sequence(self.antisense_primer, 
+                                       self.antisense_primer_id, 'antisense')
             if not seq_record.id:
                 seq_record.id = random_text(6)
             self.primers[1] = Primer(seq_record, self.A_primer)
@@ -619,9 +638,11 @@ class DegenPrimerConfig(object):
         self.job_id = ''
         for primer in self.primers:
             if not primer: continue
-            if self.job_id != '': self.job_id += '-'
+            if self.job_id: self.job_id += '-'
             if primer.id:
                 self.job_id += primer.id
+#        if self.job_id: self.job_id += '-'
+#        self.job_id += str(hash(self))
     #end def
     
     
@@ -630,36 +651,28 @@ class DegenPrimerConfig(object):
         config.optionxform = str
         for option in self._options:
             #do not save 'do_blast' option
-            if option['option'] == 'do_blast': continue
+            if option['option'] == 'do_blast':    continue
+            if option['option'] == 'run_ipcress': continue
             #save all other
             if not config.has_section(option['section']):
                 config.add_section(option['section'])
             value = self._unscale_value(option)
-            exec 'config.set("%(section)s", "%(option)s", ' \
-                 'str(value))' % {'section': option['section'],
-                                  'option' : option['option']}
+            config.set(option['section'], option['option'], str(value))
         #write output
         config_filename = self.job_id + '.cfg'
-        config_file = open(config_filename, 'wb')
-        config.write(config_file)
-        config_file.close()
+        try:
+            config_file = open(config_filename, 'wb')
+            config.write(config_file)
+            config_file.close()
+        except IOError, e:
+            print '\nFailed to write configuration file:\n   %s' % config_filename
+            print e.message
+            return
         print '\nConfiguration was written to:\n   ', config_filename
-        print 'NOTE: you may always re-run current analysis with this file \n' \
-              '      or use it as a template to run the analysis with modified \n' \
-              '      parameters.'
+        print ('NOTE: you may always re-run current analysis with this file\n'
+               '      or use it as a template to run the analysis with modified\n'
+               '      parameters.')
     #end def
-    
-    
-    def __str__(self):
-        ret = ''
-        for option in self._options:
-            if hasattr(self, option['option']):
-                exec 'ret += "%(option)s: " + str(self.%(option)s)\n' % option
-                ret += '\n'
-        return ret
-    #end def
-    
-    def __repr__(self): return str(self)
     
     
     def register_report(self, report_name, report_file):

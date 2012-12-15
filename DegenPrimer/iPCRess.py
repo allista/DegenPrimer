@@ -27,55 +27,30 @@ import subprocess
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from StringTools import wrap_text, time_hr, hr, print_exception
-from PCR_Results import PCR_Results
+#from PCR_Simulation import PCR_Simulation
+from iPCR_Interface import iPCR_Interface
 from SecStructures import Duplex
 
-class iPCR(object):
+class iPCRess(iPCR_Interface):
     '''Wrapper for ipcress process and parser for it's results'''
 
     #garbage string which ipcress inserts in the middle of a target sequence ID
     _ipcress_target_garbage = ':filter(unmasked)'
     
-
-    def __init__(self, 
-                 job_id, 
-                 fwd_primer, 
-                 rev_primer, 
-                 min_amplicon, 
-                 max_amplicon, 
-                 polymerase, 
-                 with_exonuclease,
-                 num_cycles,
-                 side_reactions=None,
-                 side_concentrations=None):
+    def __init__(self, job_id, *args, **kwargs):
+        iPCR_Interface.__init__(self, *args, **kwargs)
+        #ipcress
         self._ipcress_subprocess  = None
+        self._max_mismatches      = None
         #files
         self._program_filename    = job_id+'.ipcr'
         self._raw_report_filename = job_id+'-ipcr-raw-report.txt'
         self._PCR_report_filename = job_id+'-ipcr-PCR-report.txt'
-        #parameters
-        self._fwd_primer         = fwd_primer
-        self._rev_primer         = rev_primer
-        self._max_mismatches     = None
-        self._min_amplicon       = min_amplicon
-        self._max_amplicon       = max_amplicon
-        self._polymerase         = polymerase
-        self._with_exonuclease   = with_exonuclease
-        self._num_cycles         = num_cycles
         #results
-        self._PCR_products = PCR_Results([fwd_primer, rev_primer],
-                                         self._min_amplicon,
-                                         self._max_amplicon,
-                                         self._polymerase,
-                                         self._with_exonuclease,
-                                         self._num_cycles)
-        if side_reactions:
-            self._PCR_products.add_side_reactions(side_reactions)
-        if side_concentrations:
-            self._PCR_products.add_side_concentrations(side_concentrations)
-        self._results      = None
-        self._have_results = False
-        self._have_report  = False
+        self._PCR_Simulation = self._PCR_Simulation_factory()
+        self._results        = None
+        self._have_results   = False
+        self._have_report    = False
     #end def
     
     
@@ -191,7 +166,7 @@ class iPCR(object):
     def execute_and_analyze(self, fasta_files, max_mismatches):
         return self.execute_program(fasta_files, max_mismatches) \
         and    self.load_results() \
-        and    self.calculate_quantities()
+        and    self.simulate_PCR()
     #end def
 
 
@@ -216,7 +191,7 @@ class iPCR(object):
         try:
             ipcr_report = open(self._raw_report_filename, 'r')
         except IOError, e:
-            print '\nFailed to open raw iPCR report file:\n   %s' % self._raw_report_filename
+            print '\nFailed to open raw iPCRess report file:\n   %s' % self._raw_report_filename
             print e.message
             return False
         #parse results file
@@ -253,26 +228,28 @@ class iPCR(object):
                     self._results[-1]['rev_seq'] = seq
         ipcr_report.close()
         if not self._results:
-            print '\nNo results found in raw iPCR report:\n   %s' % self._raw_report_filename
+            print '\nNo results found in raw iPCRess report:\n   %s' % self._raw_report_filename
             self._results = None
             return False
         return True
     #end def
     
     
-    def calculate_quantities(self):
+    def simulate_PCR(self):
         if not self._results: return False
-        #add results to PCR_Results object
+        #add results to PCR_Simulation object
         for result in self._results:
-            self._PCR_products.add_product(result['hit'], 
-                                           result['start']+len(result['fwd_primer']),#ipcress defines start position as 5'-end of the forward primer 
-                                           result['end'],
-                                           Duplex(result['fwd_primer'], result['fwd_seq']), 
-                                           Duplex(result['rev_primer'], result['rev_seq']))
+            self._PCR_Simulation.add_product(result['hit'], 
+                                             #ipcress counts nucleotides tarting from 0
+                                             #and defines start position as 5'-end of the forward primer
+                                             result['start']+len(result['fwd_primer']), 
+                                             result['end']+1,
+                                             Duplex(result['fwd_primer'], result['fwd_seq']), 
+                                             Duplex(result['rev_primer'], result['rev_seq']))
         #compute PCR products quantities
-        self._PCR_products.calculate_quantities()
-        if not self._PCR_products:
-            print '\nAll results found in raw iPCR report were filtered out'
+        self._PCR_Simulation.run()
+        if not self._PCR_Simulation:
+            print '\nAll results found in raw iPCRess report were filtered out'
             return False
         self._have_results = True
         return True
@@ -285,59 +262,58 @@ class iPCR(object):
         try:
             ipcr_report = open(self._PCR_report_filename, 'w')
         except IOError, e:
-            print '\nFailed to open iPCR report file for writing:\n   %s' % self._PCR_report_filename
+            print '\nFailed to open iPCRess report file for writing:\n   %s' % self._PCR_report_filename
             print e.message
             return
-        #format report
-        ipcr_report.write(time_hr())
         #header
+        ipcr_report.write(time_hr())
         ipcr_report.write(wrap_text('All possible PCR products are ' 
                                      'filtered by amplicon size.\n'
                                      'If --no-exonuclease option was ' 
                                      'provided, products formed by primers with ' 
                                      "mismatches on 3'-end are ignored.\n"
-                                     'Relative quantities of the remaining products ' 
-                                     'are estimated using equilibrium equations and '
-                                     'current PCR parameters.\n'))
+                                     'Quantities of the remaining products ' 
+                                     'are estimated using equilibrium equations '
+                                     'and current PCR parameters.\n'))
         ipcr_report.write('\n')
         #filter parameters
-        ipcr_report.write(self._PCR_products.format_report_header())
+        ipcr_report.write(self._PCR_Simulation.format_report_header())
         if self._max_mismatches != None:
             ipcr_report.write('Number of mismatches allowed: %d\n' % self._max_mismatches)
         #if no PCR products have been found
-        if not self._PCR_products:
+        if not self._PCR_Simulation:
             ipcr_report.write(hr(' No PCR products have been found ', symbol='!'))
             ipcr_report.close()
             return
         #else...
-        ipcr_report.write(self._PCR_products.format_quantity_explanation())
+        ipcr_report.write(self._PCR_Simulation.format_quantity_explanation())
         #PCR products by hit 
-        if len(self._PCR_products.hits()) == 1:
+        if len(self._PCR_Simulation.hits()) == 1:
             #all products histogram
-            hit = self._PCR_products.hits()[0]
+            hit = self._PCR_Simulation.hits()[0]
             ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-            ipcr_report.write(self._PCR_products.per_hit_header(hit))
-            ipcr_report.write(self._PCR_products.per_hit_histogram(hit))
+            ipcr_report.write(self._PCR_Simulation.per_hit_header(hit))
+            ipcr_report.write(self._PCR_Simulation.per_hit_histogram(hit))
             ipcr_report.write('\n')
             ipcr_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
-            ipcr_report.write(self._PCR_products.per_hit_electrophoresis(hit))
+            ipcr_report.write(self._PCR_Simulation.per_hit_electrophoresis(hit))
         else:
             #all products histogram
             ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-            ipcr_report.write(self._PCR_products.all_products_histogram())
+            ipcr_report.write(self._PCR_Simulation.all_products_histogram())
             ipcr_report.write('\n\n\n')
             #per hit histogram and phoresis
-            ipcr_report.write(hr(' histograms electrophorograms of PCR products of each hit ', symbol='='))
-            ipcr_report.write(self._PCR_products.all_graphs_grouped_by_hit())            
+            ipcr_report.write(hr(' histograms and electrophorograms of PCR products of each hit ', symbol='='))
+            ipcr_report.write(self._PCR_Simulation.all_graphs_grouped_by_hit())            
         ipcr_report.close()
-        print 'iPCR report was written to:\n   ',self._PCR_report_filename
+        print '\niPCRess report was written to:\n   ',self._PCR_report_filename
         self._have_report = True
     #end def
     
     
     def reports(self):
         if self._have_report:
-            return ({'report_name': 'iPCR report', 'report_file': self._PCR_report_filename},)
+            return ({'report_name': 'iPCRess report', 'report_file': self._PCR_report_filename},)
         else: return None
     #end def
 #end class

@@ -32,10 +32,10 @@ from threading import Thread
 from contextlib import contextmanager
 from DegenPrimer import TD_Functions    
 from DegenPrimer.TD_Functions import format_PCR_conditions
-from DegenPrimer.Blast import Blast
+from DegenPrimer.BlastPrimers import BlastPrimers
 from DegenPrimer.SecStructures import AllSecStructures
 from DegenPrimer.StringTools import hr, wrap_text, time_hr, print_exception
-from DegenPrimer.iPCR import iPCR
+from DegenPrimer.iPCRess import iPCRess
 try:
     from Bio import SeqIO
 except ImportError:
@@ -52,8 +52,8 @@ class ClassManager(BaseManager):
         else: return None
 #end class
 ClassManager.register('AllSecStructures', AllSecStructures)
-ClassManager.register('iPCR', iPCR)
-ClassManager.register('Blast', Blast)
+ClassManager.register('iPCRess', iPCRess)
+ClassManager.register('BlastPrimers', BlastPrimers)
 
 
 class OutQueue(object):
@@ -244,41 +244,42 @@ class DegenPrimerPipeline(object):
         side_reactions      = all_sec_structures.reactions()
         side_concentrations = all_sec_structures.concentrations()
         _subroutine(all_sec_structures.calculate_equilibrium, None, out.queue, p_entry,
-                    'Calculate quantities of secondary structures.')
+                    'Calculate conversion degree of secondary structures.')
         #----------------------------------------------------------------------#
         
         #ipcress program file and test for primers specificity by iPCR
         #this is only available for pairs of primers
-        ipcr = None
+        ipcress = None
         if args.sense_primer and args.antisense_primer:
             with capture_to_queue() as out:
                 p_entry = self._generate_subroutine_entry(out.queue)
                 p_entry['manager'].start()
-            ipcr = p_entry['manager'].iPCR(job_id, 
-                                           fwd_primer, rev_primer, 
-                                           args.min_amplicon, args.max_amplicon, 
-                                           args.polymerase, 
-                                           args.with_exonuclease, 
-                                           args.cycles,
-                                           side_reactions, 
-                                           side_concentrations)
-            #if target sequences are provided and the run_icress flag is set, run iPCR...
+            ipcress = p_entry['manager'].iPCRess(job_id, 
+                                                 fwd_primer, rev_primer, 
+                                                 args.min_amplicon, 
+                                                 args.max_amplicon, 
+                                                 args.polymerase, 
+                                                 args.with_exonuclease, 
+                                                 args.cycles,
+                                                 side_reactions, 
+                                                 side_concentrations)
+            #if target sequences are provided and the run_icress flag is set, run iPCRess...
             if args.run_ipcress and args.fasta_files:
-                ipcr.write_program()
-                _subroutine(ipcr.execute_and_analyze, 
+                ipcress.write_program()
+                _subroutine(ipcress.execute_and_analyze, 
                             (args.fasta_files, 
                              args.max_mismatches), out.queue, p_entry,
-                            'Execute iPCRess program and calculate quantities of possible products.')
+                            'Execute iPCRess program and simulate PCR using found products.')
                 #get ipcress pid
                 sleep(0.1) #wait some time for process to fork
-                ipcress_pid = ipcr.ipcress_pid()
+                ipcress_pid = ipcress.ipcress_pid()
                 if ipcress_pid != None:
                     p_entry['children'].append(ipcress_pid)
             #else, try to load previously saved results and analyze them with current parameters
-            elif ipcr.load_results():
-                print '\nFound raw iPCR results from the previous ipcress run.'
-                _subroutine(ipcr.calculate_quantities, None, out.queue, p_entry,
-                            'Calculate quantities of possible PCR products found by iPCRess.')
+            elif ipcress.load_results():
+                print '\nFound raw iPCRess results from the previous ipcress run.'
+                _subroutine(ipcress.simulate_PCR, None, out.queue, p_entry,
+                            'Simulate PCR using possible products found by iPCRess.')
             else: self._print_queue(p_entry['queue'])
         #----------------------------------------------------------------------#
         
@@ -286,35 +287,36 @@ class DegenPrimerPipeline(object):
         with capture_to_queue() as out:
             p_entry = self._generate_subroutine_entry(out.queue)
             p_entry['manager'].start()
-        blast = p_entry['manager'].Blast(job_id,
-                                         args.min_amplicon, 
-                                         args.max_amplicon, 
-                                         args.with_exonuclease)
+        blast_primers = p_entry['manager'].BlastPrimers(job_id, 
+                                                        fwd_primer, rev_primer, 
+                                                        args.min_amplicon, 
+                                                        args.max_amplicon, 
+                                                        args.polymerase, 
+                                                        args.with_exonuclease, 
+                                                        args.cycles,
+                                                        side_reactions, 
+                                                        side_concentrations)
         #if --do-blast command was provided, make an actual query
-#        if args.do_blast:
-#            #construct Entrez query
-#            entrez_query = ''
-#            if args.organisms:
-#                for organism in args.organisms:
-#                    if entrez_query: entrez_query += ' OR '
-#                    entrez_query += organism+'[organism]'
-#            #do the blast and analyze results
-#            _subroutine(blast.blast_and_analyze_primers, 
-#                        (primers,
-#                         entrez_query,
-#                         side_reactions,
-#                         side_concentrations),
-#                        out.queue, p_entry,
-#                        'Make BLAST query and search for possible PCR products.')
-#        #else, try to load previously saved results and analyze them with current parameters
-#        elif blast.load_results():
-#            print '\nFound saved BLAST results.'
-#            _subroutine(blast.find_PCR_products, 
-#                        (side_reactions,
-#                         side_concentrations), 
-#                        out.queue, p_entry,
-#                        'Search for possible PCR products in BLAST results.')
-#        else: self._print_queue(p_entry['queue'])
+        if args.do_blast:
+            #construct Entrez query
+            entrez_query = ''
+            if args.organisms:
+                for organism in args.organisms:
+                    if entrez_query: entrez_query += ' OR '
+                    entrez_query += organism+'[organism]'
+            #do the blast and analyze results
+            _subroutine(blast_primers.blast_and_analyze, 
+                        (entrez_query,),
+                        out.queue, p_entry,
+                        'Make BLAST query and simulate PCR using returned alignments.')
+        #else, try to load previously saved results and analyze them with current parameters
+        elif blast_primers.load_results():
+            print '\nFound saved BLAST results.'
+            _subroutine(blast_primers.simulate_PCR, 
+                        None, 
+                        out.queue, p_entry,
+                        'Simulate PCR using alignments in BLAST results.')
+        else: self._print_queue(p_entry['queue'])
         #----------------------------------------------------------------------#
         
         #collect subroutines output, write it to stdout, wait for them to finish
@@ -329,13 +331,14 @@ class DegenPrimerPipeline(object):
         
         #---------------------now write all the reports------------------------#
         #write full and short reports
+        print ''
         structures_full_report_filename  = job_id+'-full-report.txt'
         structures_short_report_filename = job_id+'-short-report.txt'
         try:
             full_structures_file  = open(structures_full_report_filename, 'w')
             short_structures_file = open(structures_short_report_filename, 'w')
         except IOError, e:
-            print 'Unable to open report file(s) for writing.'
+            print '\nUnable to open report file(s) for writing.'
             print_exception(e)
         else:
             #write header
@@ -350,18 +353,18 @@ class DegenPrimerPipeline(object):
             print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
             args.register_report('Tm and secondary structures', structures_short_report_filename)
     
-        #write iPCR reports if they are available
-        if ipcr != None and ipcr.have_results():
-            ipcr.write_PCR_report()
-            for report in ipcr.reports():
+        #write iPCRess reports if they are available
+        if ipcress != None and ipcress.have_results():
+            ipcress.write_PCR_report()
+            for report in ipcress.reports():
                 if report:
                     args.register_report(**report)
         
         #write BLAST reports
-        if blast.have_results():
-            blast.write_hits_report()
-            blast.write_PCR_report()
-            for report in blast.reports():
+        if blast_primers.have_results():
+            blast_primers.write_hits_report()
+            blast_primers.write_PCR_report()
+            for report in blast_primers.reports():
                 if report:
                     args.register_report(**report)
                     

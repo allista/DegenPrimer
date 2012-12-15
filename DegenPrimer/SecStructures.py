@@ -142,6 +142,43 @@ class Duplex(object):
     def __hash__(self):
         return hash((str(self._fwd_sequence), str(self._rev_sequence), self._dimer))
     
+    def __str__(self):
+        duplex_string = ''
+        fwd_matches = self._dimer.fwd_matches
+        rev_matches = self._dimer.rev_matches
+        #construct matches string
+        matches = ''
+        for m in range(len(fwd_matches)):
+            if matches: matches += ' '*(fwd_matches[m]-fwd_matches[m-1]-1)
+            matches += '|'            
+        #calculate spacers
+        if fwd_matches[0] > rev_matches[0]:
+            spacer1 = ''
+            spacerM = ' '*(fwd_matches[0]+3)
+            spacer2 = ' '*(fwd_matches[0]-rev_matches[0])
+        else:
+            spacer1 = ' '*(rev_matches[0]-fwd_matches[0])
+            spacerM = ' '*(rev_matches[0]+3)
+            spacer2 = ''
+        #construct structures string
+        duplex_string += "%(spacer1)s5' %(seq1)s 3'\n" \
+            % {'spacer1':spacer1,
+               'seq1'   :str(self._fwd_sequence)}
+        duplex_string += "%(spacerM)s%(matches)s\n"    \
+            % {'spacerM':spacerM,
+               'matches':matches}
+        duplex_string += "%(spacer2)s3' %(seq2)s 5'\n" \
+            % {'spacer2':spacer2,
+               'seq2'   :str(self._rev_sequence[::-1])}
+        #dG
+        if self._dimer.dG != None:
+            duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, self._dimer.dG)
+        #conversion degree
+        if self._dimer.conversion_degree != None:
+            duplex_string += 'conversion degree = %.4f%%\n' % (self._dimer.conversion_degree*100)
+        return duplex_string
+    #end def
+    
     @property
     def fwd_seq(self): return str(self._fwd_sequence)
     
@@ -160,6 +197,14 @@ class Duplex(object):
     @property
     def fwd_3_mismatch(self):
         return self._dimer.fwd_matches[-1] < len(self._fwd_sequence)-1
+    
+    @property
+    def fwd_3_overhang(self):
+        fwd_tail = len(self._fwd_sequence)-1 - self._dimer.fwd_matches[-1]
+        rev_tail = len(self._rev_sequence)-1 - self._dimer.rev_matches[-1]
+        if fwd_tail > rev_tail: return fwd_tail - rev_tail
+        return 0
+    #end def
 #end class
 
 
@@ -540,44 +585,11 @@ class SecStructures(object):
     #formatting for secondary structures
     @classmethod
     def _format_dimer(cls, dimer, seq1, seq2):
-        dimer_string = ''
-        fwd_matches = dimer.fwd_matches
-        rev_matches = dimer.rev_matches
-        fwd_matches.sort()
-        rev_matches.sort()
-        #construct matches string
-        matches = ''
-        for m in range(len(fwd_matches)):
-            if matches: matches += ' '*(fwd_matches[m]-fwd_matches[m-1]-1)
-            matches += '|'            
-        #calculate spacers
-        if fwd_matches[0] > rev_matches[0]:
-            spacer1 = ''
-            spacerM = ' '*(fwd_matches[0]+3)
-            spacer2 = ' '*(fwd_matches[0]-rev_matches[0])
-        else:
-            spacer1 = ' '*(rev_matches[0]-fwd_matches[0])
-            spacerM = ' '*(rev_matches[0]+3)
-            spacer2 = ''
-        #construct structures string
-        dimer_string += "%(spacer1)s5' %(seq1)s 3'\n" \
-            % {'spacer1':spacer1,
-               'seq1'   :str(seq1)}
-        dimer_string += "%(spacerM)s%(matches)s\n"    \
-            % {'spacerM':spacerM,
-               'matches':matches}
-        dimer_string += "%(spacer2)s3' %(seq2)s 5'\n" \
-            % {'spacer2':spacer2,
-               'seq2'   :str(seq2[::-1])}
-        #dG
-        if dimer.dG != None:
-            dimer_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, dimer.dG)
-        #conversion degree
-        if dimer.conversion_degree != None:
-            dimer_string += 'conversion degree = %.4f%%\n' % (dimer.conversion_degree*100)
+        duplex = Duplex(seq1, seq2, dimer)
+        dimer_string = str(duplex)
         #check for 3' dimer
-        if fwd_matches[-1] > len(seq1)-4 or \
-           rev_matches[0]  < 3:
+        if dimer.fwd_matches[-1] > len(seq1)-4 or \
+           dimer.rev_matches[0]  < 3:
             dimer_string += '(3\'-dimer)\n'
         dimer_string += '\n'
         return dimer_string

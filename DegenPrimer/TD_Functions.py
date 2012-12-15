@@ -413,3 +413,18 @@ def equilibrium_constant(dG_T, T):
     '''calculate equilibrium constant of at a given temperature, 
     given standard dG at this temperature'''
     return exp(-1000*dG_T/(NN.R*NN.temp_K(T))) #annealing equilibrium constant
+#end def
+
+
+def primer_DNA_conversion_degree(primer_concentration, K):
+    '''calculate conversion degree of Primer/DNA dimerisation
+    given primer_concentration and equilibrium constant'''
+    P = primer_concentration
+    D = C_DNA
+    #quadratic equation with respect to DUP = r*min(P,D), 
+    #where 'r' is a conversion degree
+    _b   = (K*P+K*D+1) #MINUS b; always positive
+    disc = _b*_b - 4*K*(K*P*D) #this should always be >= 0 given non-negative K, P and D
+    DUP  = (_b-sqrt(disc))/(2*K) #take the smallest positive root
+    return DUP/min(P,D)
+#end def

@@ -93,6 +93,18 @@ class Primer(object):
     #end def
 
 
+    def _calculate_Tms(self):
+        if self.self_complement: return
+        temperatures  = []
+        concentration = self.concentration 
+        for sequence in self.sequences:
+            temperatures.append(TD_Functions.primer_template_Tm(sequence, concentration))
+        self._Tm_max  = max(temperatures)
+        self._Tm_min  = min(temperatures)
+        self._Tm_mean = (self._Tm_max + self._Tm_min)/2.0
+    #end def
+    
+
     @classmethod
     def from_sequences(cls, seq_records, concentration):
         '''Generate new Primer object from a list of unambiguous sequences. 
@@ -175,6 +187,35 @@ class Primer(object):
         return str(self._sequence.seq) == str(self._sequence.seq.reverse_complement())
     
 
+    def has_subsequence(self, seq):
+        '''Return True if any of unambiguous primers contains seq sequence''' 
+        for sequence in self.str_sequences:
+            if sequence.count(str(seq)):
+                return True
+        return False
+    #end def
+    
+    
+    def find_sequences(self, seq):
+        '''Return all unambiguous primers which contain seq sequence'''
+        sequences = []
+        for sequence in self.sequences:
+            if str(sequence).contains(str(seq)):
+                sequences.append(sequence)
+        return sequences
+    #end def
+    
+    
+    def find_records(self, seq):
+        '''Return all records of unambiguous primers which contain seq sequence'''
+        records = []
+        for record in self.seq_records:
+            if str(record.seq).contains(str(seq)):
+                records.append(record)
+        return records
+    #end def
+
+
     @classmethod
     def generate_unambiguous(cls, seq_rec):
         '''generate a list of all possible combinations from an ambiguous sequence'''
@@ -201,18 +242,6 @@ class Primer(object):
             unambiguous_seq_list.append(SeqRecord(un_seq, description=seq_rec.description, 
                                                   id=seq_rec.id+"_"+str(s)))
         return unambiguous_seq_list
-    #end def
-    
-    
-    def _calculate_Tms(self):
-        if self.self_complement: return
-        temperatures  = []
-        concentration = self.concentration 
-        for sequence in self.sequences:
-            temperatures.append(TD_Functions.primer_template_Tm(sequence, concentration))
-        self._Tm_max  = max(temperatures)
-        self._Tm_min  = min(temperatures)
-        self._Tm_mean = (self._Tm_max + self._Tm_min)/2.0
     #end def
 #end class
 

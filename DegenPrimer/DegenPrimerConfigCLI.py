@@ -62,21 +62,19 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
     
     def _override_option(self, option):
         value_override = None
-        exec_line = 'if self._args.%(option)s:\n'
-        if self._multiple_args(option):
-            exec_line += \
-                     '    value_override = self._args.%(option)s\n'
-        else: #if option represents a single argument, pass this argument, not a list with it
-            exec_line += \
-                     '    if type(self._args.%(option)s) == list:\n'
-            exec_line += \
-                     '        value_override = self._args.%(option)s[0]\n'
-            exec_line += \
-                     '    else: value_override = self._args.%(option)s\n'
-        exec (exec_line % option)
-        if value_override != None \
-        and option['py_type'] == bool:
-            value_override = True if value_override == 'True' else False
+        if hasattr(self._args, option['option']):
+            value_override = getattr(self._args, option['option'])
+            #single values should not be lists
+            if not self._multiple_args(option) \
+            and type(value_override) == list:
+                value_override = value_override[0]
+            #bool values should be True or False
+            if value_override != None \
+            and option['py_type'] == bool:
+                if type(value_override) == str:
+                    value_override = value_override == 'True'
+                elif type(value_override) != bool:
+                    value_override = bool(value_override)
         return value_override
     #end def
     

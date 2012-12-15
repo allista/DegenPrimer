@@ -149,7 +149,7 @@ class Product(Region):
     
 
 
-class PCR_Results(object):
+class PCR_Simulation(object):
     '''In silica PCR results filtration, computation and visualization.'''
     
     #histogram
@@ -301,24 +301,27 @@ class PCR_Results(object):
         concentrations.update(self._side_concentrations)
         #compose list(s) of reactions and
         #use Equilibrium to compute dimer quantities
+        self._max_objective_value = 0
         for hit_id in self._products.keys():
             reactions = self._construct_reactions((hit_id,))
             reactions.update(self._side_reactions)
             equilibrium = Equilibrium(reactions, concentrations)
-            self._solutions[hit_id] = list(equilibrium.calculate())+[equilibrium]
-        self._max_objective_value = max(self._solutions.values(), key=lambda(x): x[1])[1]
+            equilibrium.calculate()
+            self._solutions[hit_id] = equilibrium
+            self._max_objective_value = max(self._max_objective_value, 
+                                            equilibrium.solution_objective_value)
     #end def
     
     
-    def calculate_quantities(self):
+    def run(self):
         if not self._products: return
         #calculate equilibrium in the system
         self._calculate_equilibrium()
         #compute quantities of products, filter out those with low quantity
         new_hits = dict()
         for hit_id in self._products:
-            solution    = self._solutions[hit_id][0]
-            equilibrium = self._solutions[hit_id][2]
+            equilibrium = self._solutions[hit_id]
+            solution    = equilibrium.solution
             primer_concentrations = dict(self._primer_concentrations)
             dNTP_concentration    = TD_Functions.C_dNTP*4.0 #a matrix is considered to have equal quantities of each letter
             dNTP_consumption      = 0
@@ -744,7 +747,7 @@ if __name__ == '__main__':
                                           SeqRecord(Seq('CAAGGGCTAGACGCGGAAG'[::-1], IUPAC.unambiguous_dna)),
                                           SeqRecord(Seq('CAAGGCCTAGAGGCGGAAG'[::-1], IUPAC.unambiguous_dna))),
                                          0.1e-6))
-    PCR_res = PCR_Results(primers, 500, 3000, 0.01*1e6, False, 30)
+    PCR_res = PCR_Simulation(primers, 500, 3000, 0.01*1e6, False, 30)
     PCR_res.add_product('Pyrococcus yayanosii CH1', 982243, 983644,
                         Duplex(Seq('ATATTCTACGACGGCTATCC'), 
                                Seq('ATATTCTACGACGGCTATCC').reverse_complement()),
@@ -766,7 +769,7 @@ if __name__ == '__main__':
                         Duplex(Seq('CAAGGCCTAGAGGCGGAAG'[::-1]), 
                                Seq('CAAGGCCTAGAGGCGGAAG').complement()))
 
-    PCR_res.calculate_quantities()
+    PCR_res.run()
     #print 'products:'
     #print PCR_res._products
     #print bool(PCR_res)
