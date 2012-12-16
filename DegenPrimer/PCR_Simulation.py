@@ -208,7 +208,7 @@ class PCR_Simulation(object):
         
     def add_side_reactions(self, reactions):
         if reactions: self._side_reactions.update(reactions)
-    
+        
 
     def add_product(self, 
                     hit,        #name of the target sequence
@@ -337,7 +337,7 @@ class PCR_Simulation(object):
                     if r_hash in solution:
                         rev_strands_1[fwd_primer.fwd_seq] = [solution[r_hash],
                                                              equilibrium.get_product_concentration(r_hash)]
-                        primer_concentrations[fwd_primer.fwd_seq] -= equilibrium.reactants_consumption(fwd_primer.fwd_seq)[0]
+                        primer_concentrations[fwd_primer.fwd_seq] -= equilibrium.get_product_concentration(r_hash) 
                         dNTP_concentration -= equilibrium.reactants_consumption(fwd_primer.fwd_seq)[0]*len(product)
                 #reverse primer annealing, first cycle
                 fwd_strands_1 = dict()
@@ -347,7 +347,7 @@ class PCR_Simulation(object):
                     if r_hash in solution:
                         fwd_strands_1[rev_primer.fwd_seq] = [solution[r_hash],
                                                              equilibrium.get_product_concentration(r_hash)]
-                        primer_concentrations[rev_primer.fwd_seq] -= equilibrium.reactants_consumption(rev_primer.fwd_seq)[0]
+                        primer_concentrations[rev_primer.fwd_seq] -= equilibrium.get_product_concentration(r_hash)
                         dNTP_concentration -= equilibrium.reactants_consumption(rev_primer.fwd_seq)[0]*len(product)
                 #second and third cycles
                 for f_id in fwd_strands_1:
@@ -412,7 +412,7 @@ class PCR_Simulation(object):
                             continue
                         consume_ratio0 = depleted_primers[var1[0]] if var1[0] in depleted_primers else 1
                         consume_ratio1 = depleted_primers[var1[1]] if var1[1] in depleted_primers else 1
-                        real_addition = (var1[2]-var0[2])*min(consume_ratio0,
+                        real_addition = var0[2]*min(consume_ratio0,
                                                               consume_ratio1)
                         #restore subtracted
                         primer_concentrations[var1[0]] += var0[2]
@@ -642,7 +642,7 @@ class PCR_Simulation(object):
                 else:
                     header_string += '%d-%d' % shortage_period
             header_string += wrap_text(shortage_string + '\n')
-        header_string += '\n\n'
+        header_string += '\n'
         return header_string
 
         
@@ -685,6 +685,7 @@ class PCR_Simulation(object):
         for hit in self._products.keys():
             all_graphs += self.per_hit_histogram(hit)
             all_graphs += self.per_hit_header(hit)
+            all_graphs += hr(' electrophorogram of PCR products ')
             all_graphs += self.per_hit_electrophoresis(hit)
             all_graphs += '\n\n'
         return all_graphs

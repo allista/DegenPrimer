@@ -428,3 +428,30 @@ def primer_DNA_conversion_degree(primer_concentration, K):
     DUP  = (_b-sqrt(disc))/(2*K) #take the smallest positive root
     return DUP/min(P,D)
 #end def
+
+
+#tests
+if __name__ == '__main__':
+    from Bio.Seq import Seq
+    from SecStructures import Dimer
+    seq1 = Seq('ATATTCTACGACGGCTATCC')
+    seq2 = Seq('ATATTCTACGACGGCTATCC').reverse_complement()
+    seq3 = Seq('GAACGCAAAGATTGGGAAC')
+    seq4 = Seq('GAACGCAAAGATTCTGAAC').reverse_complement()
+    dimer12 = Dimer.from_sequences(seq1, seq2)
+    dimer34 = Dimer.from_sequences(seq3, seq4)
+    
+    C_Na     = 50.0e-3
+    C_Mg     = 3.0e-3 
+    C_dNTP   = 0.1e-3
+    C_DNA    = 1.0e-9
+    C_Primer = 0.43e-6
+    PCR_T    = 55
+    
+    print seq1, seq2
+    print dimer_dG(dimer12, seq1, seq2)
+    print dimer_dG_corrected(dimer12, seq1, seq2)
+    print ''
+    print seq3, seq4
+    print dimer_dG(dimer34, seq3, seq4)
+    print dimer_dG_corrected(dimer34, seq3, seq4)

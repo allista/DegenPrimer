@@ -41,13 +41,14 @@ class BlastPrimers(iPCR_Interface):
     '''Check specificity of primers using BLAST query and iPCR_Simulation'''
 
     #values adjusted for short sequences
-    e_val    =  1000  #E-value 
-    w_size   =  7     #word size
-    n_pen    = -2     #Reward and penalty for matching and mismatching bases
-    n_rew    =  1     #Reward and penalty for matching and mismatching bases
-    fltr     = 'none' #Turn off filtering of the results
-    database = 'nt'   #database to search: see  NCBI's Program Selection Guide for details
-    spacer   = 'N'*20 #single query separator for concatenation
+    e_val    =  100000 #E-value grater than 1e5 results in a veeeery long search 
+    w_size   =  7      #word size
+    n_pen    = -4      #Reward and penalty for matching and mismatching bases
+    n_rew    =  3      #Reward and penalty for matching and mismatching bases
+    fltr     = 'none'  #Turn off filtering of the results
+    database = 'nt'    #database to search: see  NCBI's Program Selection Guide for details
+    no_gaps  =  True   #no gaps in primers!
+    spacer   = 'N'*20  #single query separator for concatenation
     
     
     def __init__(self, job_id, *args, **kwargs):
@@ -136,7 +137,8 @@ class BlastPrimers(iPCR_Interface):
                                            nucl_penalty = self.n_pen,
                                            nucl_reward  = self.n_rew,
                                            filter       = self.fltr,
-                                           entrez_query = entrez_query)
+                                           entrez_query = entrez_query,
+                                           ungapped_alignment = self.no_gaps,)
             #save results to a file
             results_file = open(self._results_filename, 'w')
             results_file.write(blast_results.read())
@@ -151,8 +153,12 @@ class BlastPrimers(iPCR_Interface):
             print '\nFailed to obtain BLAST query results from NCBI.'
             print_exception(e)
             return False
-        self._have_results = True
-        return True
+        self._have_results = (len(self._blast_results) > 0 
+                              and max(len(record.alignments) 
+                                      for record in self._blast_results) > 0) 
+        if not self._have_results:
+            print '\nNCBI provided no results for the BLAST query.'
+        return self._have_results
     #end def
 
 
@@ -343,9 +349,10 @@ class BlastPrimers(iPCR_Interface):
                         hsp_primer_concentration = self._fwd_primer.concentration
                     else: hsp_primer_concentration = self._rev_primer.concentration
                     #format hsps representation
-                    hsp_text  = ''
+                    hsp_text  = ('score: %d; bits: %d; E-value: %.2e;\n\n'
+                                 % (hsp.score, hsp.bits, hsp.expect))
                     hsp_text += str(hsp_duplex)
-                    hsp_text += 'Conversion degree = %.2f%%\n' \
+                    hsp_text += 'Conversion degree = %.2f%%\n\n' \
                     % (TD_Functions.primer_DNA_conversion_degree(hsp_primer_concentration, hsp_duplex.K)*100)
                     hsp_text += 'Template strand: '
                     if hsp.frame[1] == 1:    
@@ -383,9 +390,11 @@ class BlastPrimers(iPCR_Interface):
                 for h in range(len(hits)):
                     hit = hits[h]
                     spacer    = ' '*(num_hits_len-len(str(h)))
-                    blast_report.write(wrap_text('%d.%s %s\n' % (h+1, spacer, hit[1])))
+                    blast_report.write(wrap_text('%d.%s %s\n' 
+                                                 % (h+1, spacer, 
+                                                    (hit[1].split('|')[-1]).strip())))
                     blast_report.write(('%s  min dG: %.2f; score: %d; bits: %d; '
-                                        'E-value: %.2e; alignments: %d\n\n') \
+                                        'E-value: %.2e; alignments: %d\n\n')
                                        % (' '*num_hits_len, hit[0], hit[2], 
                                           hit[3], hit[4], hit[5]))
                 blast_report.write('\n')
