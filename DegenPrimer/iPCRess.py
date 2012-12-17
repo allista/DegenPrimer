@@ -43,9 +43,9 @@ class iPCRess(iPCR_Interface):
         self._ipcress_subprocess  = None
         self._max_mismatches      = None
         #files
-        self._program_filename    = job_id+'.ipcr'
-        self._raw_report_filename = job_id+'-ipcr-raw-report.txt'
-        self._PCR_report_filename = job_id+'-ipcr-PCR-report.txt'
+        self._program_filename    = job_id+'.ipcress'
+        self._raw_report_filename = job_id+'-ipcress-raw-report.txt'
+        self._PCR_report_filename = job_id+'-ipcress-PCR-report.txt'
         #results
         self._PCR_Simulation = self._PCR_Simulation_factory()
         self._results        = None

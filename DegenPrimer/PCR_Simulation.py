@@ -162,7 +162,9 @@ class PCR_Simulation(object):
     #indirectly defines to what extent should lengths 
     #of two products differ in order of them to occupy 
     #separate bands on the electrophoresis.
-    _precision          = 1e6   
+    _precision          = 1e6
+    #minimum equilibrium constant: reactions with EC less than this will not be taken into account
+    _min_K              = 1000
 
 
     def __init__(self, 
@@ -184,13 +186,14 @@ class PCR_Simulation(object):
 
         self._nonzero   = False  #true if there're some products and their quantities were calculated
         
-        self._templates = []     #list of all templates
+        self._templates = dict() #list of all templates
         self._products  = dict() #dictionary of all possible products
         self._side_reactions = dict() #dictionary of all reactions
         self._side_concentrations   = dict()
         self._primer_concentrations = dict()
         for primer in self._primers:
-            self._primer_concentrations.update(dict.fromkeys(primer.str_sequences, primer.concentration))
+            self._primer_concentrations.update(dict.fromkeys(primer.str_sequences, 
+                                                             primer.concentration))
         
         self._solutions = dict() #solutions of equilibrium systems
         self._max_objective_value = -1 #objective value of the worst solution
@@ -207,7 +210,11 @@ class PCR_Simulation(object):
         if concentrations: self._side_concentrations.update(concentrations)
         
     def add_side_reactions(self, reactions):
-        if reactions: self._side_reactions.update(reactions)
+        if not reactions: return 
+        self._side_reactions.update(dict([R for R in reactions.items() 
+                                          if R[1]['constant'] >= self._min_K
+                                          or R[1]['type'] == 'A']))
+    #end def
         
 
     def add_product(self, 
@@ -246,28 +253,29 @@ class PCR_Simulation(object):
         else: #append primers
             self._products[hit][new_product_hash] += new_product
         #add templates
-        self._add_template(self._products[hit][new_product_hash].fwd_template)
-        self._add_template(self._products[hit][new_product_hash].rev_template)
+        self._add_template(hit, self._products[hit][new_product_hash].fwd_template)
+        self._add_template(hit, self._products[hit][new_product_hash].rev_template)
         return True
     #end def
     
     
-    def _add_template(self, new_template):
+    def _add_template(self, hit, new_template):
         #add new template
-        self._templates.append(new_template)
-        self._templates.sort(key=lambda(x): x.start)
-        #compact overlapping templates
-        compacted = [self._templates[0]]
-        for T in self._templates:
+        if hit not in self._templates:
+            self._templates[hit] = []
+        self._templates[hit].append(new_template)
+        self._templates[hit].sort(key=lambda(x): x.start)
+        compacted = [self._templates[hit][0]]
+        for T in self._templates[hit]:
             if T.overlaps(compacted[-1]):
                 compacted[-1] += T
             else: compacted.append(T)
-        self._templates = compacted
+        self._templates[hit] = compacted
     #end def
     
     
-    def _find_template(self, query_template):
-        for T in self._templates:
+    def _find_template(self, hit, query_template):
+        for T in self._templates[hit]:
             if T.overlaps(query_template):
                 return T
         return None
@@ -277,14 +285,16 @@ class PCR_Simulation(object):
         reactions = dict()
         for hit_id in hit_ids:
             for product in self._products[hit_id].values():
-                fwd_template = self._find_template(product.fwd_template)
+                fwd_template = self._find_template(hit_id, product.fwd_template)
                 for fwd_primer in product.fwd_primers:
+                    if fwd_primer.K < self._min_K: continue
                     r_hash = hash((fwd_primer.fwd_seq, fwd_template))
                     reactions[r_hash] = Equilibrium.compose_reaction(fwd_primer.K, 
                                                                      fwd_primer.fwd_seq, 
                                                                      hash(fwd_template), 'AB')
-                rev_template = self._find_template(product.fwd_template)
+                rev_template = self._find_template(hit_id, product.rev_template)
                 for rev_primer in product.rev_primers:
+                    if fwd_primer.K < self._min_K: continue
                     r_hash = hash((rev_primer.fwd_seq, rev_template))
                     reactions[r_hash] = Equilibrium.compose_reaction(rev_primer.K, 
                                                                      rev_primer.fwd_seq, 
@@ -295,19 +305,22 @@ class PCR_Simulation(object):
             
     def _calculate_equilibrium(self):
         #compose a list of reactant concentrations
-        concentrations = dict()
-        concentrations.update(self._primer_concentrations)
-        concentrations.update(dict.fromkeys([hash(T) for T in self._templates], TD_Functions.C_DNA))
-        concentrations.update(self._side_concentrations)
-        #compose list(s) of reactions and
-        #use Equilibrium to compute dimer quantities
         self._max_objective_value = 0
         for hit_id in self._products.keys():
+            #assemble reactions and concentrations for this hit
             reactions = self._construct_reactions((hit_id,))
+            if not reactions:
+                self._solutions[hit_id] = None
+                continue
             reactions.update(self._side_reactions)
+            concentrations = dict(self._primer_concentrations)
+            concentrations.update([(hash(T), TD_Functions.C_DNA) 
+                                   for T in self._templates[hit_id]])
+            concentrations.update(self._side_concentrations)
+            #calculate equilibrium
             equilibrium = Equilibrium(reactions, concentrations)
             equilibrium.calculate()
-            self._solutions[hit_id] = equilibrium
+            self._solutions[hit_id]   = equilibrium
             self._max_objective_value = max(self._max_objective_value, 
                                             equilibrium.solution_objective_value)
     #end def
@@ -318,170 +331,184 @@ class PCR_Simulation(object):
         #calculate equilibrium in the system
         self._calculate_equilibrium()
         #compute quantities of products, filter out those with low quantity
-        new_hits = dict()
         for hit_id in self._products:
             equilibrium = self._solutions[hit_id]
-            solution    = equilibrium.solution
-            primer_concentrations = dict(self._primer_concentrations)
-            dNTP_concentration    = TD_Functions.C_dNTP*4.0 #a matrix is considered to have equal quantities of each letter
-            dNTP_consumption      = 0
-            all_variants = []
-            new_products = dict()
+            if not equilibrium:
+                self._products[hit_id] = dict() 
+                continue
+            solution   = equilibrium.solution
+            cur_state  = [TD_Functions.C_dNTP*4.0, #a matrix is considered to have equal quantities of each letter
+                          dict(self._primer_concentrations), []]
+            prev_state = deepcopy(cur_state)
+            self._reaction_ends[hit_id] = {'poly':[],
+                                           'cycles':3,
+                                           'products':dict().fromkeys(self._products[hit_id].keys(),0)}
+            cur_primers,cur_variants = cur_state[1],cur_state[2]
             for product_id in self._products[hit_id]:
                 product = self._products[hit_id][product_id]
                 #forward primer annealing, first cycle
-                rev_strands_1 = dict()
-                fwd_template = self._find_template(product.fwd_template)
+                fwd_strands_1 = dict()
+                fwd_template  = self._find_template(hit_id, product.fwd_template)
                 for fwd_primer in product.fwd_primers:
                     r_hash = hash((fwd_primer.fwd_seq, fwd_template))
                     if r_hash in solution:
-                        rev_strands_1[fwd_primer.fwd_seq] = [solution[r_hash],
+                        fwd_strands_1[fwd_primer.fwd_seq] = [solution[r_hash],
                                                              equilibrium.get_product_concentration(r_hash)]
-                        primer_concentrations[fwd_primer.fwd_seq] -= equilibrium.get_product_concentration(r_hash) 
-                        dNTP_concentration -= equilibrium.reactants_consumption(fwd_primer.fwd_seq)[0]*len(product)
+                        cur_primers[fwd_primer.fwd_seq] -= fwd_strands_1[fwd_primer.fwd_seq][1] 
+                        cur_state[0] -= fwd_strands_1[fwd_primer.fwd_seq][1]*len(product)
+                        prev_state[0] = cur_state[0] 
                 #reverse primer annealing, first cycle
-                fwd_strands_1 = dict()
-                rev_template = self._find_template(product.fwd_template)
+                rev_strands_1 = dict()
+                rev_template  = self._find_template(hit_id, product.rev_template)
                 for rev_primer in product.rev_primers:
                     r_hash = hash((rev_primer.fwd_seq, rev_template))
                     if r_hash in solution:
-                        fwd_strands_1[rev_primer.fwd_seq] = [solution[r_hash],
+                        rev_strands_1[rev_primer.fwd_seq] = [solution[r_hash],
                                                              equilibrium.get_product_concentration(r_hash)]
-                        primer_concentrations[rev_primer.fwd_seq] -= equilibrium.get_product_concentration(r_hash)
-                        dNTP_concentration -= equilibrium.reactants_consumption(rev_primer.fwd_seq)[0]*len(product)
+                        cur_primers[rev_primer.fwd_seq] -= rev_strands_1[rev_primer.fwd_seq][1]
+                        cur_state[0] -= rev_strands_1[rev_primer.fwd_seq][1]*len(product)
+                        prev_state[0] = cur_state[0]
                 #second and third cycles
                 for f_id in fwd_strands_1:
                     for r_id in rev_strands_1:
                         #second
-                        fwd_strand_2 = (fwd_strands_1[f_id][0])*(rev_strands_1[r_id][1])
-                        rev_strand_2 = (rev_strands_1[r_id][0])*(fwd_strands_1[f_id][1])
+                        fwd_strand_2  = (fwd_strands_1[f_id][0])*(rev_strands_1[r_id][1])
+                        rev_strand_2  = (rev_strands_1[r_id][0])*(fwd_strands_1[f_id][1])
+                        cur_primers[f_id] -= fwd_strand_2
+                        cur_primers[r_id] -= rev_strand_2
+                        cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
+                        prev_state[0] = cur_state[0]
                         #third
                         var = [f_id, r_id, fwd_strand_2+rev_strand_2, product_id]
-                        all_variants.append(var)
-                        primer_concentrations[f_id] -= fwd_strand_2+rev_strand_2
-                        primer_concentrations[r_id] -= fwd_strand_2+rev_strand_2
-                        dNTP_concentration -= (fwd_strand_2+rev_strand_2)*len(product)
-                #add variants of this product to the common list
-                #and product itself to the new list of products of current hit
-                if fwd_strands_1 and rev_strands_1:
-                    new_products[product_id] = product
-            if not new_products: continue
+                        cur_variants.append(var)
+                        cur_primers[f_id] -= rev_strand_2
+                        cur_primers[r_id] -= fwd_strand_2
+                        cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
+            if not cur_variants:
+                self._products[hit_id] = dict() 
+                continue
+            #correct third cycle
+            cur_variants.sort(key=lambda(x): x[2])
+            self._correct_cycle(hit_id, 3, prev_state, cur_state)
             #all consequent PCR cycles
-            all_variants.sort(key=lambda(x): x[2])
-            self._reaction_ends[hit_id] = {'poly':[],
-                                           'cycles':3,
-                                           'products':dict().fromkeys(new_products.keys(),0)}
             for cycle in range(4, self._num_cycles+1):
-                #save current state
                 idle = True
-                dNTP_previous = dNTP_concentration
-                prev_variants = deepcopy(all_variants)
-                prev_primers  = deepcopy(primer_concentrations)
+                #save current state
+                prev_state = deepcopy(cur_state)
                 #calculate a normal cycle
-                for var in all_variants:
+                for var in cur_variants:
                     #if any primer is depleted, continue
-                    if primer_concentrations[var[0]] is None \
-                    or primer_concentrations[var[1]] is None: 
+                    if cur_primers[var[0]] is None \
+                    or cur_primers[var[1]] is None: 
                         continue
                     #count consumption
-                    primer_concentrations[var[0]] -= var[2]
-                    primer_concentrations[var[1]] -= var[2]
-                    dNTP_concentration -= var[2]*len(new_products[var[3]])
+                    cur_primers[var[0]] -= var[2]
+                    cur_primers[var[1]] -= var[2]
+                    cur_state[0] -= var[2]*2*len(self._products[hit_id][var[3]])
                     #count synthesis
                     var[2] += var[2]
                     #something was synthesized in this cycle
                     idle = False
                 if idle: break #all primers have been depleted
-                #check if: some primers were depleted
-                depleted_primers = dict()
-                for p_id in primer_concentrations:
-                    if  primer_concentrations[p_id] != None \
-                    and primer_concentrations[p_id] < 0:
-                        consume_ratio = (prev_primers[p_id]/
-                                         (prev_primers[p_id] 
-                                          - primer_concentrations[p_id]))
-                        depleted_primers[p_id] = consume_ratio
-                #if so, recalculate consumption for products which use them
-                if depleted_primers:
-                    for var0, var1 in zip(prev_variants, all_variants):
-                        if  not var1[0] in  depleted_primers \
-                        and not var1[1] in  depleted_primers:
-                            continue
-                        if primer_concentrations[var1[0]] is None \
-                        or primer_concentrations[var1[1]] is None: 
-                            continue
-                        consume_ratio0 = depleted_primers[var1[0]] if var1[0] in depleted_primers else 1
-                        consume_ratio1 = depleted_primers[var1[1]] if var1[1] in depleted_primers else 1
-                        real_addition = var0[2]*min(consume_ratio0,
-                                                              consume_ratio1)
-                        #restore subtracted
-                        primer_concentrations[var1[0]] += var0[2]
-                        primer_concentrations[var1[1]] += var0[2]
-                        dNTP_concentration += var0[2]*len(new_products[var1[3]])
-                        #subtract real consumption
-                        primer_concentrations[var1[0]] -= real_addition
-                        primer_concentrations[var1[1]] -= real_addition
-                        dNTP_concentration -= real_addition*len(new_products[var1[3]])
-                        #count synthesis
-                        var1[2] = var0[2] + real_addition
-                #at this point concentrations of all primers are >= 0
-                #check if: dNTP was used,
-                #     and  polymerase activity could handle this cycle.                    
-                dNTP_consumption = dNTP_previous - dNTP_concentration
-                max_consumptioin = self._polymerase*10e-9*self._elongation_time/30
-                #save polymerase shortage information
-                if dNTP_consumption > max_consumptioin:
-                    if self._reaction_ends[hit_id]['poly']:
-                        #if previous cycle passed without a shortage, start new record
-                        if cycle - self._reaction_ends[hit_id]['poly'][1] > 1:
-                            self._reaction_ends[hit_id]['poly'].append([cycle, cycle])
-                        else: #append to the current record 
-                            self._reaction_ends[hit_id]['poly'][1] = cycle
-                    else: #if there was no shortage, add current new record
-                        self._reaction_ends[hit_id]['poly'].append([cycle, cycle])
-                #correct consumption if needed
-                if dNTP_consumption > max_consumptioin \
-                or dNTP_concentration < 0:
-                    #ratio is always < 1
-                    consume_ratio = min(max_consumptioin/dNTP_consumption,
-                                        dNTP_previous/dNTP_consumption)
-                    dNTP_concentration    = dNTP_previous
-                    primer_concentrations = prev_primers
-                    for var0, var1 in zip(prev_variants, all_variants):
-                        if primer_concentrations[var1[0]] is None \
-                        or primer_concentrations[var1[1]] is None: 
-                            continue
-                        #due to primer correction var1[2]-var0[2] is not always equal to var0[2]
-                        real_addition = (var1[2]-var0[2])*consume_ratio 
-                        primer_concentrations[var1[0]] -= real_addition  
-                        primer_concentrations[var1[1]] -= real_addition
-                        dNTP_concentration -= real_addition*len(new_products[var1[3]])
-                        var1[2] = var0[2] + real_addition
-                #check again if some primers were depleted
-                for p_id in primer_concentrations:
-                    if primer_concentrations[p_id] <= 0:
-                        primer_concentrations[p_id] = None
-                #count the cycle of the reaction and for each product separately
-                self._reaction_ends[hit_id]['cycles'] = cycle
-                for var0, var1 in zip(prev_variants, all_variants):
+                self._correct_cycle(hit_id, cycle, prev_state, cur_state)
+                #count the cycle of each synthesized products
+                for var0, var1 in zip(prev_state[2], cur_state[2]):
                     if var0[2] != var1[2]:
                         self._reaction_ends[hit_id]['products'][var1[3]] = cycle
+                #count the cycle of the reaction
+                self._reaction_ends[hit_id]['cycles'] = cycle
                 #if no dNTP left, end the reaction
-                if dNTP_concentration <= 0: break
+                if cur_state[0] <= 0: break
             #end cycles
-            self._reaction_ends[hit_id]['dNTP'] = dNTP_concentration/4.0 if dNTP_concentration >= 0 else 0
+            self._reaction_ends[hit_id]['dNTP'] = cur_state[0]/4.0 if cur_state[0] >= 0 else 0
             #sum up all variants of each product
-            for var in all_variants:
-                new_products[var[3]].quantity += var[2]
-            #add new products list to new hits list
-            new_hits[hit_id] = new_products
-        #store new hits if there are any
-        if new_hits:
-            self._products = new_hits
-            self._nonzero  = True
-        else: self._products = dict()
+            for var in cur_variants:
+                self._products[hit_id][var[3]].quantity += var[2]
+            #filter out products with zero quantity
+            self._products[hit_id] = dict([prod for prod in self._products[hit_id].items() 
+                                           if prod[1].quantity > 0])
+        #filter out hits without proucts
+        self._products = dict([hit for hit in self._products.items() 
+                               if len(hit[1]) > 0])
+        self._nonzero  = len(self._products) > 0
     #end def
 
+
+    def _correct_cycle(self, hit_id, cycle, prev_state, cur_state):
+        prev_dNTP,prev_primers,prev_variants = prev_state
+        cur_dNTP,cur_primers,cur_variants = cur_state
+        #check if: some primers were depleted
+        depleted_primers = dict()
+        for p_id in cur_primers:
+            if  cur_primers[p_id] != None \
+            and cur_primers[p_id] < 0:
+                consume_ratio = (prev_primers[p_id]/
+                                 (prev_primers[p_id] 
+                                  - cur_primers[p_id]))
+                depleted_primers[p_id] = consume_ratio
+        #if so, recalculate consumption for products which use them
+        if depleted_primers:
+            for var0, var1 in zip(prev_variants, cur_variants):
+                if  not var1[0] in  depleted_primers \
+                and not var1[1] in  depleted_primers:
+                    continue
+                if cur_primers[var1[0]] is None \
+                or cur_primers[var1[1]] is None: 
+                    continue
+                consume_ratio0 = depleted_primers[var1[0]] if var1[0] in depleted_primers else 1
+                consume_ratio1 = depleted_primers[var1[1]] if var1[1] in depleted_primers else 1
+                real_addition = var0[2]*min(consume_ratio0,
+                                            consume_ratio1)
+                #restore subtracted
+                cur_primers[var1[0]] += var0[2]
+                cur_primers[var1[1]] += var0[2]
+                cur_dNTP += var0[2]*2*len(self._products[hit_id][var1[3]])
+                #subtract real consumption
+                cur_primers[var1[0]] -= real_addition
+                cur_primers[var1[1]] -= real_addition
+                cur_dNTP -= real_addition*2*len(self._products[hit_id][var1[3]])
+                #count synthesis
+                var1[2] = var0[2] + real_addition
+        #set depleted primers to exact zero (due to floating point errors they may still be small real numbers)
+        for p_id in depleted_primers: cur_primers[p_id] = 0
+        #check if: dNTP was used,
+        #     and  polymerase activity could handle this cycle.                    
+        dNTP_consumption = prev_dNTP - cur_dNTP
+        max_consumptioin = self._polymerase*10e-9*self._elongation_time/30
+        #save polymerase shortage information
+        if dNTP_consumption > max_consumptioin:
+            if self._reaction_ends[hit_id]['poly']:
+                #if previous cycle passed without a shortage, start new record
+                if cycle - self._reaction_ends[hit_id]['poly'][-1][1] > 1:
+                    self._reaction_ends[hit_id]['poly'].append([cycle, cycle])
+                else: #append to the current record 
+                    self._reaction_ends[hit_id]['poly'][-1][1] = cycle
+            else: #if there was no shortage, add current new record
+                self._reaction_ends[hit_id]['poly'].append([cycle, cycle])
+        #correct consumption if needed
+        if dNTP_consumption > max_consumptioin \
+        or cur_dNTP < 0:
+            consume_ratio = min(max_consumptioin/dNTP_consumption,
+                                prev_dNTP/dNTP_consumption)
+            cur_dNTP = prev_dNTP
+            cur_primers.update(prev_primers)
+            for var0, var1 in zip(prev_variants, cur_variants):
+                if cur_primers[var1[0]] is None \
+                or cur_primers[var1[1]] is None: 
+                    continue
+                #due to primer correction var1[2]-var0[2] is not always equal to var0[2]
+                real_addition = (var1[2]-var0[2])*consume_ratio
+                cur_primers[var1[0]] -= real_addition  
+                cur_primers[var1[1]] -= real_addition
+                cur_dNTP -= real_addition*2*len(self._products[hit_id][var1[3]])
+                var1[2] = var0[2] + real_addition
+        cur_state[0] = cur_dNTP
+        #check again if some primers were depleted
+        for p_id in cur_primers:
+            if cur_primers[p_id] <= 0:
+                cur_primers[p_id] = None
+    #end def
+    
     
     @classmethod
     def _construct_histogram(cls, main_title, products, reaction_ends=None, with_titles=True):
@@ -621,6 +648,8 @@ class PCR_Simulation(object):
     
 
     def per_hit_header(self, hit):
+        if not self._nonzero: 
+            return '\nNo PCR products have been found.\n'
         header_string  = ''
         header_string += 'Reaction ended in: %d cycles.\n' \
             % self._reaction_ends[hit]['cycles']
@@ -640,7 +669,7 @@ class PCR_Simulation(object):
                 if shortage_period[0] == shortage_period[1]:
                     header_string += str(shortage_period[0])
                 else:
-                    header_string += '%d-%d' % shortage_period
+                    header_string += '%d-%d' % tuple(shortage_period)
             header_string += wrap_text(shortage_string + '\n')
         header_string += '\n'
         return header_string
@@ -648,7 +677,7 @@ class PCR_Simulation(object):
         
     def all_products_histogram(self):
         if not self._nonzero: 
-            return '\nNo PCR products found, or quantities have not been calculated.\n'
+            return '\nNo PCR products have been found.\n'
         all_products = list(chain(*(p.values() for p in self._products.values())))
         return self._construct_histogram(self._all_products_title, all_products)
     #end def
@@ -656,7 +685,7 @@ class PCR_Simulation(object):
     
     def per_hit_histogram(self, hit):
         if not self._nonzero: 
-            return '\nNo PCR products found, or quantities have not been calculated.\n'
+            return '\nNo PCR products have been found.\n'
         products = self._products[hit].values()
         return self._construct_histogram('%s' % hit, products, self._reaction_ends, with_titles=False)
     #end def
@@ -664,7 +693,7 @@ class PCR_Simulation(object):
     
     def all_products_electrophoresis(self):
         if not self._nonzero: 
-            return '\nNo PCR products found, or quantities have not been calculated.\n'
+            return '\nNo PCR products have been found.\n'
         all_products = list(chain(*(p.values() for p in self._products.values())))
         return self._construct_electrophoresis(all_products)
     #end def
@@ -672,7 +701,7 @@ class PCR_Simulation(object):
     
     def per_hit_electrophoresis(self, hit):
         if not self._nonzero: 
-            return '\nNo PCR products found, or quantities have not been calculated.\n'
+            return '\nNo PCR products have been found.\n'
         products = self._products[hit].values()
         return self._construct_electrophoresis(products)
     #end def
@@ -680,7 +709,7 @@ class PCR_Simulation(object):
     
     def all_graphs_grouped_by_hit(self):
         if not self._nonzero: 
-            return '\nNo PCR products found, or quantities have not been calculated.\n'
+            return '\nNo PCR products have been found.\n'
         all_graphs = ''
         for hit in self._products.keys():
             all_graphs += self.per_hit_histogram(hit)
@@ -771,9 +800,6 @@ if __name__ == '__main__':
                                Seq('CAAGGCCTAGAGGCGGAAG').complement()))
 
     PCR_res.run()
-    #print 'products:'
-    #print PCR_res._products
-    #print bool(PCR_res)
     print PCR_res.format_report_header()
     print PCR_res.format_quantity_explanation()
     print PCR_res.all_products_histogram()

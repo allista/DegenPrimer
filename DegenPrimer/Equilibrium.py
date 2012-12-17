@@ -75,8 +75,15 @@ class Equilibrium(object):
         self._iconcentrations = list() #indexed list of concentrations
         self._reactants_dict  = dict() #dict of reactant indices
         for r_hash in self.reactions:
-            #add reaction to the list and add it's hash to the reverse dicts
             R  = self.reactions[r_hash]
+            #check reactants
+            if R['Ai'] != None and R['Ai'] not in self.concentrations:
+                raise ValueError(('Equilibrium: reactant %s is not present in '
+                                  'the list of concentrations.') % str(R['Ai']))
+            if R['Bi'] != None and R['Bi'] not in self.concentrations:
+                raise ValueError(('Equilibrium: reactant %s is not present in '
+                                  'the list of concentrations.') % str(R['Bi']))
+            #add reaction to the list and add it's hash to the reverse dicts
             Ri = self.indexed_reaction(R)
             self._ireactions.append(Ri)
             self._rev_r_dict[reaction_i] = r_hash
