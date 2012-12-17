@@ -356,6 +356,7 @@ class PCR_Simulation(object):
                                                              equilibrium.get_product_concentration(r_hash)]
                         cur_primers[fwd_primer.fwd_seq] -= fwd_strands_1[fwd_primer.fwd_seq][1] 
                         cur_state[0] -= fwd_strands_1[fwd_primer.fwd_seq][1]*len(product)
+                        prev_state[1][fwd_primer.fwd_seq] = cur_primers[fwd_primer.fwd_seq]
                         prev_state[0] = cur_state[0] 
                 #reverse primer annealing, first cycle
                 rev_strands_1 = dict()
@@ -367,6 +368,7 @@ class PCR_Simulation(object):
                                                              equilibrium.get_product_concentration(r_hash)]
                         cur_primers[rev_primer.fwd_seq] -= rev_strands_1[rev_primer.fwd_seq][1]
                         cur_state[0] -= rev_strands_1[rev_primer.fwd_seq][1]*len(product)
+                        prev_state[1][rev_primer.fwd_seq] = cur_primers[rev_primer.fwd_seq]
                         prev_state[0] = cur_state[0]
                 #second and third cycles
                 for f_id in fwd_strands_1:
@@ -377,6 +379,10 @@ class PCR_Simulation(object):
                         cur_primers[f_id] -= fwd_strand_2
                         cur_primers[r_id] -= rev_strand_2
                         cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
+                        var = [f_id, r_id, min(fwd_strand_2,rev_strand_2), product_id]
+                        prev_state[2].append(var)
+                        prev_state[1][f_id] = cur_primers[f_id]
+                        prev_state[1][r_id] = cur_primers[r_id]
                         prev_state[0] = cur_state[0]
                         #third
                         var = [f_id, r_id, fwd_strand_2+rev_strand_2, product_id]
@@ -386,6 +392,14 @@ class PCR_Simulation(object):
                         cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
             if not cur_variants:
                 self._products[hit_id] = dict() 
+                continue
+            #check if primers or dNTP were used in the first two cycles
+            if prev_state[0] < 0:
+                print '\nPCR simulation warning:'
+                print '   Template DNA: %s' % hit_id
+                print '   dNTP have been depleted in the first two cycles.'
+                print 'Try to change reaction conditions.'
+                self._products[hit_id] = dict()
                 continue
             #correct third cycle
             cur_variants.sort(key=lambda(x): x[2])
@@ -457,8 +471,8 @@ class PCR_Simulation(object):
                     continue
                 consume_ratio0 = depleted_primers[var1[0]] if var1[0] in depleted_primers else 1
                 consume_ratio1 = depleted_primers[var1[1]] if var1[1] in depleted_primers else 1
-                real_addition = var0[2]*min(consume_ratio0,
-                                            consume_ratio1)
+                real_addition = (var1[2]-var0[2])*min(consume_ratio0,
+                                                      consume_ratio1)
                 #restore subtracted
                 cur_primers[var1[0]] += var0[2]
                 cur_primers[var1[1]] += var0[2]
@@ -766,6 +780,7 @@ if __name__ == '__main__':
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
     from Bio.Alphabet import IUPAC
+    TD_Functions.C_dNTP = 0.5e-3
     TD_Functions.C_DNA  = 1e-10
     TD_Functions.PCR_T  = 60
     primers = []
