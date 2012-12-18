@@ -1,3 +1,17 @@
+degen-primer (2.0-rc1-0ppa1) precise; urgency=low
+
+  * New features:
+  All thermodynamic parameters (including stability of secondary structures) are calculated at a temperature of annealing provided through --PCR-T option.
+  Thermodynamic tables are now installed separately in csv format and may be easily checked.
+  Stability of secondary structures is described not only by vague dG but also by conversion degree at equilibrium, which is a way more convenient.
+  Added full-fledged simulation of PCR. Temperature, polymerase activity, number of cycles separate concentrations of template and each primer, polymerisation time (calculated from maximum amplicon length), affinity of each primer to each annealing site and stability of secondary structures -- all are taken into account. This allows accurate prediction of quantities of PCR products. And variation of these parameters may provide some insights into mechanics of complex PCR systems.
+  Changed BLAST query parameters. Generaly, search results are now less specific, which give more information on possible side products. Still not nearly as much as ipcress gives.
+  BLAST results are reported in a more descriptive manner: each alignment is displayed as a dimer of found template sequence with a full, not truncated primer (with dangling ends when they exist). Stability of each alignment is described in the same terms as in the report of secondary structures. Hits are filtered and sorted by stability of their alignments, which are filtered and sorted as well. Added list of all hits with short info for each at the beginning of a report.
+  CPU or time consuming tasks (namely, PCR sumulation, calculation of equilibrium states, BLAST query) are parallelized at subprocess level. So multicore processors should give considerable speadup.
+  * Plus bugfixes, code refactoring and improvment
+
+ -- Allis Tauri <allista@gmail.com>  Wed, 19 Dec 2012 00:35:06 +0400
+
 degen-primer (1.6-0ppa1) precise; urgency=low
 
   * Bufgixes.

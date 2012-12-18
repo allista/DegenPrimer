@@ -30,15 +30,16 @@ from DegenPrimer.UnifiedNN import UnifiedNN
 
 from distutils.core import setup
 setup(name='degen-primer',
-      version='1.6',
-      description='Tool to compute degenerate primer parameters using BioPython',
+      version='2.0-rc1',
+      description='Degenerate primer characterization and '
+                  'in silico PCR simulation software.',
       long_description=read('README'),
       license='GPL-3',
       author='Allis Tauri',
       author_email='allista@gmail.com',
       url='https://launchpad.net/degenprimer',
       classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Intended Audience :: Science/Research',
         'Operating System :: POSIX',
