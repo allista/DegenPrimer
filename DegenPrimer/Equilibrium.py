@@ -20,7 +20,7 @@ Created on Nov 25, 2012
 
 @author: Allis Tauri <allista@gmail.com>
 '''
-from scipy.optimize import fmin_l_bfgs_b, fsolve
+from scipy.optimize import fsolve
 from numpy.random import random_sample
 
 class Equilibrium(object):
@@ -234,18 +234,6 @@ class Equilibrium(object):
                 return (A1i - (C_A - _A)*K)
             return func
     #end def
-
-
-    def _initial_estimation(self, obj_func, r0, bounds):
-        '''try to estimate the solution roughly with iterations of increasing precision'''
-        factr = 1e15 #initial convergence precision
-        sol    = fmin_l_bfgs_b(obj_func, r0, factr = factr, bounds=bounds, approx_grad=True)
-        objective_ratio = obj_func(r0)/obj_func(sol[0]) 
-        if objective_ratio < 10:
-            if objective_ratio > 1:
-                r0 = sol[0] 
-        return r0
-    #end def
     
     
     def calculate(self):
@@ -257,13 +245,7 @@ class Equilibrium(object):
         #system function for fsolve and objective function for fmin_ 
         sys_func = lambda(r): tuple(l_funcs[i](r) for i in range(len(l_funcs)))
         objective_function = lambda(r): sum((l_funcs[i](r))**2 for i in range(len(l_funcs)))
-        objective_scale    = 1e12/sum((l_funcs[i](r0))**2 for i in range(len(l_funcs)))
-        scaled_objective_function = lambda(r): sum((l_funcs[i](r))**2 for i in range(len(l_funcs)))*objective_scale
-        #solution bounds
-        bounds = ((0,1),)*len(l_funcs)
-        #try to estimate the solution roughly
-        r0 = self._initial_estimation(scaled_objective_function, r0, bounds)
-        #try to fine-tune the solution using fsolve
+        #try to find the solution using fsolve
         sol = fsolve(sys_func, r0, full_output=True)
         #if failed for the first time, iterate fsolve while jitter r0 a little
         r0_value = objective_function(r0)
@@ -271,7 +253,8 @@ class Equilibrium(object):
         or    objective_function(sol[0]) >  self._precision \
         or    min(sol[0]) < 0 \
         or    max(sol[0]) > 1:
-            sol = fsolve(sys_func, [ri+(random_sample(1)[0]-0.5)*1e-1 for ri in r0], xtol=1e-10, full_output=True)
+            sol = fsolve(sys_func, [ri+(random_sample(1)[0]-ri)*0.3 for ri in r0], xtol=1e-10, full_output=True)
+            if  min(sol[0]) >= 0 and max(sol[0]) <= 1: r0 = sol[0]
         r0 = sol[0]
         #in any case use the best guess for the solution
         self._solution = r0

@@ -164,7 +164,7 @@ class PCR_Simulation(object):
     #separate bands on the electrophoresis.
     _precision          = 1e6
     #minimum equilibrium constant: reactions with EC less than this will not be taken into account
-    _min_K              = 1000
+    _min_K              = 100
 
 
     def __init__(self, 
@@ -339,7 +339,6 @@ class PCR_Simulation(object):
             solution   = equilibrium.solution
             cur_state  = [TD_Functions.C_dNTP*4.0, #a matrix is considered to have equal quantities of each letter
                           dict(self._primer_concentrations), []]
-            prev_state = deepcopy(cur_state)
             self._reaction_ends[hit_id] = {'poly':[],
                                            'cycles':3,
                                            'products':dict().fromkeys(self._products[hit_id].keys(),0)}
@@ -356,8 +355,6 @@ class PCR_Simulation(object):
                                                              equilibrium.get_product_concentration(r_hash)]
                         cur_primers[fwd_primer.fwd_seq] -= fwd_strands_1[fwd_primer.fwd_seq][1] 
                         cur_state[0] -= fwd_strands_1[fwd_primer.fwd_seq][1]*len(product)
-                        prev_state[1][fwd_primer.fwd_seq] = cur_primers[fwd_primer.fwd_seq]
-                        prev_state[0] = cur_state[0] 
                 #reverse primer annealing, first cycle
                 rev_strands_1 = dict()
                 rev_template  = self._find_template(hit_id, product.rev_template)
@@ -368,8 +365,6 @@ class PCR_Simulation(object):
                                                              equilibrium.get_product_concentration(r_hash)]
                         cur_primers[rev_primer.fwd_seq] -= rev_strands_1[rev_primer.fwd_seq][1]
                         cur_state[0] -= rev_strands_1[rev_primer.fwd_seq][1]*len(product)
-                        prev_state[1][rev_primer.fwd_seq] = cur_primers[rev_primer.fwd_seq]
-                        prev_state[0] = cur_state[0]
                 #second and third cycles
                 for f_id in fwd_strands_1:
                     for r_id in rev_strands_1:
@@ -380,10 +375,6 @@ class PCR_Simulation(object):
                         cur_primers[r_id] -= rev_strand_2
                         cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
                         var = [f_id, r_id, min(fwd_strand_2,rev_strand_2), product_id]
-                        prev_state[2].append(var)
-                        prev_state[1][f_id] = cur_primers[f_id]
-                        prev_state[1][r_id] = cur_primers[r_id]
-                        prev_state[0] = cur_state[0]
                         #third
                         var = [f_id, r_id, fwd_strand_2+rev_strand_2, product_id]
                         cur_variants.append(var)
@@ -393,18 +384,19 @@ class PCR_Simulation(object):
             if not cur_variants:
                 self._products[hit_id] = dict() 
                 continue
-            #check if primers or dNTP were used in the first two cycles
-            if prev_state[0] < 0:
+            #check if primers or dNTP were used in the first three cycles
+            if cur_state[0] <= 0 or min(cur_state[1]) <= 0:
                 print '\nPCR simulation warning:'
                 print '   Template DNA: %s' % hit_id
-                print '   dNTP have been depleted in the first two cycles.'
+                if cur_state[0] <= 0:
+                    print '   dNTP have been depleted in the first three cycles.'
+                if min(cur_state[1]) <= 0:
+                    print '   Some primers have been depleted in the first three cycles.'
                 print 'Try to change reaction conditions.'
                 self._products[hit_id] = dict()
                 continue
-            #correct third cycle
-            cur_variants.sort(key=lambda(x): x[2])
-            self._correct_cycle(hit_id, 3, prev_state, cur_state)
             #all consequent PCR cycles
+            cur_variants.sort(key=lambda(x): x[2])
             for cycle in range(4, self._num_cycles+1):
                 idle = True
                 #save current state
@@ -525,17 +517,16 @@ class PCR_Simulation(object):
     
     
     @classmethod
-    def _construct_histogram(cls, main_title, products, reaction_ends=None, with_titles=True):
-        text_width = StringTools.text_width
+    def _construct_histogram(cls, main_title, products, reaction_ends=None, with_titles=True, sort=True):
         #construct histogram
-        histogram  = dict()
+        histogram  = []
         max_start  = max(len(str(p.start)) for p in products)
         max_end    = max(len(str(p.end))   for p in products)
         max_len    = max(len(str(len(p)))  for p in products)
-        max_title  = 0
         if with_titles:
-            max_title  = max(len(p.name) for p in products)
-        spec_limit = text_width-cls._hist_width-2
+            max_title = max(len(p.name) for p in products)
+        else: max_title = 0
+        spec_limit = StringTools.text_width-cls._hist_width-2
         for product in products:
             product_spec   = '%d%s bp [%d%s-%s%d]' \
                            % (len(product),
@@ -561,10 +552,9 @@ class PCR_Simulation(object):
                             + ' ' + product_spec
             else:
                 colname = product_spec+' '*(spec_limit - len(product_spec))
-            histogram[colname] = [product.quantity, len(product)]
+            histogram.append([colname, product.quantity, len(product)])
         #sort histogram by product length, from the longest to the shortest
-        histogram = sorted(zip(histogram, histogram.values()), key=lambda x: x[1][1], reverse=True)
-        histogram = tuple((line[0], line[1][0]) for line in histogram)
+        if sort: histogram.sort(key=lambda(x): x[2], reverse=True)
         #format histogram
         return cls._format_histogram(main_title, histogram)
     #end def
@@ -692,8 +682,15 @@ class PCR_Simulation(object):
     def all_products_histogram(self):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
-        all_products = list(chain(*(p.values() for p in self._products.values())))
-        return self._construct_histogram(self._all_products_title, all_products)
+        all_products = []
+        prods_list = self._products.values()
+        prods_list.sort(key=lambda(d): max(p.quantity for p in d.values()), reverse=True)
+        for p_dict in prods_list:
+            prods = p_dict.values()
+            prods.sort(key=len, reverse=True)
+            all_products += prods
+        return self._construct_histogram(self._all_products_title, all_products, 
+                                         None, with_titles=True, sort=False)
     #end def
     
     
@@ -701,15 +698,8 @@ class PCR_Simulation(object):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
         products = self._products[hit].values()
-        return self._construct_histogram('%s' % hit, products, self._reaction_ends, with_titles=False)
-    #end def
-    
-    
-    def all_products_electrophoresis(self):
-        if not self._nonzero: 
-            return '\nNo PCR products have been found.\n'
-        all_products = list(chain(*(p.values() for p in self._products.values())))
-        return self._construct_electrophoresis(all_products)
+        return self._construct_histogram('%s' % hit, products, 
+                                         self._reaction_ends, with_titles=False)
     #end def
     
     
@@ -725,7 +715,10 @@ class PCR_Simulation(object):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
         all_graphs = ''
-        for hit in self._products.keys():
+        prods = self._products.items()
+        prods.sort(key=lambda(d): max(p.quantity for p in d[1].values()), reverse=True)
+        hits = [p[0] for p in prods]
+        for hit in hits:
             all_graphs += self.per_hit_histogram(hit)
             all_graphs += self.per_hit_header(hit)
             all_graphs += hr(' electrophorogram of PCR products ')
@@ -780,7 +773,7 @@ if __name__ == '__main__':
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
     from Bio.Alphabet import IUPAC
-    TD_Functions.C_dNTP = 0.5e-3
+    TD_Functions.C_dNTP = 0.02e-3
     TD_Functions.C_DNA  = 1e-10
     TD_Functions.PCR_T  = 60
     primers = []
