@@ -29,3 +29,4 @@ RE:(?i).*\.ods#
 ./old-output
 ./test.py
 *.profile
+RE:(?i).*\.fa

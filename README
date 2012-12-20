@@ -16,5 +16,6 @@ the BioUtils project.
 
 Dependecies: python2 >= 2.7, 
              Biopython >= 1.58, 
+	     NumPy >= 1.6.1,
              SciPy >= 0.9,
              exonerate (optional, yet strongly recommended)

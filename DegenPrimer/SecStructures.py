@@ -135,15 +135,23 @@ class Duplex(object):
         self._rev_sequence = rev_seq
         if not dimer: self._dimer = Dimer.from_sequences(fwd_seq, rev_seq)
         else: self._dimer  = dimer
-        self._dimer.dG     = dimer_dG_corrected(self._dimer, fwd_seq, rev_seq)
-        self._K            = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
+        if self._dimer:
+            self._dimer.dG = dimer_dG_corrected(self._dimer, fwd_seq, rev_seq)
+            self._K        = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
+        else: self._K      = None
     #end def
+    
+    def __nonzero__(self): return bool(self._dimer)
     
     def __hash__(self):
         return hash((str(self._fwd_sequence), str(self._rev_sequence), self._dimer))
     
     def __str__(self):
         duplex_string = ''
+        if not self._dimer:
+            duplex_string += str(self._fwd_sequence) + '\n'
+            duplex_string += str(self._rev_sequence) + '\n'
+            return duplex_string
         fwd_matches = self._dimer.fwd_matches
         rev_matches = self._dimer.rev_matches
         #construct matches string
