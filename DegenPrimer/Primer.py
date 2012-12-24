@@ -62,6 +62,8 @@ class Primer(object):
         self._calculate_Tms()
     #end def
 
+    def __len__(self): return len(self._sequence)
+
     def __contains__(self, seq):
         return str(seq) in self.str_sequences
 

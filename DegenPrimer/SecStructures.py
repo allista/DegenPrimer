@@ -187,6 +187,8 @@ class Duplex(object):
         return duplex_string
     #end def
     
+    def __repr__(self): return str(self)
+    
     @property
     def fwd_seq(self): return str(self._fwd_sequence)
     
