@@ -93,9 +93,11 @@ class SearchEngine(object):
 
 
     def __init__(self):
-        self._abort_events = []
-        self._all_jobs = []
-
+        self._all_jobs        = []
+        self._abort_lock      = mp.Lock()
+        self._abort_events    = []
+    #end def
+    
 
     @classmethod
     def _map_letter(cls, letter, _map):
@@ -183,112 +185,7 @@ class SearchEngine(object):
     
     @classmethod
     def mp_better(cls, template, primer):
-        return cls._max_jobs > 1 and len(template) >= 300*len(primer)
-
-    
-    #subprocess worker factory and launcher
-    @classmethod
-    def _find_in_chunk_mp(cls, job_list, queue, strand, i, 
-                          t_chunk, p_fft, correction, c_size, c_stride):
-        #define the worker
-        def worker(q, strand, i, t_chunk, p_fft, correction, c_size, c_stride):
-            result = cls._find_in_chunk(t_chunk, p_fft, correction, c_size, c_stride)
-            q.put((strand, i, result))
-        #start subprocess
-        job = mp.Process(target=worker, args=(queue, strand, i, t_chunk, 
-                                              p_fft, correction, c_size, c_stride))
-        job_list.append((job,queue))
-        job.start()
-    #end def
-    
-    
-    @classmethod
-    def _join_job(cls, job, fwd_list, rev_list):
-        out = []
-        while True:
-            try: 
-                while True: out.append(job[1].get(True,1e-3))
-            except Empty: 
-                if job[0].is_alive(): 
-                    #sleep(1e-6)
-                    continue
-                else: 
-                    job[0].join()
-                    break
-            except IOError, e:
-                if e.errno == errno.EINTR:
-                    #sleep(1e-12)
-                    continue
-                else:
-                    print 'Unhandled IOError:', e.message
-                    raise
-            except Exception, e:
-                print 'Unhandled Exception:'
-                print_exception(e)
-                raise
-        #end loop
-        if out:
-            for item in out:
-                if item[0] == 1:
-                    fwd_list.append((item[1],item[2]))
-                else:
-                    rev_list.append((item[1],item[2]))
-    #end def
-    
-    
-    @classmethod
-    def find_mp1(cls, template, primer, mismatches):
-        '''Find all occurrences of a primer sequence in both strands of a 
-        template sequence with at most k mismatches.'''
-        p_len,t_len  = len(primer),len(template)
-        cls._check_length_inequality(t_len, p_len)
-        chunk_size   = min(cls._max_chunk_size, cls._calculate_chunk_size(t_len, p_len))
-        chunk_stride = chunk_size-p_len
-        p_maps       = cls._map_pattern(str(primer.master_sequence.seq), chunk_size)
-        p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
-        fwd_seq      = template.seq
-        rev_seq      = template.seq.reverse_complement()
-        correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
-        fwd_score    = []
-        rev_score    = []
-        jobs, i      = [], 0
-        #start find_in_chunk jobs
-        while i < t_len:
-            if len(jobs) >= cls._max_jobs:
-                cls._join_job(jobs[0], fwd_score, rev_score)
-                del jobs[0]
-            front = min(t_len, i+chunk_size)
-            cls._find_in_chunk_mp(jobs, mp.Queue(), 1, i, fwd_seq[i:front], 
-                                  p_fft, correction, 
-                                  chunk_size, chunk_stride)
-            if len(jobs) >= cls._max_jobs:
-                cls._join_job(jobs[0], fwd_score, rev_score)
-                del jobs[0]
-            cls._find_in_chunk_mp(jobs, mp.Queue(), -1, i, rev_seq[i:front], 
-                                  p_fft, correction, 
-                                  chunk_size, chunk_stride)
-            i += chunk_stride
-        #join all jobs
-        while len(jobs) > 0:
-            cls._join_job(jobs[0], fwd_score, rev_score)
-            del jobs[0]
-        #sort and concatenate scores
-        fwd_score.sort(key=lambda(x): x[0])
-        fwd_score = [result[1] for result in fwd_score]
-        rev_score.sort(key=lambda(x): x[0])
-        rev_score = [result[1] for result in rev_score]
-        fwd_score = np.concatenate(fwd_score)
-        rev_score = np.concatenate(rev_score)
-        #match indices
-        matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len)[fwd_score[:t_len-p_len] >= matches]
-        rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
-        del fwd_score, rev_score
-        #construct duplexes
-        fwd_results = cls._compile_duplexes(fwd_seq, primer, fwd_matches)
-        rev_results = cls._compile_duplexes(rev_seq, primer, rev_matches)
-        return fwd_results,rev_results
-    #end def
+        return len(template) > 25000
 
 
     @classmethod
@@ -316,7 +213,7 @@ class SearchEngine(object):
                     print_exception(e)
                     raise
             if finished_job is not None:
-                del jobs[finished_job] 
+                del jobs[finished_job]
     #end def
     
 
@@ -338,7 +235,6 @@ class SearchEngine(object):
                 rev_score = np.concatenate([rev_score, score])
                 pos += c_stride
             if abort_e.is_set():
-                print 'Subprocess %d aborted.' % os.getpid() 
                 queue.cancel_join_thread()
             else: queue.put((start, 
                              fwd_score[:t_len-p_len], 
@@ -353,12 +249,12 @@ class SearchEngine(object):
     #end def
     
     
-    def find_mp2(self, template, primer, mismatches, mult):
+    def find_mp(self, template, primer, mismatches):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
         p_len,t_len  = len(primer),len(template)
         self._check_length_inequality(t_len, p_len)
-        slice_size   = t_len/self._max_jobs/mult+p_len+1
+        slice_size   = t_len/self._max_jobs/(t_len/100000+1)+p_len+1
         slice_stride = slice_size-p_len
         chunk_size   = min(self._max_chunk_size, self._calculate_chunk_size(slice_size, p_len))
         chunk_stride = chunk_size-p_len
@@ -370,7 +266,7 @@ class SearchEngine(object):
         fwd_score    = []
         rev_score    = []
         jobs         = []
-        i = 0; abort_event  = mp.Event() 
+        i = 0; abort_event = mp.Event()
         self._abort_events.append(abort_event)
         #start find_in_chunk jobs
         while i < t_len and not abort_event.is_set():
@@ -381,11 +277,18 @@ class SearchEngine(object):
                                     correction, front-i, p_len, chunk_size, chunk_stride)
             self._all_jobs.append(jobs[-1])
             i += slice_stride
-        #if search was aborted, return empty results
-        if abort_event.is_set(): return [],[]
         #join all jobs
-        self._join_jobs(abort_event, jobs, fwd_score, rev_score)
-        del jobs
+        self._join_jobs(abort_event, list(jobs), fwd_score, rev_score)
+        #if search was aborted, return empty results
+        if abort_event.is_set():
+            return [],[]
+        #else, cleanup
+        with self._abort_lock:
+            if abort_event in self._abort_events:
+                self._abort_events.remove(abort_event)
+            for job in jobs: 
+                if job in self._all_jobs:
+                    self._all_jobs.remove(job)
         #sort, correct and concatenate scores
         fwd_score.sort(key=lambda(x): x[0])
         fwd_score = [result[1] for result in fwd_score]
@@ -432,6 +335,7 @@ class SearchEngine(object):
             i += chunk_stride
         #if search was aborted, return empty results
         if abort_event.is_set(): return [],[]
+        self._abort_events.remove(abort_event)
         #concatenate scores
         fwd_score = np.concatenate(fwd_score)
         rev_score = np.concatenate(rev_score)
@@ -449,20 +353,24 @@ class SearchEngine(object):
     
     def abort(self):
         if self._abort_events:
-            for event in self._abort_events:
-                event.set()
-            while self._all_jobs:
-                finished_job = None
-                for i,job in enumerate(self._all_jobs):
-                    try: 
-                        while True: job[1].get_nowait()
-                    except Empty: pass
-                    if not job[0].is_alive():
-                        job[0].join()
-                        finished_job = i
-                        break
-                if finished_job is not None:
-                    del self._all_jobs[finished_job]
+            with self._abort_lock:
+                for event in self._abort_events:
+                    event.set()
+            sleep(1)
+            with self._abort_lock:
+                while self._all_jobs:
+                    finished_job = None
+                    for i,job in enumerate(self._all_jobs):
+                        try: 
+                            while True: job[1].get_nowait()
+                        except Empty: pass
+                        if not job[0].is_alive():
+                            job[0].join()
+                            finished_job = i
+                            break
+                    if finished_job is not None:
+                        del self._all_jobs[finished_job]
+                self._abort_events = []
     #end def
 #end class
 
@@ -661,7 +569,7 @@ if __name__ == '__main__':
                         P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
                         times = []
                         for i in range(10):
-                            et = timeit.timeit('searcher.find_mp2(T, P, 3, mult)', 
+                            et = timeit.timeit('searcher.find_mp(T, P, 3, mult)', 
                                                setup='from __main__ import T,P,mult,searcher', 
                                                number=1)
                             times.append(et)
@@ -676,42 +584,34 @@ if __name__ == '__main__':
                         min_time = data1[mult][-1]
                         min_mult = mult
                 data2.append((t_len, p_len, min_mult, min_time))
-        out_file = open('find_mp2_data1-%d.csv' % time(), 'wb')
+        out_file = open('find_mp_data1-%d.csv' % time(), 'wb')
         csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
         csv_writer.writerows(data1)
         out_file.close()
-        out_file = open('find_mp2_data2-%d.csv' % time(), 'wb')
+        out_file = open('find_mp_data2-%d.csv' % time(), 'wb')
         csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
         csv_writer.writerows(data2)
         out_file.close()
     #end def
 
-    #gather_statistics(2100000, 3500000)
-    #gather_statistics(3600000, 4000000)
-
     #primer = Primer(SeqRecord(query, id='test'), 0.1e-6)
     #out0,out1,out2,out3 = [],[],[],[]
-    #cProfile.run("out1 = searcher.find_mp(template, primer, 3);", 'find_mp.profile')
-    #sleep(1)
-    #cProfile.run("for i in range(10): searcher.find_mp1(template, primer, 3);", 'find_mp1.profile')
-    #sleep(1)
-    #cProfile.run("for i in range(10): searcher.find_mp2(template, primer, 3);", 'find_mp2.profile')
+    #cProfile.run("for i in range(10): searcher.find_mp(template, primer, 3);", 'find_mp2.profile')
     #sleep(1)
     #cProfile.run("for i in range(10): searcher.find(template, primer, 3)", 'find.profile')
-    
-#    out = None
-#    cProfile.run("for i in range(10): \
-#                      out = searcher.find_mp2(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3, 2)",
-#                 'find_mp2.profile')
-#    print_out(out,  'find_mp2')
+
     
     ppid = os.getpid()
-    for i in range(10):
-        out = searcher.find_mp2(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 
-                                3, 26)
+    out  = None
+    cProfile.run("for i in range(10):\
+        out = searcher.find_mp(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
+        'find_mp.profile')
+    print_out(out, 'find_mp')
+    cProfile.run("for i in range(10):\
+        out = searcher.find(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
+        'find.profile')
+    print_out(out, 'find')
     
     #print_out(out0, 'find')
     #print_out(out1, 'find_mp')
-    #print_out(out2, 'find_mp1')
-    #print_out(out3, 'find_mp2')
     print 'Done'
