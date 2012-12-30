@@ -20,77 +20,34 @@ Created on Dec 21, 2012
 import os
 import shutil
 import sqlite3
+import errno
 import numpy as np
-import multiprocessing
-from time import time
+import multiprocessing as mp
+from Queue import Empty
+from time import time, sleep
 from datetime import timedelta
 from array import array
 from StringIO import StringIO
 from scipy.fftpack import fft, ifft
 from SecStructures import Duplex
+from StringTools import print_exception
 
-class SeqDB(object):
-    '''Create and manage a database of sequences with fast approximate match 
-    searching.'''
+
+class SearchEngine(object):
+    '''Fast search of a pattern sequence in a given set of template sequences 
+    with parallelization using multiprocessing.'''
     
-    _sequences_schema = \
-    '''CREATE TABLE "sequences" (
-           "id"         INTEGER PRIMARY KEY AUTOINCREMENT,
-           "name"       TEXT NOT NULL,
-           "sequence"   TEXT NOT NULL,
-           "fwd_AT_map" BLOB NOT NULL,
-           "rev_AT_map" BLOB NOT NULL,
-           "fwd_GC_map" BLOB NOT NULL,
-           "rev_GC_map" BLOB NOT NULL)'''
+    _w_3_0 = 1                        #trivial 3d root of unity 
+    _w_3_1 = (-1/2.0+np.sqrt(3)/2.0j) #3d root of unity in a power of 1
+    _w_3_2 = (-1/2.0-np.sqrt(3)/2.0j) #3d root of unity in a power of 2
     
-#    _strands_schema = \
-#    '''CREATE TABLE "strands" (
-#           "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
-#           "sequence"  BLOB NOT NULL,
-#           "strand"    INTEGER NOT NULL,
-#           "AT_map_id" INTEGER NOT NULL,
-#           "GC_map_id" INTEGER NOT NULL)'''
-#    
-#    _maps_schema = \
-#    '''CREATE TABLE "maps" (
-#           "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-#           "letters"   TEXT NOT NULL,
-#           "map"       BLOB NOT NULL)'''
+    _unambiguous = array('b','ATGC')  #ATGC characters as byte array
     
-    
-    _w_3_0 = 1
-    _w_3_1 = (-1/2.0+np.sqrt(3)/2.0j)
-    _w_3_2 = (-1/2.0-np.sqrt(3)/2.0j)
-    
-    _unambiguous = array('b','ATGC')
-    _ambiguous   = _unambiguous+array('b', 'RYSWKMBDHVN') 
-    
+    #alphabet mappings to the 3d roots of unity for templates and patterns
     _T_AT_mapping = dict(zip(_unambiguous, (_w_3_1,_w_3_2,0,0))) 
-#                    {'A':_w_3_1,
-#                     'T':_w_3_2,
-#                     'G':0,'C':0}
     
     _T_GC_mapping = dict(zip(_unambiguous, (0,0,_w_3_1,_w_3_2)))
-#                    {'A':0,'T':0,
-#                     'G':_w_3_1,
-#                     'C':_w_3_2}
-    
-#    _P_AT_mapping = dict(zip(_ambiguous, 
-#                            (_w_3_2,
-#                            _w_3_1,
-#                            _w_3_0,
-#                            _w_3_0,
-#                            _w_3_2,
-#                            _w_3_1,
-#                            _w_3_0,
-#                            _w_3_2+_w_3_1,
-#                            _w_3_1,
-#                            _w_3_2,
-#                            _w_3_1,
-#                            _w_3_2+_w_3_1,
-#                            _w_3_2+_w_3_1,
-#                            _w_3_2,
-#                            _w_3_2+_w_3_1)))
+
     _P_AT_mapping = {'A':_w_3_2,
                      'T':_w_3_1,
                      'G':_w_3_0,
@@ -108,22 +65,6 @@ class SeqDB(object):
                      'V':_w_3_2,
                      'N':_w_3_2+_w_3_1}
     
-#    _P_GC_mapping = dict(zip(_ambiguous, 
-#                            (_w_3_0,
-#                             _w_3_0,
-#                             _w_3_2,
-#                             _w_3_1,
-#                             _w_3_2,
-#                             _w_3_1,
-#                             _w_3_2+_w_3_1,
-#                             _w_3_0,
-#                             _w_3_2,
-#                             _w_3_1,
-#                             _w_3_2+_w_3_1,
-#                             _w_3_2,
-#                             _w_3_1,
-#                             _w_3_2+_w_3_1,
-#                             _w_3_2+_w_3_1)))
     _P_GC_mapping = {'A':_w_3_0,
                      'T':_w_3_0,
                      'G':_w_3_2,
@@ -141,14 +82,21 @@ class SeqDB(object):
                      'V':_w_3_2+_w_3_1,
                      'N':_w_3_2+_w_3_1}
     
-    _chunk_size = 100000
+    #template sequences grater than this value will be split into slices of 
+    #approximately that size 
+    _max_chunk_size = 2**17
+    
+    #maximum jobs to launch within a single search
+    _max_jobs   = mp.cpu_count()
+    
+    ###########################################################################
+
 
     def __init__(self):
-        self._db = None
-        self._cursor = None
-    #end def
-    
-    
+        self._abort_events = []
+        self._all_jobs = []
+
+
     @classmethod
     def _map_letter(cls, letter, _map):
         try: return _map[letter]
@@ -157,29 +105,8 @@ class SeqDB(object):
     
     
     @classmethod
-    def _map_template(cls, template, map_len):
-        fwd_seq = template.seq
-        rev_seq = template.seq.reverse_complement()
-        fwd_AT_map = np.array(array('b',str(fwd_seq)), dtype=complex)
-        fwd_AT_map.resize(map_len)
-        rev_AT_map = np.array(array('b',str(rev_seq)), dtype=complex)
-        rev_AT_map.resize(map_len)
-        fwd_GC_map = fwd_AT_map.copy()
-        rev_GC_map = rev_AT_map.copy()
-        for k,v in cls._T_AT_mapping.iteritems():
-            fwd_AT_map[fwd_AT_map == k] = v
-            rev_AT_map[rev_AT_map == k] = v
-        for k,v in cls._T_GC_mapping.iteritems():
-            fwd_GC_map[fwd_GC_map == k] = v
-            rev_GC_map[rev_GC_map == k] = v
-        return (fwd_seq, rev_seq, 
-                (fwd_AT_map[::-1], fwd_GC_map[::-1]),
-                (rev_AT_map[::-1], rev_GC_map[::-1]))
-    #end def
-    
-    
-    @classmethod
     def _map_pattern(cls, pattern, map_len):
+        '''Map pattern sequence to an alphabet of 3d roots of unity.'''
         #this naive algorithm works ~5 times faster 
         #than the one used for template mapping due to short length of patterns
         AT_map = np.zeros(map_len, dtype=complex)
@@ -190,25 +117,35 @@ class SeqDB(object):
         return (AT_map, GC_map)
     #end def
 
+
     @classmethod
     def _compile_duplexes(cls, template, primer, matches):
+        '''Given a template strand, a primer and a list of locations where the 
+        primer matches the template, return a list of Duplexes formed by 
+        unambiguous components of the primer at each match location.'''
         p_len = len(primer)
         results = []
         for i in matches:
             duplexes = []
-            print i #TODO:remove
             for var in primer.sequences:
                 duplexes.append(Duplex(var, template[i:i+p_len].reverse_complement()))
-                print duplexes[-1] #TODO:remove
             results.append((i+p_len-1, duplexes))
         return results
     #end def
     
     
     @classmethod
-    def _find_in_chunk(cls, t_chunk, p_fft, c_stride, map_len):
+    def _find_in_chunk(cls, t_chunk, p_fft, correction, c_size, c_stride):
+        '''Find number of matches of pattern at each position in a given 
+        chunk of a template.
+        Pattern is given as a polynomial evaluated at n-th roots of unity 
+        using fft.
+        map_len is a length of a map of template to the alphabet of 3-d roots 
+        of unity chunk to build. It's a power of 2 integer for fft to work fast.
+        c_stride -- a part of chunk for which matches are calculated 
+        (it is less than map_len, so chunks overlap each other)'''
         t_AT_map = np.array(array('b',str(t_chunk)), dtype=complex)
-        t_AT_map.resize(map_len)
+        t_AT_map.resize(c_size)
         t_GC_map = t_AT_map.copy()
         for k,v in cls._T_AT_mapping.iteritems():
             t_AT_map[t_AT_map == k] = v
@@ -217,97 +154,339 @@ class SeqDB(object):
         AT_score = ifft(fft(t_AT_map[::-1])*p_fft[0])[::-1][:c_stride]
         GC_score = ifft(fft(t_GC_map[::-1])*p_fft[1])[::-1][:c_stride]
         score    = AT_score.real + GC_score.real
+        score    = (score + correction - score/3.0)
         return score
     #end def
     
     
-    @classmethod 
-    def find_by_chunks(cls, template, primer, mismatches):
-        pattern    = primer.master_sequence.seq
-        p_len      = len(pattern)
-        t_len      = len(template)
-        if p_len > t_len: 
-            raise ValueError('find: template sequence should be longer or equal'
-                             ' to primer sequence.')
-        chunk_size   = min(t_len, (cls._chunk_size/p_len+1)*p_len)
-        chunk_stride = chunk_size-p_len+1
-        map_len    = int(2**(np.ceil(np.log2(chunk_size))))
-        p_maps     = cls._map_pattern(pattern, map_len)
-        p_AT_fft   = fft(p_maps[0])
-        p_GC_fft   = fft(p_maps[1])
-        fwd_seq    = template.seq
-        rev_seq    = template.seq.reverse_complement()
-        fwd_score  = np.ndarray(0,dtype=float)
-        rev_score  = np.ndarray(0,dtype=float)
-        correction = np.ndarray(chunk_stride)
-        correction.fill(p_len/3.0)
-        i = 0
-        while i < t_len:
-            front = min(t_len, i+chunk_size)
-            score = cls._find_in_chunk(fwd_seq[i:front], (p_AT_fft,p_GC_fft), 
-                                       chunk_stride, map_len)
-            score = (score + correction - score/3.0)
-            fwd_score = np.concatenate([fwd_score, score])
-            score = cls._find_in_chunk(rev_seq[i:front], (p_AT_fft,p_GC_fft), 
-                                       chunk_stride, map_len)
-            score = (score + correction - score/3.0)
-            rev_score = np.concatenate([rev_score, score])
-            i += chunk_stride
-        #match indeces
-        matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]
-        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]
-        del fwd_score, rev_score
-        #construct duplexes
-        fwd_results = cls._compile_duplexes(fwd_seq, primer, fwd_matches)
-        rev_results = cls._compile_duplexes(rev_seq, primer, rev_matches)
-        return fwd_results,rev_results
+    @classmethod
+    def _calculate_chunk_size(cls, t_len, p_len):
+        chunk = 2**int(np.ceil(np.log2(t_len)))
+        rem = t_len % chunk
+        if rem == 0: return chunk
+        chunks = 3
+        while t_len/chunk+1 < cls._max_jobs:
+            new_chunk = 2**int(np.ceil(np.log2(t_len/float(chunks)+p_len)))
+            if t_len % new_chunk < rem: chunk = new_chunk
+            chunks += 2
+        return chunk
     #end def
     
     
     @classmethod
-    def find(cls, template, primer, mismatches):
-        pattern = primer.master_sequence
-        p_len   = len(pattern)
-        t_len   = len(template)
-        if p_len > t_len: 
-            raise ValueError('find: template sequence should be longer or equal'
-                             ' to primer sequence.')
-        map_len = int(2**(np.ceil(np.log2(t_len))))
-        matches = max(1, p_len - mismatches)-0.5
-        fwd_seq,rev_seq,fwd_maps,rev_maps = cls._map_template(template, map_len)
-        pattern_maps  = cls._map_pattern(pattern, map_len)
-        #AT convolution
-        P_AT_fft     = fft(pattern_maps[0])
-        fwd_AT_score = ifft(fft(fwd_maps[0])*P_AT_fft)[::-1][:t_len-p_len+1]
-        rev_AT_score = ifft(fft(rev_maps[0])*P_AT_fft)[::-1][:t_len-p_len+1]
-        del P_AT_fft
-        #GC convolution
-        P_GC_fft     = fft(pattern_maps[1])
-        fwd_GC_score = ifft(fft(fwd_maps[1])*P_GC_fft)[::-1][:t_len-p_len+1]
-        rev_GC_score = ifft(fft(rev_maps[1])*P_GC_fft)[::-1][:t_len-p_len+1]
-        del P_GC_fft
-        del fwd_maps, rev_maps
-        #total scores
-        fwd_score    = fwd_AT_score.real + fwd_GC_score.real
-        rev_score    = rev_AT_score.real + rev_GC_score.real
-        del fwd_AT_score, fwd_GC_score, rev_AT_score, rev_GC_score
-        #correct scores
-        correction = np.ndarray(t_len-p_len+1)
-        correction.fill(p_len/3.0)
-        fwd_score  = (fwd_score + correction - fwd_score/3.0)
-        rev_score  = (rev_score + correction - rev_score/3.0)
-        del correction
-        #match indeces
-        fwd_matches = np.arange(t_len-p_len+1)[fwd_score >= matches]
-        rev_matches = np.arange(t_len-p_len+1)[rev_score >= matches]
+    def _check_length_inequality(cls, t_len, p_len):
+        if t_len < p_len or p_len == 0:
+            raise ValueError('SearchEngine.find: template sequence should be '
+                             'longer or equal to primer sequence and both '
+                             'should be grater than zero.')
+    #end def
+    
+    @classmethod
+    def mp_better(cls, template, primer):
+        return cls._max_jobs > 1 and len(template) >= 300*len(primer)
+
+    
+    #subprocess worker factory and launcher
+    @classmethod
+    def _find_in_chunk_mp(cls, job_list, queue, strand, i, 
+                          t_chunk, p_fft, correction, c_size, c_stride):
+        #define the worker
+        def worker(q, strand, i, t_chunk, p_fft, correction, c_size, c_stride):
+            result = cls._find_in_chunk(t_chunk, p_fft, correction, c_size, c_stride)
+            q.put((strand, i, result))
+        #start subprocess
+        job = mp.Process(target=worker, args=(queue, strand, i, t_chunk, 
+                                              p_fft, correction, c_size, c_stride))
+        job_list.append((job,queue))
+        job.start()
+    #end def
+    
+    
+    @classmethod
+    def _join_job(cls, job, fwd_list, rev_list):
+        out = []
+        while True:
+            try: 
+                while True: out.append(job[1].get(True,1e-3))
+            except Empty: 
+                if job[0].is_alive(): 
+                    #sleep(1e-6)
+                    continue
+                else: 
+                    job[0].join()
+                    break
+            except IOError, e:
+                if e.errno == errno.EINTR:
+                    #sleep(1e-12)
+                    continue
+                else:
+                    print 'Unhandled IOError:', e.message
+                    raise
+            except Exception, e:
+                print 'Unhandled Exception:'
+                print_exception(e)
+                raise
+        #end loop
+        if out:
+            for item in out:
+                if item[0] == 1:
+                    fwd_list.append((item[1],item[2]))
+                else:
+                    rev_list.append((item[1],item[2]))
+    #end def
+    
+    
+    @classmethod
+    def find_mp1(cls, template, primer, mismatches):
+        '''Find all occurrences of a primer sequence in both strands of a 
+        template sequence with at most k mismatches.'''
+        p_len,t_len  = len(primer),len(template)
+        cls._check_length_inequality(t_len, p_len)
+        chunk_size   = min(cls._max_chunk_size, cls._calculate_chunk_size(t_len, p_len))
+        chunk_stride = chunk_size-p_len
+        p_maps       = cls._map_pattern(str(primer.master_sequence.seq), chunk_size)
+        p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
+        fwd_seq      = template.seq
+        rev_seq      = template.seq.reverse_complement()
+        correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
+        fwd_score    = []
+        rev_score    = []
+        jobs, i      = [], 0
+        #start find_in_chunk jobs
+        while i < t_len:
+            if len(jobs) >= cls._max_jobs:
+                cls._join_job(jobs[0], fwd_score, rev_score)
+                del jobs[0]
+            front = min(t_len, i+chunk_size)
+            cls._find_in_chunk_mp(jobs, mp.Queue(), 1, i, fwd_seq[i:front], 
+                                  p_fft, correction, 
+                                  chunk_size, chunk_stride)
+            if len(jobs) >= cls._max_jobs:
+                cls._join_job(jobs[0], fwd_score, rev_score)
+                del jobs[0]
+            cls._find_in_chunk_mp(jobs, mp.Queue(), -1, i, rev_seq[i:front], 
+                                  p_fft, correction, 
+                                  chunk_size, chunk_stride)
+            i += chunk_stride
+        #join all jobs
+        while len(jobs) > 0:
+            cls._join_job(jobs[0], fwd_score, rev_score)
+            del jobs[0]
+        #sort and concatenate scores
+        fwd_score.sort(key=lambda(x): x[0])
+        fwd_score = [result[1] for result in fwd_score]
+        rev_score.sort(key=lambda(x): x[0])
+        rev_score = [result[1] for result in rev_score]
+        fwd_score = np.concatenate(fwd_score)
+        rev_score = np.concatenate(rev_score)
+        #match indices
+        matches     = max(1, p_len - mismatches)-0.5
+        fwd_matches = np.arange(t_len-p_len)[fwd_score[:t_len-p_len] >= matches]
+        rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
         del fwd_score, rev_score
         #construct duplexes
         fwd_results = cls._compile_duplexes(fwd_seq, primer, fwd_matches)
         rev_results = cls._compile_duplexes(rev_seq, primer, rev_matches)
         return fwd_results,rev_results
     #end def
+
+
+    @classmethod
+    def _join_jobs(cls, abort_e, jobs, fwd_list, rev_list):
+        while jobs and not abort_e.is_set():
+            finished_job = None
+            for i,job in enumerate(jobs):
+                try: 
+                    out = job[1].get(True,1e-3)
+                    fwd_list.append((out[0],out[1]))
+                    rev_list.append((out[0],out[2]))
+                    job[0].join()
+                    finished_job = i
+                    break
+                except Empty: 
+                    continue
+                except IOError, e:
+                    if e.errno == errno.EINTR:
+                        continue
+                    else:
+                        print 'Unhandled IOError:', e.message
+                        raise
+                except Exception, e:
+                    print 'Unhandled Exception:'
+                    print_exception(e)
+                    raise
+            if finished_job is not None:
+                del jobs[finished_job] 
+    #end def
     
+
+    @classmethod
+    def _start_find_worker(cls, jobs, queue, abort_e, start, fwd_chunk, rev_chunk, 
+                           p_fft, correction, t_len, p_len, c_size, c_stride):
+        def worker(queue, abort_e, start, fwd_chunk, rev_chunk, p_fft, 
+                   correction, t_len, p_len, c_size, c_stride):
+            fwd_score = np.ndarray(0,dtype=float)
+            rev_score = np.ndarray(0,dtype=float)
+            pos = 0
+            while pos < t_len and not abort_e.is_set():
+                front = min(t_len, pos+c_size)
+                score = cls._find_in_chunk(fwd_chunk[pos:front], p_fft, correction,
+                                           c_size, c_stride)
+                fwd_score = np.concatenate([fwd_score, score])
+                score = cls._find_in_chunk(rev_chunk[pos:front], p_fft, correction,
+                                           c_size, c_stride)
+                rev_score = np.concatenate([rev_score, score])
+                pos += c_stride
+            if abort_e.is_set():
+                print 'Subprocess %d aborted.' % os.getpid() 
+                queue.cancel_join_thread()
+            else: queue.put((start, 
+                             fwd_score[:t_len-p_len], 
+                             rev_score[:t_len-p_len]))
+            queue.close()
+            return
+        #end def
+        job = mp.Process(target=worker, args=(queue, abort_e, start, fwd_chunk, rev_chunk, p_fft, 
+                                              correction, t_len, p_len, c_size, c_stride))
+        job.start()
+        jobs.append((job,queue))
+    #end def
+    
+    
+    def find_mp2(self, template, primer, mismatches, mult):
+        '''Find all occurrences of a primer sequence in both strands of a 
+        template sequence with at most k mismatches. Multiprocessing version.'''
+        p_len,t_len  = len(primer),len(template)
+        self._check_length_inequality(t_len, p_len)
+        slice_size   = t_len/self._max_jobs/mult+p_len+1
+        slice_stride = slice_size-p_len
+        chunk_size   = min(self._max_chunk_size, self._calculate_chunk_size(slice_size, p_len))
+        chunk_stride = chunk_size-p_len
+        p_maps       = self._map_pattern(str(primer.master_sequence.seq), chunk_size)
+        p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
+        fwd_seq      = template.seq
+        rev_seq      = template.seq.reverse_complement()
+        correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
+        fwd_score    = []
+        rev_score    = []
+        jobs         = []
+        i = 0; abort_event  = mp.Event() 
+        self._abort_events.append(abort_event)
+        #start find_in_chunk jobs
+        while i < t_len and not abort_event.is_set():
+            front = min(t_len, i+slice_size)
+            queue = mp.Queue()
+            self._start_find_worker(jobs, queue, abort_event, i, 
+                                    fwd_seq[i:front], rev_seq[i:front], p_fft, 
+                                    correction, front-i, p_len, chunk_size, chunk_stride)
+            self._all_jobs.append(jobs[-1])
+            i += slice_stride
+        #if search was aborted, return empty results
+        if abort_event.is_set(): return [],[]
+        #join all jobs
+        self._join_jobs(abort_event, jobs, fwd_score, rev_score)
+        del jobs
+        #sort, correct and concatenate scores
+        fwd_score.sort(key=lambda(x): x[0])
+        fwd_score = [result[1] for result in fwd_score]
+        rev_score.sort(key=lambda(x): x[0])
+        rev_score = [result[1] for result in rev_score]
+        fwd_score = np.concatenate(fwd_score)
+        rev_score = np.concatenate(rev_score)
+        #match indices
+        matches     = max(1, p_len - mismatches)-0.5
+        fwd_matches = np.arange(t_len-p_len)[fwd_score[:t_len-p_len] >= matches]
+        rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
+        del fwd_score, rev_score
+        #construct duplexes
+        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches)
+        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches)
+        return fwd_results,rev_results
+    #end def
+
+    
+    def find(self, template, primer, mismatches):
+        '''Find all occurrences of a primer sequence in both strands of a 
+        template sequence with at most k mismatches.'''
+        p_len,t_len  = len(primer),len(template)
+        self._check_length_inequality(t_len, p_len)
+        chunk_size   = min(self._max_chunk_size, self._calculate_chunk_size(t_len, p_len))
+        chunk_stride = chunk_size-p_len
+        p_maps       = self._map_pattern(str(primer.master_sequence.seq), chunk_size)
+        p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
+        fwd_seq      = template.seq
+        rev_seq      = template.seq.reverse_complement()
+        fwd_score    = []
+        rev_score    = []
+        correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
+        i = 0; abort_event = mp.Event()
+        self._abort_events.append(abort_event)
+        #find in chunks of a template, which is faster due to lower cost of memory allocation
+        while i < t_len and not abort_event.is_set():
+            front = min(t_len, i+chunk_size)
+            fwd_score.append(self._find_in_chunk(fwd_seq[i:front], p_fft, correction, 
+                                                chunk_size, chunk_stride))
+            
+            rev_score.append(self._find_in_chunk(rev_seq[i:front], p_fft, correction, 
+                                                chunk_size, chunk_stride))
+            i += chunk_stride
+        #if search was aborted, return empty results
+        if abort_event.is_set(): return [],[]
+        #concatenate scores
+        fwd_score = np.concatenate(fwd_score)
+        rev_score = np.concatenate(rev_score)
+        #match indices
+        matches     = max(1, p_len - mismatches)-0.5
+        fwd_matches = np.arange(t_len-p_len)[fwd_score[:t_len-p_len] >= matches]
+        rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
+        del fwd_score, rev_score
+        #construct duplexes
+        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches)
+        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches)
+        return fwd_results,rev_results
+    #end def
+    
+    
+    def abort(self):
+        if self._abort_events:
+            for event in self._abort_events:
+                event.set()
+            while self._all_jobs:
+                finished_job = None
+                for i,job in enumerate(self._all_jobs):
+                    try: 
+                        while True: job[1].get_nowait()
+                    except Empty: pass
+                    if not job[0].is_alive():
+                        job[0].join()
+                        finished_job = i
+                        break
+                if finished_job is not None:
+                    del self._all_jobs[finished_job]
+    #end def
+#end class
+
+
+class SeqDB(object):
+    '''Create and manage a database of sequences with fast approximate match 
+    searching.'''
+    
+    _sequences_schema = \
+    '''CREATE TABLE "sequences" (
+           "id"         INTEGER PRIMARY KEY AUTOINCREMENT,
+           "name"       TEXT NOT NULL,
+           "sequence"   TEXT NOT NULL,
+           "length"     INTEGER UNSIGNED NOT NULL)'''
+  
+    
+    def __init__(self):
+        self._db     = None
+        self._cursor = None
+    #end def
+    
+    def __nonzero__(self):
+        return not self._cursor is None 
+        
     
     def _init_db(self, filename):
         #if db exists, back it up
@@ -318,14 +497,13 @@ class SeqDB(object):
         self._cursor = self._db.cursor()
         #init tables
         self._cursor.execute(self._sequences_schema)
-#        self._cursor.execute(self._strands_schema)
-#        self._cursor.execute(self._maps_schema)
         self._db.commit()
         self.close()
     #end def
     
     
     def create_db(self, filename, sequences):
+        '''Create and SQLite database of sequences in a given file.'''
         #create database tables
         self._init_db(filename)
         #connect to the new database
@@ -333,91 +511,19 @@ class SeqDB(object):
         self._cursor.execute('PRAGMA cache_size=500000')
         #populate database with data
         for sequence in sequences:
-            fwd_str = str(sequence.seq)
-            rev_str = str(sequence.seq.reverse_complement())
-            #map strands to the 3d roots of unity
-            fwd_AT_map = np.ndarray(len(fwd_str), dtype=complex)
-            rev_AT_map = np.ndarray(len(fwd_str), dtype=complex)
-            fwd_GC_map = np.ndarray(len(fwd_str), dtype=complex)
-            rev_GC_map = np.ndarray(len(fwd_str), dtype=complex)
-            for i in range(len(fwd_str)):
-                fl = fwd_str[i]
-                rl = rev_str[i]
-                fwd_AT_map[i] = self._map_letter(fl, self._T_AT_mapping)
-                rev_AT_map[i] = self._map_letter(rl, self._T_AT_mapping)
-                fwd_GC_map[i] = self._map_letter(fl, self._T_GC_mapping)
-                rev_GC_map[i] = self._map_letter(rl, self._T_GC_mapping)
-            #fill sequences table
-            str_out = StringIO()
-            np.save(str_out, fwd_AT_map)
-            np.save('fwd_AT_map', fwd_AT_map)
-            fwd_AT_map = str_out.getvalue()
-            str_out.truncate(0)
-            np.save(str_out, rev_AT_map)
-            rev_AT_map = str_out.getvalue()
-            str_out.truncate(0)
-            np.save(str_out, fwd_GC_map)
-            fwd_GC_map = str_out.getvalue()
-            str_out.truncate(0)
-            np.save(str_out, rev_GC_map)
-            rev_GC_map = str_out.getvalue()
-            str_out.close()
             self._cursor.execute('''
-            INSERT INTO sequences (name, sequence, 
-                                   fwd_AT_map, rev_AT_map,
-                                   fwd_GC_map, rev_GC_map)
-            VALUES (?, ?, ?, ?, ?, ?)''', (sequence.id, fwd_str, 
-                                           sqlite3.Binary(fwd_AT_map), 
-                                           sqlite3.Binary(rev_AT_map),
-                                           sqlite3.Binary(fwd_GC_map), 
-                                           sqlite3.Binary(rev_GC_map)))
-#            #fill in tables in reverse order: maps table first
-#            str_out = StringIO()
-#            np.save(str_out, fwd_AT_map)
-#            self._cursor.execute('''
-#            INSERT INTO maps (letters, map)
-#            VALUES (?, ?)''', ('AT',  sqlite3.Binary(str_out.getvalue())))
-#            fwd_AT_map_id = self._cursor.lastrowid
-#            str_out.truncate(0)
-#            np.save(str_out, rev_AT_map)
-#            self._cursor.execute('''
-#            INSERT INTO maps (letters, map)
-#            VALUES (?, ?)''', ('AT',  sqlite3.Binary(str_out.getvalue())))
-#            rev_AT_map_id = self._cursor.lastrowid
-#            str_out.truncate(0)
-#            np.save(str_out, fwd_GC_map)
-#            self._cursor.execute('''
-#            INSERT INTO maps (letters, map)
-#            VALUES (?, ?)''', ('GC',  sqlite3.Binary(str_out.getvalue())))
-#            fwd_GC_map_id = self._cursor.lastrowid
-#            str_out.truncate(0)
-#            np.save(str_out, rev_GC_map)
-#            self._cursor.execute('''
-#            INSERT INTO maps (letters, map)
-#            VALUES (?, ?)''', ('GC',  sqlite3.Binary(str_out.getvalue())))
-#            rev_GC_map_id = self._cursor.lastrowid
-#            str_out.close()
-#            #strands table
-#            self._cursor.execute('''
-#            INSERT INTO strands (sequence, strand, AT_map_id, GC_map_id)
-#            VALUES (?, ?, ?, ?)''', (fwd_str.tostring(),  1, fwd_AT_map_id, fwd_GC_map_id))
-#            fwd_str_id = self._cursor.lastrowid
-#            self._cursor.execute('''
-#            INSERT INTO strands (sequence, strand, AT_map_id, GC_map_id)
-#            VALUES (?, ?, ?, ?)''', (rev_str,  1, rev_AT_map_id, rev_GC_map_id))
-#            rev_str_id = self._cursor.lastrowid
-#            #sequences table
-#            self._cursor.execute('''
-#            INSERT INTO sequences (name, fwd_strand_id, rev_strand_id)
-#            VALUES (?, ?, ?)''', (sequence.id, fwd_str_id, rev_str_id))
+            INSERT INTO sequences (name, sequence, length)
+            VALUES (?, ?, ?)''', 
+            (sequence.id, sequence.format('fasta'), len(sequence)))
         self._db.commit()
         self.close()
     #end def
     
     
     def connect(self, filename):
+        '''Connect to an existent file database of sequences.'''
         if not os.path.isfile(filename): return False
-        self._db = sqlite3.connect(filename)
+        self._db = sqlite3.connect(filename, isolation_level='DEFERRED')
         self._cursor = self._db.cursor()
         self._cursor.execute('PRAGMA cache_size=64000')
         self._cursor.execute('PRAGMA synchronous=OFF')
@@ -426,24 +532,71 @@ class SeqDB(object):
         return True
     #end def
     
+    
     def close(self):
         if not self._db is None: return
         self._db.close()
         self._db = None
-        self._cursor = None 
+        self._cursor = None
+    #end def
+    
+    
+    def get_names(self):
+        if self._db is None: return []
+        self._cursor.execute('''SELECT name, id from sequences''')
+        return list(self._cursor)
+    #end def
 #end class
 
 
 #tests
+import signal
+import cProfile
+import sys, csv, timeit
+from functools import partial
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from Bio.Alphabet import IUPAC
+from Primer import Primer
+
+searcher = None
+ppid     = -1
+data1    = []
+data2    = []
+
+def sig_handler(signal, frame):
+    if ppid != os.getpid():
+        return
+    print 'Aborting main process %d' % os.getpid()
+    if searcher:
+        searcher.abort()
+    if data1:
+        print 'Write out gathered data1...'
+        out_file = open('find_mp2_data1-%d.csv' % time(), 'wb')
+        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+        csv_writer.writerows(data1)
+        out_file.close()
+        print 'Done.'
+    if data2:
+        print 'Write out gathered data2...'
+        out_file = open('find_mp2_data2-%d.csv' % time(), 'wb')
+        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+        csv_writer.writerows(data2)
+        out_file.close()
+        print 'Done.'
+    sys.exit(1)
+#end def
+
+
+#tests
 if __name__ == '__main__':
-    import cProfile
-    import sys
-    from StringTools import print_exception
-    from Bio import SeqIO
-    from Bio.Seq import Seq
-    from Bio.SeqRecord import SeqRecord
-    from Bio.Alphabet import IUPAC
-    from Primer import Primer
+    #setup signal handler
+    signal.signal(signal.SIGINT,  sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
+    signal.signal(signal.SIGQUIT, sig_handler)
+    
+
     
     os.chdir('../')
     try:
@@ -452,9 +605,19 @@ if __name__ == '__main__':
         print 'Unable to open Ch5_gnm.fa'
         print_exception(e)
         sys.exit(1)
-    template = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
+    record = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
     record_file.close()
+    
+    sdb = SeqDB()
+    sdb.create_db('test.db', (record,))
+    if sdb.connect('test.db'):
+        print sdb.get_names()
+    
     query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+    
+    template = record+record+record+record
+    query    = query+query+query+query+query
+    searcher = SearchEngine()
     
 #    'AAGCGTGCTTAGCTAGTCAGTGACGATG'
 #    'GACG'
@@ -463,7 +626,92 @@ if __name__ == '__main__':
 #                             IUPAC.ambiguous_dna), id='test')
 #    query = Seq('GACG', IUPAC.ambiguous_dna)
 
-    primer = Primer(SeqRecord(query, id='test'), 0.1e-6)
-    seq_db = SeqDB()
-    cProfile.run("seq_db.find_by_chunks(template, primer, 3); seq_db.find(template, primer, 3)", 'test.profile')
-    #cProfile.run("seq_db.create_db('test.db', (record, ))", 'test.profile')
+    def print_out(out, name):
+        print name
+        for results in out:
+            if not results: 
+                print 'No results.'
+            else:
+                for res in results:
+                    print res[0]
+                    for dup in res[1]:
+                        print dup
+                    print '\n'
+                print '\n'
+    
+    T,P,mult = 0,0,0
+    def gather_statistics(start_len, end_len):
+        global ppid, data1, data2, T,P,mult
+        ppid  = os.getpid()
+        mults = range(max(1,start_len/100000-2),end_len/100000+5)
+        patts = range(15,101,5)
+        data1  = [['multiplier']]
+        data1 += [[mult] for mult in range(1,max(mults)+1)]
+        data2  = [('t_len', 'p_len', 'min multiplier', 'min time (sec)')]#, 'stdev', 'stdev %')]
+        for t_len in range(start_len, end_len+1, 200000):
+            print 't_len:',t_len
+            l_mults = range(max(1,t_len/100000-2),t_len/100000+5)
+            for p_len in patts:
+                print 'p_len:',p_len
+                data1[0].append('%d-%d' % (t_len, p_len))
+                for mult in mults:
+                    if mult in l_mults:
+                        print 'mult:',mult
+                        T = template[:t_len]
+                        P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
+                        times = []
+                        for i in range(10):
+                            et = timeit.timeit('searcher.find_mp2(T, P, 3, mult)', 
+                                               setup='from __main__ import T,P,mult,searcher', 
+                                               number=1)
+                            times.append(et)
+                        data1[mult].append(min(times))
+                        print ''
+                    else:
+                        data1[mult].append(None)
+                min_mult = min(l_mults)
+                min_time = data1[min_mult][-1]
+                for mult in l_mults:
+                    if  data1[mult][-1] < min_time:
+                        min_time = data1[mult][-1]
+                        min_mult = mult
+                data2.append((t_len, p_len, min_mult, min_time))
+        out_file = open('find_mp2_data1-%d.csv' % time(), 'wb')
+        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+        csv_writer.writerows(data1)
+        out_file.close()
+        out_file = open('find_mp2_data2-%d.csv' % time(), 'wb')
+        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+        csv_writer.writerows(data2)
+        out_file.close()
+    #end def
+
+    #gather_statistics(2100000, 3500000)
+    #gather_statistics(3600000, 4000000)
+
+    #primer = Primer(SeqRecord(query, id='test'), 0.1e-6)
+    #out0,out1,out2,out3 = [],[],[],[]
+    #cProfile.run("out1 = searcher.find_mp(template, primer, 3);", 'find_mp.profile')
+    #sleep(1)
+    #cProfile.run("for i in range(10): searcher.find_mp1(template, primer, 3);", 'find_mp1.profile')
+    #sleep(1)
+    #cProfile.run("for i in range(10): searcher.find_mp2(template, primer, 3);", 'find_mp2.profile')
+    #sleep(1)
+    #cProfile.run("for i in range(10): searcher.find(template, primer, 3)", 'find.profile')
+    
+#    out = None
+#    cProfile.run("for i in range(10): \
+#                      out = searcher.find_mp2(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3, 2)",
+#                 'find_mp2.profile')
+#    print_out(out,  'find_mp2')
+    
+    ppid = os.getpid()
+    for i in range(10):
+        out = searcher.find_mp2(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 
+                                3, 26)
+    
+    #print_out(out0, 'find')
+    #print_out(out1, 'find_mp')
+    #print_out(out2, 'find_mp1')
+    #print_out(out3, 'find_mp2')
+    print 'Done'

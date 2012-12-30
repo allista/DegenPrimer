@@ -30,3 +30,5 @@ RE:(?i).*\.ods#
 ./test.py
 *.profile
 RE:(?i).*\.fa
+*.db
+RE:(?i).*\.back
