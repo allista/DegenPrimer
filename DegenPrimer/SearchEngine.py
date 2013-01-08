@@ -81,7 +81,7 @@ class SearchEngine(object):
     
     #template sequences grater than this value will be split into slices of 
     #approximately that size 
-    _max_chunk_size = 2**13
+    _max_chunk_size = 2**12
     
     #maximum jobs to launch within a single search
     _cpu_count   = mp.cpu_count()
@@ -94,6 +94,11 @@ class SearchEngine(object):
         self._abort_lock      = mp.Lock()
         self._abort_events    = []
     #end def
+    
+    
+    @classmethod
+    def set_max_chunk(cls, chunk_size):
+        cls._max_chunk_size = chunk_size
     
 
     @classmethod
@@ -143,7 +148,7 @@ class SearchEngine(object):
         of unity chunk to build. It's a power of 2 integer for fft to work fast.
         c_stride -- a part of chunk for which matches are calculated 
         (it is less than map_len, so chunks overlap each other)'''
-        t_AT_map = np.array(array('b',str(t_chunk)), dtype=complex)
+        t_AT_map = np.fromiter(array('b',str(t_chunk)), dtype=complex) 
         t_AT_map.resize(c_size)
         t_GC_map = t_AT_map.copy()
         for k,v in cls._T_AT_mapping.iteritems():
@@ -160,7 +165,7 @@ class SearchEngine(object):
     
     @classmethod
     def _calculate_chunk_size(cls, t_len, p_len):
-        rem   = lambda(c): ((t_len/(c-p_len))*(c-p_len)+c-t_len)
+        rem = lambda(c): ((t_len/(c-p_len))*(c-p_len)+c-t_len)
         if t_len <= cls._max_chunk_size:
             chunk = 2**int(np.ceil(np.log2(t_len)))
             if chunk % t_len == 0: return chunk
@@ -182,11 +187,11 @@ class SearchEngine(object):
             raise ValueError('SearchEngine.find: template sequence should be '
                              'longer or equal to primer sequence and both '
                              'should be grater than zero.')
-    #end def
+
     
     @classmethod
     def mp_better(cls, t_len, p_len):
-        return t_len > 25000
+        return cls._cpu_count > 1 and t_len > 25000
 
 
     @classmethod
@@ -310,12 +315,19 @@ class SearchEngine(object):
     #end def
     
     
+    @classmethod
+    def _optimal_slices(cls, t_len):
+        linear = max(cls._cpu_count, int(t_len*1.75e-5 + 1.75))
+        return min(60, linear)
+    #end def
+    
+    
     def find_mp(self, template, primer, mismatches, abort_event=None):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
         p_len,t_len  = len(primer),len(template)
         self._check_length_inequality(t_len, p_len)
-        slice_size   = t_len/(max(self._cpu_count, int(t_len*1.6e-5+1.5)))+p_len+1
+        slice_size   = t_len/self._optimal_slices(t_len)+p_len+1
         slice_stride = slice_size-p_len
         chunk_size   = self._calculate_chunk_size(slice_size, p_len)
         chunk_stride = chunk_size-p_len
@@ -580,19 +592,19 @@ if __name__ == '__main__':
     def gather_statistics(start_len, end_len, delta):
         global ppid, data1, data2, T,P,mult
         ppid  = os.getpid()
-        mults = range(searcher._cpu_count, max(searcher._cpu_count, end_len/50000)+5)
+        mults = range(searcher._cpu_count, max(searcher._cpu_count, end_len/50000)+10)
         patts = range(20,21,5)
         data1  = [['multiplier']]
         data1 += [[mult] for mult in range(1,max(mults)+1)]
         data2  = [('t_len', 'p_len', 'min multiplier', 'min time (sec)')]
         for t_len in range(start_len, end_len+1, delta):
             print 't_len:',t_len
-            l_mults = range(searcher._cpu_count, max(searcher._cpu_count,t_len/50000)+5)
+            l_mults = range(searcher._cpu_count, max(searcher._cpu_count,t_len/50000)+10)
             for p_len in patts:
                 print 'p_len:',p_len
                 data1[0].append('%d-%d' % (t_len, p_len))
                 times = dict([(m,[]) for m in l_mults])
-                for i in range(10):
+                for i in range(5):
                     print 'iteration:', i
                     for mult in l_mults:
                         print 'mult:',mult
@@ -615,8 +627,8 @@ if __name__ == '__main__':
                         min_time = data1[mult][-1]
                         min_mult = mult
                 data2.append((t_len, p_len, min_mult, min_time))
-        filename1 = 'find_mp_data1-%d.csv' % time()
-        filename2 = 'find_mp_data2-%d.csv' % time()
+        filename1 = 'find_mp_data1-%d-%d-%d.csv' % (start_len, end_len, time())
+        filename2 = 'find_mp_data2-%d-%d-%d.csv' % (start_len, end_len, time())
         out_file = open(filename1, 'wb')
         csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
         csv_writer.writerows(data1)
@@ -631,12 +643,15 @@ if __name__ == '__main__':
     #end def
     
     
-    def gather_statistics1(start_len, end_len, delta):
+    def gather_statistics1(start_len, end_len, delta, title=None):
         global ppid, data1, data2, T,P,mult
         ppid  = os.getpid()
         p_len = 20
         lens  = range(start_len, end_len+1, delta)
-        data2 = [('t_len', 'p_len', 'find time', 'find_mp time')]
+        if title:
+            data2 = [('t_len', 'p_len', 'find time %s'%title, 
+                      'find_mp time %s'%title)]
+        else: data2 = [('t_len', 'p_len', 'find time', 'find_mp time')]
         find_times    = dict([(l,[]) for l in lens])
         find_mp_times = dict([(l,[]) for l in lens])
         for i in range(20):
@@ -657,7 +672,9 @@ if __name__ == '__main__':
         for t_len in lens:
             data2.append((t_len, p_len, 
                           min(find_times[t_len]), min(find_mp_times[t_len])))
-        filename = 'find_mp_vs_find-%d.csv' % time()
+        if title:
+            filename = 'find_mp_vs_find-%s-%d.csv' % (title, time())
+        else: filename = 'find_mp_vs_find-%d.csv' % time()
         out_file = open(filename, 'wb')
         csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
         csv_writer.writerows(data2)
@@ -665,18 +682,27 @@ if __name__ == '__main__':
         data2 = []
         print 'Gather statistics 1: data was written to %s' % filename 
     #end def
+
+    ppid = os.getpid()
     
-    gather_statistics1(105000, 400000, 5000)
-    sys.exit(0)
     
-    while True:
-        gather_statistics(600000, 1000000, 100000)
-        gather_statistics(1100000, 1600000, 100000)
-        gather_statistics(1800000, 2600000, 200000)
-        gather_statistics(2800000, 4000000, 400000)
-        gather_statistics(50000, 500000, 50000)
+    gather_statistics1(5000, 500000, 5000)
+    
+#    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
+#        searcher.set_max_chunk(l)
+#        gather_statistics1(205000, 400000, 5000, str(l))
         
-    #searcher.find_mp(template[:1000], Primer(SeqRecord(query[:65], id='test'), 0.1e-6), 3)
+#    while True:
+#        gather_statistics(50000, 500000, 50000)
+#        gather_statistics(600000, 1000000, 100000)
+#        gather_statistics(1100000, 1500000, 100000)
+#        gather_statistics(1600000, 2000000, 100000)
+#        gather_statistics(1800000, 2600000, 200000)
+#        gather_statistics(2800000, 4000000, 400000)
+        #gather_statistics(5000000, 10000000, 1000000)
+        
+    #searcher.find(template[:215000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
+    #searcher.find(template[:220000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
 
     #primer = Primer(SeqRecord(query, id='test'), 0.1e-6)
     #out0,out1,out2,out3 = [],[],[],[]
@@ -686,16 +712,31 @@ if __name__ == '__main__':
     #cProfile.run("for i in range(10): searcher.find(template[:34000], Primer(SeqRecord(query[:15], id='test'), 0.1e-6), 3)", 'find_34.profile')
 
     
-#    ppid = os.getpid()
 #    out  = None
 #    cProfile.run("for i in range(10):\
-#        out = searcher.find_mp(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
-#        'find_mp.profile')
-#    print_out(out, 'find_mp')
-#    cProfile.run("for i in range(10):\
-#        out = searcher.find(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
-#        'find.profile')
+#        out = searcher.find(template[:215000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
+#        'find_215000.profile')
 #    print_out(out, 'find')
+#    cProfile.run("for i in range(10):\
+#        out = searcher.find(template[:220000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
+#        'find_220000.profile')
+#    print_out(out, 'find')
+#    ar1, ar2 = None,None
+#    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
+#        ar1 = np.random.random_sample(l).astype(complex)
+#        ar2 = np.random.random_sample(l).astype(complex)
+#        times = []
+#        for i in range(10):
+#            et = timeit.timeit('ifft(fft(ar1)*fft(ar2))', 
+#                               setup='from __main__ import ar1, ar2\n'
+#                                     'from scipy.fftpack import fft, ifft', 
+#                               number=10)
+#            times.append(et)
+#        print '%d %f' % (l, min(times))
+#        cProfile.run("for i in range(10):\
+#            ifft(fft(ar1)*fft(ar2))",
+#            'ifft_fft_%d.profile'%l)
+    
     
     #print_out(out0, 'find')
     #print_out(out1, 'find_mp')
