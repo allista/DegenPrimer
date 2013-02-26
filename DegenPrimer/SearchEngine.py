@@ -177,20 +177,20 @@ class SearchEngine(object):
         and chunk > min_chunk:
             chunk /= 2
             r = rem(chunk)
-        return chunk
+        return max(chunk, min_chunk)
     #end def
     
     
     @classmethod
     def _check_length_inequality(cls, t_len, p_len):
         if t_len < p_len or p_len == 0:
-            raise ValueError('SearchEngine.find: template sequence should be '
+            raise ValueError('SearchEngine._find: template sequence should be '
                              'longer or equal to primer sequence and both '
                              'should be grater than zero.')
 
     
     @classmethod
-    def mp_better(cls, t_len, p_len):
+    def _mp_better(cls, t_len, p_len):
         return cls._cpu_count > 1 and t_len > 25000
 
 
@@ -316,18 +316,16 @@ class SearchEngine(object):
     
     
     @classmethod
-    def _optimal_slices(cls, t_len):
+    def _optimal_slices(cls, t_len, p_len):
         linear = max(cls._cpu_count, int(t_len*1.75e-5 + 1.75))
-        return min(60, linear)
+        return min(60, linear, t_len/p_len)
     #end def
     
     
-    def find_mp(self, template, primer, mismatches, abort_event=None):
+    def _find_mp(self, template, primer, t_len, p_len, mismatches, abort_event):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
-        p_len,t_len  = len(primer),len(template)
-        self._check_length_inequality(t_len, p_len)
-        slice_size   = t_len/self._optimal_slices(t_len)+p_len+1
+        slice_size   = t_len/self._optimal_slices(t_len, p_len)+p_len+1
         slice_stride = slice_size-p_len
         chunk_size   = self._calculate_chunk_size(slice_size, p_len)
         chunk_stride = chunk_size-p_len
@@ -339,9 +337,6 @@ class SearchEngine(object):
         fwd_score    = []
         rev_score    = []
         jobs         = []
-        if abort_event is None:
-            abort_event = mp.Event()
-            self._abort_events.append(abort_event)
         #start find_in_chunk jobs
         i = 0 
         while i < t_len and not abort_event.is_set():
@@ -357,12 +352,9 @@ class SearchEngine(object):
             rev_list.append((out[0],out[2]))
         self._join_jobs(abort_event, list(jobs), parse_out, fwd_score, rev_score)
         #if search was aborted, return empty results
-        if abort_event.is_set():
-            return [],[]
+        if abort_event.is_set(): return None
         #else, cleanup
         with self._abort_lock:
-            if abort_event in self._abort_events:
-                self._abort_events.remove(abort_event)
             for job in jobs: 
                 if job in self._all_jobs:
                     self._all_jobs.remove(job)
@@ -385,36 +377,31 @@ class SearchEngine(object):
     #end def
 
     
-    def find(self, template, primer, mismatches, abort_event=None):
+    @classmethod
+    def _find(cls, template, primer, t_len, p_len, mismatches, abort_event):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches.'''
-        p_len,t_len  = len(primer),len(template)
-        self._check_length_inequality(t_len, p_len)
-        chunk_size   = self._calculate_chunk_size(t_len, p_len)
+        chunk_size   = cls._calculate_chunk_size(t_len, p_len)
         chunk_stride = chunk_size-p_len
-        p_maps       = self._map_pattern(str(primer.master_sequence.seq), chunk_size)
+        p_maps       = cls._map_pattern(str(primer.master_sequence.seq), chunk_size)
         p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
         fwd_seq      = template.seq
         rev_seq      = template.seq.reverse_complement()
         fwd_score    = []
         rev_score    = []
         correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
-        if abort_event is None:
-            abort_event = mp.Event()
-            self._abort_events.append(abort_event)
-        #find in chunks of a template, which is faster due to lower cost of memory allocation
+        #_find in chunks of a template, which is faster due to lower cost of memory allocation
         i = 0
         while i < t_len and not abort_event.is_set():
             front = min(t_len, i+chunk_size)
-            fwd_score.append(self._find_in_chunk(fwd_seq[i:front], p_fft, correction, 
+            fwd_score.append(cls._find_in_chunk(fwd_seq[i:front], p_fft, correction, 
                                                 chunk_size, chunk_stride))
             
-            rev_score.append(self._find_in_chunk(rev_seq[i:front], p_fft, correction, 
+            rev_score.append(cls._find_in_chunk(rev_seq[i:front], p_fft, correction, 
                                                 chunk_size, chunk_stride))
             i += chunk_stride
         #if search was aborted, return empty results
-        if abort_event.is_set(): return [],[]
-        self._abort_events.remove(abort_event)
+        if abort_event.is_set(): return None
         #concatenate scores
         fwd_score = np.concatenate(fwd_score)
         rev_score = np.concatenate(rev_score)
@@ -424,25 +411,44 @@ class SearchEngine(object):
         rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
         del fwd_score, rev_score
         #construct duplexes
-        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches)
-        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches)
+        fwd_results = cls._compile_duplexes(fwd_seq, primer, fwd_matches)
+        rev_results = cls._compile_duplexes(rev_seq, primer, rev_matches)
         return fwd_results,rev_results
     #end def
     
     
-    def _start_short_find_job(self, jobs, queue, abort_event, t_id, template, primer, mismatches):
-        def worker(searcher, queue, abort_event, t_id, template, primer, mismatches):
-            result = searcher.find(template, primer, mismatches, abort_event)
+    @classmethod
+    def _start_short_find_job(cls, jobs, queue, abort_event, t_id, 
+                              template, primer, t_len, p_len, mismatches):
+        def worker(searcher, queue, abort_event, t_id, 
+                   template, primer, t_len, p_len, mismatches):
+            result = searcher._find(template, primer, t_len, p_len, mismatches, abort_event)
             if abort_event.is_set():
                 queue.cancel_join_thread()
             else: queue.put((t_id, result))
             queue.close()
             return
         #end def
-        job = mp.Process(target=worker, args=(self, queue, abort_event, 
-                                              t_id, template, primer, mismatches))
+        job = mp.Process(target=worker, args=(cls, queue, abort_event, t_id, 
+                                              template, primer, t_len, p_len, mismatches))
         job.start()
         jobs.append((job,queue))
+    #end def
+    
+    
+    def find(self, template, primer, mismatches):
+        p_len,t_len = len(primer),len(template)
+        self._check_length_inequality(t_len, p_len)
+        abort_event = mp.Event()
+        self._abort_events.append(abort_event)
+        results = None
+        if self._mp_better(t_len, p_len):
+            results = self._find_mp(template, primer, t_len, p_len, mismatches, abort_event)
+        else:
+            results = self._find(template, primer, t_len, p_len, mismatches, abort_event)
+        if abort_event in self._abort_events:
+            self._abort_events.remove(abort_event)
+        return results
     #end def
     
     
@@ -453,29 +459,34 @@ class SearchEngine(object):
         short_templates = []
         long_templates  = []
         for t in templates:
-            if self.mp_better(t[0], p_len):
+            if self._mp_better(t[0], p_len):
                 long_templates.append(t)
             else: short_templates.append(t)
-        #add aboty event
+        #add abort event
         abort_event = mp.Event()
         self._abort_events.append(abort_event)
-        #first, launch short jobs
-        jobs = []
-        for t_len, t_id, template in short_templates:
-            if abort_event.is_set(): break
-            self._start_short_find_job(jobs, mp.Queue(), abort_event, t_id, 
-                                       template, primer, mismatches)
-        #join all launched jobs and gather the results
-        def parse_out(out, results):
-            results[out[0]] = out[1]
-        self._join_jobs(abort_event, list(jobs), parse_out, results)
+        #first, launch short jobs if there're more than 1 short template
+        if len(short_templates) > 1:
+            jobs = []
+            for t_len, t_id, template in short_templates:
+                if abort_event.is_set(): break
+                self._start_short_find_job(jobs, mp.Queue(), abort_event, t_id, 
+                                           template, primer, t_len, p_len, mismatches)
+            #join all launched jobs and gather the results
+            def parse_out(out, results):
+                results[out[0]] = out[1]
+            self._join_jobs(abort_event, list(jobs), parse_out, results)
+        elif short_templates: #if there's only one short template, just find in it
+            t_len, t_id, template = short_templates[0]
+            results[t_id] = self._find(template, primer, t_len, p_len, 
+                                       mismatches, abort_event)
         #when they are finished, launch long searches one by one
         for t_len, t_id, template in long_templates:
             if abort_event.is_set(): break
-            results[t_id] = self.find_mp(template, primer, mismatches, abort_event)
-        #if abort event is set, return empty dict
-        if abort_event.is_set(): 
-            return dict().fromkeys([t[1] for t in templates])
+            results[t_id] = self._find_mp(template, primer, t_len, p_len, 
+                                          mismatches, abort_event)
+        #if abort event is set, return None
+        if abort_event.is_set(): return None
         #else, cleanup
         with self._abort_lock:
             if abort_event in self._abort_events:
@@ -649,9 +660,9 @@ if __name__ == '__main__':
         p_len = 20
         lens  = range(start_len, end_len+1, delta)
         if title:
-            data2 = [('t_len', 'p_len', 'find time %s'%title, 
-                      'find_mp time %s'%title)]
-        else: data2 = [('t_len', 'p_len', 'find time', 'find_mp time')]
+            data2 = [('t_len', 'p_len', '_find time %s'%title, 
+                      '_find_mp time %s'%title)]
+        else: data2 = [('t_len', 'p_len', '_find time', '_find_mp time')]
         find_times    = dict([(l,[]) for l in lens])
         find_mp_times = dict([(l,[]) for l in lens])
         for i in range(20):
@@ -660,11 +671,11 @@ if __name__ == '__main__':
                 print 't_len:',t_len
                 T = template[:t_len]
                 P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
-                et = timeit.timeit('searcher.find(T, P, 3)', 
+                et = timeit.timeit('searcher._find(T, P, 3)', 
                                    setup='from __main__ import T,P,searcher', 
                                    number=1)
                 find_times[t_len].append(et)
-                et = timeit.timeit('searcher.find_mp(T, P, 3)', 
+                et = timeit.timeit('searcher._find_mp(T, P, 3)', 
                                    setup='from __main__ import T,P,searcher', 
                                    number=1)
                 find_mp_times[t_len].append(et)
@@ -701,26 +712,26 @@ if __name__ == '__main__':
 #        gather_statistics(2800000, 4000000, 400000)
         #gather_statistics(5000000, 10000000, 1000000)
         
-    #searcher.find(template[:215000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
-    #searcher.find(template[:220000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
+    #searcher._find(template[:215000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
+    #searcher._find(template[:220000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
 
     #primer = Primer(SeqRecord(query, id='test'), 0.1e-6)
     #out0,out1,out2,out3 = [],[],[],[]
-    #cProfile.run("for i in range(10): searcher.find_mp(template, primer, 3);", 'find_mp2.profile')
+    #cProfile.run("for i in range(10): searcher._find_mp(template, primer, 3);", 'find_mp2.profile')
     #sleep(1)
-    #cProfile.run("for i in range(10): searcher.find(template[:33000], Primer(SeqRecord(query[:15], id='test'), 0.1e-6), 3)", 'find_33.profile')
-    #cProfile.run("for i in range(10): searcher.find(template[:34000], Primer(SeqRecord(query[:15], id='test'), 0.1e-6), 3)", 'find_34.profile')
+    #cProfile.run("for i in range(10): searcher._find(template[:33000], Primer(SeqRecord(query[:15], id='test'), 0.1e-6), 3)", 'find_33.profile')
+    #cProfile.run("for i in range(10): searcher._find(template[:34000], Primer(SeqRecord(query[:15], id='test'), 0.1e-6), 3)", 'find_34.profile')
 
     
 #    out  = None
 #    cProfile.run("for i in range(10):\
-#        out = searcher.find(template[:215000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
+#        out = searcher._find(template[:215000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
 #        'find_215000.profile')
-#    print_out(out, 'find')
+#    print_out(out, '_find')
 #    cProfile.run("for i in range(10):\
-#        out = searcher.find(template[:220000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
+#        out = searcher._find(template[:220000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
 #        'find_220000.profile')
-#    print_out(out, 'find')
+#    print_out(out, '_find')
 #    ar1, ar2 = None,None
 #    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
 #        ar1 = np.random.random_sample(l).astype(complex)
@@ -738,6 +749,6 @@ if __name__ == '__main__':
 #            'ifft_fft_%d.profile'%l)
     
     
-    #print_out(out0, 'find')
-    #print_out(out1, 'find_mp')
+    #print_out(out0, '_find')
+    #print_out(out1, '_find_mp')
     print 'Done'

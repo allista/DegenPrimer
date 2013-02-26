@@ -212,7 +212,7 @@ class Primer(object):
         '''Return all records of unambiguous primers which contain seq sequence'''
         records = []
         for record in self.seq_records:
-            if str(record.seq).contains(str(seq)):
+            if str(record.seq).count(str(seq)) >= 0:
                 records.append(record)
         return records
     #end def

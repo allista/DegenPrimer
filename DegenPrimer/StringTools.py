@@ -38,26 +38,56 @@ def random_text(length):
 #end def
 
 
-def hr(s, symbol='-'):
-    return s.center(text_width, symbol) + '\n\n'
+def hr(s, symbol='-', width=text_width):
+    return s.center(width, symbol) + '\n\n'
 #end def
 
 def time_hr(symbol='#'):
     return hr(' %s ' % ctime(), symbol)
 
 
-def wrap_text(_text):
+def wrap_text(_text, _width=text_width):
     wrapped_text = ''
     lines = _text.splitlines()
     for line in lines:
-        while len(line) > text_width:
-            new_line      = line[:text_width]
-            last_space    = new_line.rfind(' ')
+        while len(line) > _width:
+            new_line   = line[:_width]
+            last_space = new_line.rfind(' ')
+            last_space = last_space if last_space >=0 else _width-1
             wrapped_text += new_line[:last_space+1]+'\n'
             line = line[last_space+1:]
-        wrapped_text += line+'\n'
+        wrapped_text += line + '\n'
     return wrapped_text
 #end def
+
+
+def line_by_line(texts, widths, divider='|', filler=' ', j_down=False, j_center=False):
+    if len(texts) != len(widths):
+        raise ValueError('StringTools.line_by_line: for each text a line width '
+                         'should be provided')
+    _texts = [wrap_text(t, widths[w]-1)[:-1].splitlines() for w,t in enumerate(texts)]
+    _lines = max(len(t) for t in _texts)
+    output_text = ''
+    for l in range(_lines):
+        for w,t in enumerate(_texts):
+            if not j_down:
+                if l < len(t):
+                    if j_center:
+                        output_text += t[l].center(widths[w]-1, filler) + divider
+                    else: 
+                        output_text += t[l].ljust(widths[w]-1, filler) + divider
+                else: output_text += filler*(widths[w]-1) + divider
+            else:
+                l_start = _lines-len(t)
+                if l >= l_start:
+                    if j_center:
+                        output_text += t[l-l_start].center(widths[w]-1, filler) + divider
+                    else: 
+                        output_text += t[l-l_start].ljust(widths[w]-1, filler) + divider
+                else: output_text += filler*(widths[w]-1) + divider
+        output_text += '\n'
+    return output_text
+#end if
 
 
 def print_dict(_dict, delimiter=':'):

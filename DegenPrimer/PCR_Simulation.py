@@ -29,7 +29,7 @@ from Equilibrium import Equilibrium
 import StringTools
 import TD_Functions
 from TD_Functions import format_PCR_conditions
-from StringTools import wrap_text, hr
+from StringTools import wrap_text, line_by_line, hr
 
 
 
@@ -59,7 +59,7 @@ class Region(object):
     @property
     def end(self): return self._end
 
-    def __len__(self): return self._end-self._start
+    def __len__(self): return self._end-self._start+1
         
     def __hash__(self):
         return hash((self._name, self._start, self._end))
@@ -91,6 +91,8 @@ class Product(Region):
         #quantity
         self._quantity     = 0
         #primers and templates
+        self._fwd_ids      = set()
+        self._rev_ids      = set()
         self._fwd_primers  = set()
         self._rev_primers  = set()
         self._fwd_template = Region(template_name, start, start)
@@ -129,12 +131,28 @@ class Product(Region):
     @property
     def rev_template(self): return self._rev_template
 
+    @property
+    def fwd_ids(self):
+        _ids = list(self._fwd_ids)
+        _ids.sort() 
+        return _ids
+    
+    @property
+    def rev_ids(self): 
+        _ids = list(self._rev_ids)
+        _ids.sort() 
+        return _ids
+
+    def add_fwd_id(self, _id): self._fwd_ids.add(_id)
+    
+    def add_rev_id(self, _id): self._rev_ids.add(_id)
+
 
     def add_fwd_primer(self, primer_duplex):
         if not primer_duplex: return
         self._fwd_primers.add(primer_duplex)
         self._fwd_template += Region(self._name, 
-                                     max(self._start-len(primer_duplex.fwd_seq), 0), 
+                                     max(self._start-len(primer_duplex.fwd_seq), 1), 
                                      self._start)
     #end def
         
@@ -153,18 +171,20 @@ class PCR_Simulation(object):
     '''In silica PCR results filtration, computation and visualization.'''
     
     #histogram
-    _all_products_title = 'PCR-product'
-    _hist_column_title  = '-----final concentration-----'
+    _all_products_title  = 'PCR-product'
+    _hist_column_title   = '     final concentration     '
     #bar width should not be less than 2*len('100.00%')+1, or value will not fit
-    _hist_width         = max(2*len('999.9 mM')+2, len(_hist_column_title)) 
+    _hist_width          = max(2*len('999.9 mM')+2, len(_hist_column_title)) 
     #electrophoresis
-    _window_percent     = 0.05 #percentage of a length of the longest PCR product; it defines band width on electrophoresis
+    _window_percent      = 0.05 #percentage of a length of the longest PCR product; it defines band width on electrophoresis
     #indirectly defines to what extent should lengths 
     #of two products differ in order of them to occupy 
     #separate bands on the electrophoresis.
-    _precision          = 1e6
+    _precision           = 1e6
     #minimum equilibrium constant: reactions with EC less than this will not be taken into account
-    _min_K              = 100
+    _min_K               = 100
+    #products with quantity less than maximum quantity multiplied by this factor will not be included in the report
+    _min_quantity_factor = 0.001
 
 
     def __init__(self, 
@@ -374,13 +394,20 @@ class PCR_Simulation(object):
                         cur_primers[f_id] -= fwd_strand_2
                         cur_primers[r_id] -= rev_strand_2
                         cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
-                        var = [f_id, r_id, min(fwd_strand_2,rev_strand_2), product_id]
                         #third
                         var = [f_id, r_id, fwd_strand_2+rev_strand_2, product_id]
                         cur_variants.append(var)
                         cur_primers[f_id] -= rev_strand_2
                         cur_primers[r_id] -= fwd_strand_2
                         cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
+                        #add primer ids to the product
+                        for primer in self._primers:
+                            if f_id in primer:
+                                for record in primer.find_records(f_id):
+                                    product.add_fwd_id(record.id)
+                            if r_id in primer:
+                                for record in primer.find_records(r_id):
+                                    product.add_rev_id(record.id)
             if not cur_variants:
                 self._products[hit_id] = dict() 
                 continue
@@ -431,8 +458,11 @@ class PCR_Simulation(object):
             for var in cur_variants:
                 self._products[hit_id][var[3]].quantity += var[2]
             #filter out products with zero quantity
+            max_product_quantity   = max(prod[1].quantity 
+                                         for prod in self._products[hit_id].items())
             self._products[hit_id] = dict([prod for prod in self._products[hit_id].items() 
-                                           if prod[1].quantity > 0])
+                                          if prod[1].quantity > max(TD_Functions.C_DNA, 
+                                                                    max_product_quantity*self._min_quantity_factor)])
         #filter out hits without proucts
         self._products = dict([hit for hit in self._products.items() 
                                if len(hit[1]) > 0])
@@ -523,36 +553,32 @@ class PCR_Simulation(object):
         max_start  = max(len(str(p.start)) for p in products)
         max_end    = max(len(str(p.end))   for p in products)
         max_len    = max(len(str(len(p)))  for p in products)
-        if with_titles:
-            max_title = max(len(p.name) for p in products)
-        else: max_title = 0
-        spec_limit = StringTools.text_width-cls._hist_width-2
         for product in products:
-            product_spec   = '%d%s bp [%d%s-%s%d]' \
+            product_spec = ''
+            #if the flag is set, print full hit title
+            if with_titles:
+                product_spec += product.name + '\n'
+            #compose product specification
+            product_spec  += '%d%s bp [%d%s-%s%d]' \
                            % (len(product),
                               ' '*(max_len-len(str(len(product)))),
                               product.start,
                               ' '*(max_start-len(str(product.start))),
                               ' '*(max_end-len(str(product.end))),
                               product.end)
+            #print last cycle of the reaction where this product was still generating
             if reaction_ends:
                 product_spec += ' %d cycles' \
                               % reaction_ends[product.name]['products'][hash(product)]
-            if with_titles: 
-                title_limit  = spec_limit - len(product_spec) -1
-                title_spacer = max_title - len(product.name)
-                if title_limit < 0: colname = product_spec
-                elif title_limit < len(product.name):
-                    colname = product.name
-                    colname = (colname)[:title_limit/2-1] + '-' \
-                            + (colname)[len(colname)-title_limit/2:] + ' '\
-                            + product_spec
-                else:
-                    colname = (product.name + ' '*title_spacer)[:title_limit] \
-                            + ' ' + product_spec
-            else:
-                colname = product_spec+' '*(spec_limit - len(product_spec))
-            histogram.append([colname, product.quantity, len(product)])
+            product_spec += '\n'
+            #print primers which give this product
+            if not with_titles:
+                primer_ids  = ', '.join(product.fwd_ids)
+                if primer_ids: primer_ids += ' <> '
+                primer_ids += ', '.join(product.rev_ids)
+                if primer_ids: product_spec += primer_ids + '\n'
+            #append histogram row
+            histogram.append([product_spec, product.quantity, len(product)])
         #sort histogram by product length, from the longest to the shortest
         if sort: histogram.sort(key=lambda(x): x[2], reverse=True)
         #format histogram
@@ -562,43 +588,31 @@ class PCR_Simulation(object):
     
     @classmethod
     def _format_histogram(cls, title, histogram):
-        histogram_string = ''
         #maximum column name width and value
-        max_name  = StringTools.text_width-cls._hist_width-2
         max_value = max(c[1] for c in histogram)
-        #cut name column title if necessary 
-        if len(title) > max_name:
-            title = title[:max_name]
-        #spacers
-        names_spacer    = max_name - len(title)
-        coltitle_spacer = cls._hist_width-len(cls._hist_column_title)
-        #column_titles 
-        histogram_string += '-'*(names_spacer/2)+title        + \
-                            '-'*(names_spacer-names_spacer/2) + '|'+ \
-                            ' '*(coltitle_spacer/2) + cls._hist_column_title + \
-                            ' '*(coltitle_spacer-coltitle_spacer/2)+'|\n'
+        widths    = [StringTools.text_width-cls._hist_width-1, cls._hist_width+1]
+        histogram_string  = '-'*StringTools.text_width + '\n'
+        #wrap column and hist titles
+        histogram_string += line_by_line([title, cls._hist_column_title], 
+                                         widths, j_center=True)
+        histogram_string += '-'*StringTools.text_width + '\n'
         #histogram lines
         for col in histogram:
-            #line title
-            if len(col[0]) > max_name:
-                name = col[0][:max_name]
-            else: name = col[0]
-            name_spacer = max_name - len(name)
-            histogram_string += name + ' '*name_spacer
             #line value
-            hist_value  = int(round((cls._hist_width*col[1])/max_value))
-            col_spacer  = cls._hist_width - hist_value
+            hist_value = int(round((cls._hist_width*col[1])/max_value))
+            col_spacer = cls._hist_width - hist_value
             #value figure
-            value_str   = TD_Functions.format_concentration(col[1])
-            #value bar
+            value_str  = TD_Functions.format_concentration(col[1])
+            hist_bar  = ''
             if len(value_str) < col_spacer:
                 _spacer = col_spacer-len(value_str)
-                histogram_string += ':' + '#'*hist_value + ' '*_spacer 
-                histogram_string += value_str + ':' + '\n'
+                hist_bar += '#'*hist_value + ' '*_spacer + value_str 
             else:
                 _bar = hist_value-len(value_str)
-                histogram_string += ':' + '#'*(_bar/2) + value_str 
-                histogram_string += '#'*(_bar-_bar/2) + ' '*col_spacer + ':' + '\n'
+                hist_bar += '#'*(_bar/2) + value_str 
+                hist_bar += '#'*(_bar-_bar/2) + ' '*col_spacer
+            histogram_string += line_by_line([col[0],hist_bar], widths, divider=':')
+            histogram_string += '-'*StringTools.text_width + '\n'
         histogram_string += '\n'
         return histogram_string
     #end def
@@ -628,7 +642,7 @@ class PCR_Simulation(object):
         text_width  = StringTools.text_width
         max_line    = max(min(p.concentration for p in self._primers)*self._max_amplicon, 
                           max(l[1] for l in phoresis))
-        max_mark    = max(len(str(l[2])) for l in phoresis)*2
+        max_mark    = max(len(str(l[2]+window)) for l in phoresis)*2
         line_width  = text_width - max_mark - 7 #mark b :###   :
         #format phoresis
         phoresis_text = ''
@@ -671,9 +685,9 @@ class PCR_Simulation(object):
             for shortage_period in self._reaction_ends[hit]['poly']:
                 if shortage_string: shortage_string += ', '
                 if shortage_period[0] == shortage_period[1]:
-                    header_string += str(shortage_period[0])
+                    shortage_string += str(shortage_period[0])
                 else:
-                    header_string += '%d-%d' % tuple(shortage_period)
+                    shortage_string += '%d-%d' % tuple(shortage_period)
             header_string += wrap_text(shortage_string + '\n')
         header_string += '\n'
         return header_string
@@ -723,6 +737,7 @@ class PCR_Simulation(object):
             all_graphs += self.per_hit_header(hit)
             all_graphs += hr(' electrophorogram of PCR products ')
             all_graphs += self.per_hit_electrophoresis(hit)
+            all_graphs += hr('')
             all_graphs += '\n\n'
         return all_graphs
     
@@ -750,13 +765,20 @@ class PCR_Simulation(object):
     
     def format_quantity_explanation(self):
         expl_string  = ''
-        expl_string += hr(' estimation of PCR product quantities ')
+        expl_string += hr(' estimation of PCR products concentrations ')
         expl_string += 'Value of an objective function at the solution ' + \
                        '(the lower the better):\n   %e\n' % \
                         self._max_objective_value
         expl_string += wrap_text('This value shows "distance" to the solution of '
                            'the system of equilibrium equations which were used '
-                           'to calculate quantities of PCR products.\n\n')
+                           'to calculate concentrations of PCR products.\n\n')
+        expl_string += wrap_text(('Products with concentration less than %.2f%% '
+                                  'of the concentration of the most abundant '
+                                  'product or less than initial DNA concentration '
+                                  'are not shown.'
+                                 '\n\n') % (self._min_quantity_factor*100))
+        expl_string += wrap_text('Boundaries of a product and it\'s length do '
+                                 'not include primers.\n\n')
         expl_string += '\n'
         return expl_string
     #end def    
@@ -766,6 +788,7 @@ class PCR_Simulation(object):
 
 #test
 if __name__ == '__main__':
+    import StringTools
     from SecStructures import Duplex
     from Primer import Primer
     import os

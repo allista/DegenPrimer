@@ -215,7 +215,7 @@ class DegenPrimerConfig(object):
                                #metavar
                                'metavar'   :'uM',
                                #help string
-                               'help'      :'Concentration of primer (assume C(sense)=C(antisense)) '
+                               'help'      :'Concentration of the sense primer '
                                'in uM for Tm and dG correction (def=0.25)',
                                #type
                                'py_type'   :float, #for argparse
@@ -234,7 +234,7 @@ class DegenPrimerConfig(object):
                                #metavar
                                'metavar'   :'uM',
                                #help string
-                               'help'      :'Concentration of primer (assume C(sense)=C(antisense)) '
+                               'help'      :'Concentration of the antisense primer '
                                'in uM for Tm and dG correction (def=0.25)',
                                #type
                                'py_type'   :float, #for argparse

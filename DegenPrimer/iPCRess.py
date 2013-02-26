@@ -240,10 +240,10 @@ class iPCRess(iPCR_Interface):
         #add results to PCR_Simulation object
         for result in self._results:
             self._PCR_Simulation.add_product(result['hit'], 
-                                             #ipcress counts nucleotides tarting from 0
+                                             #ipcress counts nucleotides starting from 0
                                              #and defines start position as 5'-end of the forward primer
-                                             result['start']+len(result['fwd_primer']), 
-                                             result['end']+1,
+                                             result['start']+len(result['fwd_primer'])+1,
+                                             result['end'],
                                              Duplex(result['fwd_primer'], result['fwd_seq']), 
                                              Duplex(result['rev_primer'], result['rev_seq']))
         #compute PCR products quantities
@@ -279,7 +279,7 @@ class iPCRess(iPCR_Interface):
         #filter parameters
         ipcr_report.write(self._PCR_Simulation.format_report_header())
         if self._max_mismatches != None:
-            ipcr_report.write('Number of mismatches allowed: %d\n' % self._max_mismatches)
+            ipcr_report.write('Number of mismatches allowed: %d\n\n' % self._max_mismatches)
         #if no PCR products have been found
         if not self._PCR_Simulation:
             ipcr_report.write(hr(' No PCR products have been found ', symbol='!'))
