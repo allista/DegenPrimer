@@ -192,7 +192,7 @@ class Primer(object):
     def has_subsequence(self, seq):
         '''Return True if any of unambiguous primers contains seq sequence''' 
         for sequence in self.str_sequences:
-            if sequence.count(str(seq)):
+            if sequence.count(str(seq)) > 0:
                 return True
         return False
     #end def
@@ -202,7 +202,7 @@ class Primer(object):
         '''Return all unambiguous primers which contain seq sequence'''
         sequences = []
         for sequence in self.sequences:
-            if str(sequence).contains(str(seq)):
+            if str(sequence).count(str(seq)) > 0:
                 sequences.append(sequence)
         return sequences
     #end def
@@ -212,7 +212,7 @@ class Primer(object):
         '''Return all records of unambiguous primers which contain seq sequence'''
         records = []
         for record in self.seq_records:
-            if str(record.seq).count(str(seq)) >= 0:
+            if str(record.seq).count(str(seq)) > 0:
                 records.append(record)
         return records
     #end def

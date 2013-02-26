@@ -216,12 +216,12 @@ class BlastPrimers(iPCR_Interface):
                     target_dir = hsp.frame[1]
                     #fwd hsp
                     if primer_dir == 1 and target_dir == 1:
-                        product_bound = hsp.sbjct_end + hsp_duplex.fwd_3_overhang
+                        product_bound = hsp.sbjct_end + hsp_duplex.fwd_3_overhang + 1
                         hits['fwd'].append({'start':product_bound,
                                             'fwd_duplex':hsp_duplex})
                     #rev hsp
                     elif primer_dir == 1 and target_dir == -1:
-                        product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang
+                        product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang - 1
                         hits['rev'].append({'end':product_bound,
                                             'rev_duplex':hsp_duplex})
                 #search for possible PCR products
@@ -321,7 +321,7 @@ class BlastPrimers(iPCR_Interface):
         if self._with_exonuclease:
             blast_report.write("DNA polymerase HAS 3'-5'-exonuclease activity\n")
         else: blast_report.write("DNA polymerase doesn't have 3'-5'-exonuclease activity\n")
-        blast_report.write('Maximum dG of an alignment: %.2f\n' % SecStructures.max_dimer_dG)
+        blast_report.write('Maximum dG of an alignment: %.2f kcal/mol\n' % SecStructures.max_dimer_dG)
         blast_report.write('\n')
         blast_report.write(hr(''))
         blast_report.write('\n\n')

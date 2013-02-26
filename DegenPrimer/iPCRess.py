@@ -224,7 +224,7 @@ class iPCRess(iPCR_Interface):
                     self._results[-1]['fwd_primer'] = Seq(words[0][3:-3], IUPAC.unambiguous_dna) #forward primer 5'->3'
                     self._results[-1]['rev_primer'] = Seq(words[1][3:-3][::-1], IUPAC.unambiguous_dna) #reverse primer 5'->3'
                 elif words[-1] == 'revcomp':
-                    seq = Seq(words[0].strip('.'), IUPAC.unambiguous_dna).complement() #forward template 5'->3'
+                    seq = Seq(words[0].strip('.'), IUPAC.unambiguous_dna).complement() #reverse template 5'->3'
                     self._results[-1]['rev_seq'] = seq
         ipcr_report.close()
         if not self._results:

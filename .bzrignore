@@ -32,3 +32,4 @@ RE:(?i).*\.ods#
 RE:(?i).*\.fa
 *.db
 RE:(?i).*\.back
+RE:(?i).*\.ipcress

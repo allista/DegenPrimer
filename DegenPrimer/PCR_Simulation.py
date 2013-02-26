@@ -113,6 +113,31 @@ class Product(Region):
         return rep
     #end def
     
+    def __iadd__(self, T):
+        if self._name != T.name: return self
+        if self._start > T.start:
+            self._start        = T.start
+            self._fwd_template = deepcopy(T.fwd_template)
+            self._fwd_primers  = deepcopy(T.fwd_primers)
+            self._fwd_ids      = set(T.fwd_ids)
+        elif self._start == T.start:
+            for _primer in T.fwd_primers:
+                self.add_fwd_primer(_primer)
+            for _id in T.fwd_ids:
+                self.add_fwd_id(_id)
+        if self._end < T.end:
+            self._end          = T.end
+            self._rev_template = deepcopy(T.rev_template)
+            self._rev_primers  = deepcopy(T.rev_primers)
+            self._rev_ids      = set(T.rev_ids)
+        elif self._end == T.end:
+            for _primer in T.rev_primers:
+                self.add_rev_primer(_primer)
+            for _id in T.rev_ids:
+                self.add_rev_id(_id)
+        return self
+    #end def
+    
     @property
     def quantity(self): return self._quantity
     
@@ -146,7 +171,6 @@ class Product(Region):
     def add_fwd_id(self, _id): self._fwd_ids.add(_id)
     
     def add_rev_id(self, _id): self._rev_ids.add(_id)
-
 
     def add_fwd_primer(self, primer_duplex):
         if not primer_duplex: return
@@ -314,7 +338,7 @@ class PCR_Simulation(object):
                                                                      hash(fwd_template), 'AB')
                 rev_template = self._find_template(hit_id, product.rev_template)
                 for rev_primer in product.rev_primers:
-                    if fwd_primer.K < self._min_K: continue
+                    if rev_primer.K < self._min_K: continue
                     r_hash = hash((rev_primer.fwd_seq, rev_template))
                     reactions[r_hash] = Equilibrium.compose_reaction(rev_primer.K, 
                                                                      rev_primer.fwd_seq, 

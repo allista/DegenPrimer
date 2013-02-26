@@ -1,3 +1,4 @@
+  Add search capability to the GUI view tabs
 ? PCR_Simulation<-Blast: add primer annealing regions which do not produce PCR product as side-reactions
 ? take into account primer-dimers synthesis
 ? Reimplement ipcress in order to port the whole thing to Windows
