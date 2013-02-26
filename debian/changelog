@@ -1,3 +1,10 @@
+degen-primer (2.0-rc5-0ppa1) precise; urgency=low
+
+  * Changed the way histogram is represented. Each row is now multiline in order to display all the information about a product. Also to the information about a product the list of primers which gave it is added. Products are filtered by quantity now. Description of histogram was updated.
+  * Important bugfixes in iPCR algorithm.
+
+ -- Allis Tauri <allista@gmail.com>  Tue, 26 Feb 2013 23:50:43 +0400
+
 degen-primer (2.0-rc1-0ppa1) precise; urgency=low
 
   * New features:
