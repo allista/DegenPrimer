@@ -21,10 +21,11 @@ Created on Dec 15, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from ReporterInterface import ReporterInterface
 from PCR_Simulation import PCR_Simulation
 
 
-class iPCR_Interface(object):
+class iPCR_Interface(ReporterInterface):
     '''Interface class to create facilities which use PCR_Simulation'''
 
     def __init__(self, 
@@ -37,6 +38,7 @@ class iPCR_Interface(object):
                  num_cycles,
                  side_reactions=None,
                  side_concentrations=None):
+        ReporterInterface.__init__(self)
         #parameters
         self._fwd_primer          = fwd_primer
         self._rev_primer          = rev_primer
@@ -47,9 +49,13 @@ class iPCR_Interface(object):
         self._num_cycles          = num_cycles
         self._side_reactions      = side_reactions
         self._side_concentrations = side_concentrations
+        self._PCR_report_filename = None
+        self._possible_products   = None
+        self._have_results        = False
     #end def
     
     
+    #factory for PCR_Simulation objects
     def _PCR_Simulation_factory(self):
         _PCR_simulation = PCR_Simulation([self._fwd_primer, 
                                           self._rev_primer],
@@ -66,5 +72,10 @@ class iPCR_Interface(object):
     #end def
     
     
+    #property functions
+    def have_results(self): return self._have_results
+    
+    
+    #pure virtual
     def simulate_PCR(self): pass
 #end class

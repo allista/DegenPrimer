@@ -24,7 +24,6 @@ Created on Nov 16, 2012
 from copy import deepcopy
 from datetime import timedelta
 from math import log, exp
-from itertools import chain
 from Equilibrium import Equilibrium
 import StringTools
 import TD_Functions
@@ -36,47 +35,48 @@ from StringTools import wrap_text, line_by_line, hr
 class Region(object):
     '''Region of a sequence.'''
     def __init__(self, name, start, end):
-        self._name  = name
-        self._start = min(start, end)
-        self._end   = max(start, end)
+        self.name  = name
+        if start < 1 or end < 1:
+            raise ValueError('Region: start and end of a sequence region should be grater than 1.')
+        if start > end:
+            raise ValueError('Region: start of a sequence region should be less than it\'s end')
+        self.start  = start
+        self.end    = end
+        self._len   = end - start +1
     #end def
     
     def __repr__(self):
         rep  = '\n'
-        rep += 'name:   %s\n' % self._name
-        rep += 'start:  %d\n' % self._start
-        rep += 'end:    %d\n' % self._end
+        rep += 'name:   %s\n' % self.name
+        rep += 'start:  %d\n' % self.start
+        rep += 'end:    %d\n' % self.end
         rep += 'length: %d\n' % len(self)
         return rep
     #end def
     
-    @property
-    def name(self): return self._name
-    
-    @property
-    def start(self): return self._start
-    
-    @property
-    def end(self): return self._end
-
-    def __len__(self): return self._end-self._start+1
+    def __len__(self): return self._len
         
-    def __hash__(self):
-        return hash((self._name, self._start, self._end))
+    def __hash__(self): return hash((self.name, self.start, self.end))
+    
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
+    
+    def __ne__(self, other):
+        return self.__hash__() != other.__hash__()
         
     def __iadd__(self, T):
-        if self._name != T.name: return self
-        self._start = min(self._start, T.start)
-        self._end   = max(self._end, T.end)
+        if self.name != T.name: return self
+        self.start = min(self.start, T.start)
+        self.end   = max(self.end, T.end)
         return self
     #end def
     
     def overlaps(self, T):
-        return (self._name == T.name 
+        return (self.name == T.name 
                 and
-                (self._start <= T.start <= self._end)
+                (self.start <= T.start <= self.end)
                 or
-                (self._start <= T.end <= self._end))
+                (self.start <= T.end <= self.end))
     #end def
 #end class
 
@@ -86,19 +86,24 @@ class Product(Region):
     region bounded by start and end positions which correspond to 3' ends of 
     primers (forward and reverse) which produce this product.'''
     def __init__(self, template_name, start, end, 
-                 fwd_primer_duplex=None, rev_primer_duplex=None):
+                 fwd_primer_duplexes=None, rev_primer_duplexes=None):
         Region.__init__(self, template_name, start, end)
         #quantity
         self._quantity     = 0
         #primers and templates
-        self._fwd_ids      = set()
-        self._rev_ids      = set()
-        self._fwd_primers  = set()
-        self._rev_primers  = set()
-        self._fwd_template = Region(template_name, start, start)
-        self._rev_template = Region(template_name, end, end)
-        self.add_fwd_primer(fwd_primer_duplex)
-        self.add_rev_primer(rev_primer_duplex)
+        self._fwd_ids     = set()
+        self._rev_ids     = set()
+        self.fwd_primers  = set()
+        self.rev_primers  = set()
+        self._fwd_margin  = self.start-1
+        self._rev_margin  = self.end+1
+        if self._fwd_margin < 1: self._fwd_margin = 1
+        self.fwd_template = Region(template_name, self._fwd_margin, self._fwd_margin)
+        self.rev_template = Region(template_name, self._rev_margin, self._rev_margin)
+        for duplex in fwd_primer_duplexes:
+            self.add_fwd_primer(duplex)
+        for duplex in rev_primer_duplexes:
+            self.add_rev_primer(duplex)
     #end def
     
     def __repr__(self):
@@ -108,32 +113,38 @@ class Product(Region):
         rep += 'forward template: %s\n' % repr(self._fwd_template)
         rep += 'reverse template: %s\n' % repr(self._rev_template)
         rep += '------\n'
-        rep += 'forward primers:\n%s\n' % repr(self._fwd_primers)
-        rep += 'reverse primers:\n%s\n' % repr(self._rev_primers)
+        rep += 'forward primers:\n'
+        for primer in self._fwd_primers:
+            rep += repr(primer) + '\n'
+        rep += 'reverse primers:\n'
+        for primer in self._rev_primers:
+            rep += repr(primer) + '\n'
         return rep
     #end def
     
     def __iadd__(self, T):
-        if self._name != T.name: return self
-        if self._start > T.start:
-            self._start        = T.start
-            self._fwd_template = deepcopy(T.fwd_template)
-            self._fwd_primers  = deepcopy(T.fwd_primers)
-            self._fwd_ids      = set(T.fwd_ids)
-        elif self._start == T.start:
+        if self.name != T.name: return self
+        if self.start > T.start:
+            self.start        = T.start
+            self._fwd_margin  = T._fwd_margin
+            self.fwd_template = deepcopy(T.fwd_template)
+            self.fwd_primers  = deepcopy(T.fwd_primers)
+            self._fwd_ids     = set(T._fwd_ids)
+        elif self.start == T.start:
             for _primer in T.fwd_primers:
                 self.add_fwd_primer(_primer)
-            for _id in T.fwd_ids:
+            for _id in T._fwd_ids:
                 self.add_fwd_id(_id)
-        if self._end < T.end:
-            self._end          = T.end
-            self._rev_template = deepcopy(T.rev_template)
-            self._rev_primers  = deepcopy(T.rev_primers)
-            self._rev_ids      = set(T.rev_ids)
-        elif self._end == T.end:
+        if self.end < T.end:
+            self.end          = T.end
+            self._rev_margin  = T._rev_margin
+            self.rev_template = deepcopy(T.rev_template)
+            self.rev_primers  = deepcopy(T.rev_primers)
+            self._rev_ids     = set(T._rev_ids)
+        elif self.end == T.end:
             for _primer in T.rev_primers:
                 self.add_rev_primer(_primer)
-            for _id in T.rev_ids:
+            for _id in T._rev_ids:
                 self.add_rev_id(_id)
         return self
     #end def
@@ -144,18 +155,6 @@ class Product(Region):
     @quantity.setter
     def quantity(self, q): self._quantity = q
         
-    @property
-    def fwd_primers(self): return self._fwd_primers
-    
-    @property
-    def rev_primers(self): return self._rev_primers
-    
-    @property
-    def fwd_template(self): return self._fwd_template
-    
-    @property
-    def rev_template(self): return self._rev_template
-
     @property
     def fwd_ids(self):
         _ids = list(self._fwd_ids)
@@ -174,18 +173,20 @@ class Product(Region):
 
     def add_fwd_primer(self, primer_duplex):
         if not primer_duplex: return
-        self._fwd_primers.add(primer_duplex)
-        self._fwd_template += Region(self._name, 
-                                     max(self._start-len(primer_duplex.fwd_seq), 1), 
-                                     self._start)
+        if primer_duplex in self.fwd_primers: return
+        self.fwd_primers.add(primer_duplex)
+        self.fwd_template += Region(self.name, 
+                                    max(self.start-primer_duplex.fwd_len, 1), 
+                                    max(self.start-1, 1))
     #end def
         
     def add_rev_primer(self, primer_duplex):
         if not primer_duplex: return
-        self._rev_primers.add(primer_duplex)
-        self._rev_template += Region(self._name, 
-                                     self._end, 
-                                     self._end+len(primer_duplex.fwd_seq))
+        if primer_duplex in self.rev_primers: return
+        self.rev_primers.add(primer_duplex)
+        self.rev_template += Region(self.name, 
+                                    self.end+1, 
+                                    self.end+primer_duplex.fwd_len)
     #end def
 #end class
     
@@ -262,37 +263,61 @@ class PCR_Simulation(object):
         
 
     def add_product(self, 
-                    hit,        #name of the target sequence
-                    start,      #start position of the product on the target sequence
-                    end,        #end position of the product on the target sequence
-                    fwd_duplex, #duplex of forward primer with corresponding template sequence
-                    rev_duplex, #duplex of reverse primer with corresponding template sequence
+                    hit,          #name of the target sequence
+                    start,        #start position of the product on the target sequence
+                    end,          #end position of the product on the target sequence
+                    fwd_duplexes, #duplex of forward primer with corresponding template sequence
+                    rev_duplexes,   #duplex of reverse primer with corresponding template sequence
                     ):
         '''add a new product to the list'''
-        #check if there are such primers in the system at all
-        fwd_valid = False
-        rev_valid = False
-        for primer in self._primers:
-            fwd_valid |= fwd_duplex.fwd_seq in primer
-            rev_valid |= rev_duplex.fwd_seq in primer
-        if not (fwd_valid and rev_valid): return False
-        #check 3' mismatches
-        if not self._with_exonuclease \
-        and (fwd_duplex.fwd_3_mismatch or rev_duplex.fwd_3_mismatch): 
-            return False
-        #construct product
-        new_product = Product(hit, start, end, fwd_duplex, rev_duplex)
         #check amplicon length
-        if not (self._min_amplicon <= len(new_product) <= self._max_amplicon): 
+        if not (self._min_amplicon <= end-start+1 <= self._max_amplicon): 
             return False
-        #if new product is to be added, reset nonzero flag
+        #check fwd primers
+        valid_fwd = []
+        for fwd_duplex in fwd_duplexes:
+            #check equilibrium constant
+            if fwd_duplex.K < self._min_K: continue
+            #check 3' mismatches
+            if not self._with_exonuclease and fwd_duplex.fwd_3_mismatch:
+                continue
+            #check if there are such primers in the system at all
+            cur_valid = False
+            for primer in self._primers:
+                if fwd_duplex.fwd_seq in primer:
+                    cur_valid = True
+                    break
+            #add primer
+            if cur_valid:
+                valid_fwd.append(fwd_duplex)
+        #check rev primers
+        valid_rev = []
+        for rev_duplex in rev_duplexes:
+            #check equilibrium constant
+            if rev_duplex.K < self._min_K: continue
+            #check 3' mismatches
+            if not self._with_exonuclease and rev_duplex.fwd_3_mismatch:
+                continue
+            #check if there are such primers in the system at all
+            cur_valid = False
+            for primer in self._primers:
+                if rev_duplex.fwd_seq in primer:
+                    cur_valid = True
+                    break
+            #add primer
+            if cur_valid:
+                valid_rev.append(rev_duplex)
+        #if there are no valid fwd and rev primers, return
+        if not valid_fwd or not valid_rev: return False
+        #initialize new product and reset nonzero flag
+        new_product = Product(hit, start, end, valid_fwd, valid_rev)
         self._nonzero = False
         #if there was no such hit before, add it
-        if hit not in self._products.keys():
+        if hit not in self._products:
             self._products[hit] = dict()
         #if no such product from this hit, add it to the list
         new_product_hash = hash(new_product)
-        if new_product_hash not in self._products[hit].keys():
+        if new_product_hash not in self._products[hit]:
             self._products[hit][new_product_hash]  = new_product
         else: #append primers
             self._products[hit][new_product_hash] += new_product
@@ -331,14 +356,12 @@ class PCR_Simulation(object):
             for product in self._products[hit_id].values():
                 fwd_template = self._find_template(hit_id, product.fwd_template)
                 for fwd_primer in product.fwd_primers:
-                    if fwd_primer.K < self._min_K: continue
                     r_hash = hash((fwd_primer.fwd_seq, fwd_template))
                     reactions[r_hash] = Equilibrium.compose_reaction(fwd_primer.K, 
                                                                      fwd_primer.fwd_seq, 
                                                                      hash(fwd_template), 'AB')
                 rev_template = self._find_template(hit_id, product.rev_template)
                 for rev_primer in product.rev_primers:
-                    if rev_primer.K < self._min_K: continue
                     r_hash = hash((rev_primer.fwd_seq, rev_template))
                     reactions[r_hash] = Equilibrium.compose_reaction(rev_primer.K, 
                                                                      rev_primer.fwd_seq, 

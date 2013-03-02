@@ -45,25 +45,31 @@ class Dimer(object):
          rev_matches = 3'-[4,6,9,11]-5'
     '''
     def __init__(self, fwd_matches=None, rev_matches=None, dG=None):
-        if fwd_matches:
+        if fwd_matches and rev_matches:
+            if len(fwd_matches) != len(rev_matches):
+                raise ValueError('SecStructures.Dimer: number of forward matches should equal that of reverse matches.')
             self._fwd_matches = set(fwd_matches)
-        else:
-            self._fwd_matches = set()    
-        if rev_matches:
             self._rev_matches = set(rev_matches)
+            self.num_matches  = len(fwd_matches)
         else:
+            self._fwd_matches = set()
             self._rev_matches = set()
+            self.num_matches  = 0    
         self.dG = dG
         self.conversion_degree = None
     #end def
     
     def __hash__(self):
-        return hash((tuple(self._fwd_matches), tuple(self._rev_matches)))
+        return hash((tuple(self.fwd_matches), tuple(self.rev_matches)))
+    
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
+    
+    def __ne__(self, other):
+        return self.__hash__() != other.__hash__()
     
     def __nonzero__(self):
-        if  len(self._fwd_matches) > 0 \
-        and len(self._rev_matches) == len(self._fwd_matches):
-            return True
+        if self.num_matches > 0: return True
         else: return False
     
     def __getitem__(self, i):
@@ -83,24 +89,46 @@ class Dimer(object):
         l = list(self._rev_matches)
         l.sort()
         return l
+    
+    @property
+    def fwd_min(self):
+        return min(self._fwd_matches)
+    
+    @property
+    def rev_min(self):
+        return min(self._rev_matches)
+    
+    @property
+    def fwd_max(self):
+        return max(self._fwd_matches)
+    
+    @property
+    def rev_max(self):
+        return max(self._rev_matches)
         
     def add(self, fwd, rev):
         self._fwd_matches.add(fwd)
         self._rev_matches.add(rev)
+        self.num_matches += 1
         
     @classmethod
     def from_sequences(cls, seq1, seq2):
         '''form a simple dimer structure from two sequences of the same length;
         both sequences should be 5'->3' oriented'''
-        if len(seq1) != len(seq2):
+        seq1_len = len(seq1)
+        seq2_len = len(seq2)
+        if seq1_len != seq2_len:
             raise ValueError('SecStructures.Dimer.from_sequences: '
                              'sequences must be of the same length.')
-        forward = seq1
-        revcomp = seq2.reverse_complement()
+        forward = str(seq1)
+        revcomp = str(seq2.complement())[::-1]
         dimer  =  cls()
-        for i in range(len(seq1)):
+        for i in range(seq1_len):
             if forward[i] == revcomp[i]:
-                dimer.add(i,i)
+                #add indexes directly is much faster than to call Dimer.add method
+                dimer._fwd_matches.add(i)
+                dimer._rev_matches.add(i)
+                dimer.num_matches += 1
         return dimer
     #end def
 #end class
@@ -133,18 +161,25 @@ class Duplex(object):
         '''
         self._fwd_sequence = fwd_seq
         self._rev_sequence = rev_seq
-        if not dimer: self._dimer = Dimer.from_sequences(fwd_seq, rev_seq)
+        self.fwd_len       = len(fwd_seq)
+        self.rev_len       = len(rev_seq)
+        if not dimer: 
+            self._dimer    = Dimer.from_sequences(fwd_seq, rev_seq)
         else: self._dimer  = dimer
-        if self._dimer:
-            self._dimer.dG = dimer_dG_corrected(self._dimer, fwd_seq, rev_seq)
-            self._K        = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
-        else: self._K      = None
+        self._dimer.dG     = dimer_dG_corrected(self._dimer, fwd_seq, rev_seq)
+        self._K            = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
     #end def
     
     def __nonzero__(self): return bool(self._dimer)
     
     def __hash__(self):
         return hash((str(self._fwd_sequence), str(self._rev_sequence), self._dimer))
+    
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
+    
+    def __ne__(self, other):
+        return self.__hash__() != other.__hash__()
     
     def __str__(self):
         duplex_string = ''
@@ -156,7 +191,7 @@ class Duplex(object):
         rev_matches = self._dimer.rev_matches
         #construct matches string
         matches = ''
-        for m in range(len(fwd_matches)):
+        for m in range(self._dimer.num_matches):
             if matches: matches += ' '*(fwd_matches[m]-fwd_matches[m-1]-1)
             matches += '|'            
         #calculate spacers
@@ -177,7 +212,7 @@ class Duplex(object):
                'matches':matches}
         duplex_string += "%(spacer2)s3' %(seq2)s 5'\n" \
             % {'spacer2':spacer2,
-               'seq2'   :str(self._rev_sequence[::-1])}
+               'seq2'   :str(self._rev_sequence)[::-1]}
         #dG
         if self._dimer.dG != None:
             duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, self._dimer.dG)
@@ -206,15 +241,29 @@ class Duplex(object):
     
     @property
     def fwd_3_mismatch(self):
-        return self._dimer.fwd_matches[-1] < len(self._fwd_sequence)-1
+        return self._dimer.fwd_max < self.fwd_len-1
     
     @property
     def fwd_3_overhang(self):
-        fwd_tail = len(self._fwd_sequence)-1 - self._dimer.fwd_matches[-1]
-        rev_tail = len(self._rev_sequence)-1 - self._dimer.rev_matches[-1]
+        fwd_tail = self.fwd_len-1 - self._dimer.fwd_max
+        rev_tail = self.rev_len-1 - self._dimer.rev_max
         if fwd_tail > rev_tail: return fwd_tail - rev_tail
         return 0
     #end def
+    
+    @property
+    def mismatches(self):
+        fwd_head = self._dimer.fwd_min
+        rev_head = self._dimer.rev_min
+        fwd_tail = self.fwd_len-1 - self._dimer.fwd_max
+        rev_tail = self.rev_len-1 - self._dimer.rev_max
+        #calculate 3' and 5' overhangs
+        fwd_5_overhang = fwd_head-rev_head if fwd_head > rev_head else 0
+        fwd_3_overhang = fwd_tail-rev_tail if fwd_tail > rev_tail else 0
+        #effective length of the duplex
+        effective_len = self.fwd_len-fwd_3_overhang-fwd_5_overhang
+        #mismatches
+        return effective_len - self._dimer.num_matches
 #end class
 
 

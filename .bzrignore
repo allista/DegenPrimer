@@ -33,3 +33,5 @@ RE:(?i).*\.fa
 *.db
 RE:(?i).*\.back
 RE:(?i).*\.ipcress
+RE:(?i).*\.gz
+RE:(?i).*\.out

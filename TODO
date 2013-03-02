@@ -1,6 +1,14 @@
+  SearchEngine: parallelize _construct_duplexes method.
+  
+  Add description member to Duplex to hold the name of a primer.
+  PCR_Simulation: add products report with graphical representation of annealing sites.
+  
+  PCR_Simulation: add primer annealing regions which do not produce PCR product as side-reactions.
+  PCR_Simulation: also add primer annealing variants with dissociated 3' end as side-reactions.
+  
+  Add some progress bar.
   Add search capability to the GUI view tabs.
   Make Entrez query of PCR products.
-? PCR_Simulation<-Blast: add primer annealing regions which do not produce PCR product as side-reactions
-? take into account primer-dimers synthesis
-? Reimplement ipcress in order to port the whole thing to Windows
-? use some graphics library to make PDF plots of PCR phoresis (apparently, mathplotlib)
+  
+? take into account primer-dimers synthesis.
+? use some graphics library to make PDF plots of PCR phoresis (apparently, mathplotlib).

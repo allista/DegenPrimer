@@ -178,13 +178,13 @@ class DegenPrimerConfig(object):
                                'metavar'   :'mM',
                                #help string
                                'help'      :'Concentration of dNTP in mM for '
-                               'Tm and dG correction (def=1)',
+                               'Tm and dG correction (def=0.1)',
                                #type
                                'py_type'   :float, #for argparse
                                'str_type'  :'f', #for string formatting
                                'field_type':'float', #for gui
                                #default value
-                               'default'   :1,
+                               'default'   :0.1,
                                'limits'    :(1e-3, 1000), #1M max
                                'scale'     :1e-3},
                {'option':'DNA',
@@ -333,7 +333,12 @@ class DegenPrimerConfig(object):
                                'help'      :'Maximum number of mismatches between a primer '
                                'and a target sequence '
                                '(default 20 percent of the biggest primer length). '
-                               'Applies only to ipcress simulation.',
+                               'It is recommended to gradually increase this parameter '
+                               'up to 5-6, for some annealings with 5 or even 6 mismatches may be '
+                               'more stable than some with 4 mismatches. '
+                               'Note, though, that PCR simulation with 5 and more mismatches '
+                               'may take a considerable time due to grate number of possible products. '
+                               'Applies only to iPCR simulation.',
                                #type
                                'py_type'   :int, #for argparse
                                'str_type'  :'d', #for string formatting
@@ -411,34 +416,13 @@ class DegenPrimerConfig(object):
                                'metavar'   :'path',
                                #help string
                                'help'      :'Path(s) to fasta file(s) containing '
-                               'target sequences for ipcress simulation.',
+                               'target sequences for iPCR simulation.',
                                #type
                                'py_type'   :str, #for argparse
                                'str_type'  :'s', #for string formatting
                                'field_type':'file', #for gui
                                #default value
                                'default'   :None,
-                               'limits'    :(None, None),
-                               'scale'     :None},
-                
-               {'option':'run_ipcress',
-                               'section'   :'iPCR',
-                               #command-line arguments 
-                               'args'      :('--run-ipcress',),
-                               #number of arguments
-                               'nargs'     :1,
-                               #metavar
-                               'metavar'   :None,
-                               #help string
-                               'help'      :'If True, run the ipcress programm to '
-                               'search for possible PCR products in the sequences '
-                               'given as fasta files (see --fasta-files argument).',
-                               #type
-                               'py_type'   :bool, #for argparse
-                               'str_type'  :'d',  #for string formatting
-                               'field_type':'boolean', #for gui
-                               #default value
-                               'default'   :False,
                                'limits'    :(None, None),
                                'scale'     :None},
                #BLAST
@@ -502,6 +486,12 @@ class DegenPrimerConfig(object):
     #end def
     
     def __repr__(self): return str(self)    
+    
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
+    
+    def __ne__(self, other):
+        return self.__hash__() != other.__hash__()
     
     def __hash__(self):
         values = []
@@ -652,7 +642,6 @@ class DegenPrimerConfig(object):
         for option in self._options:
             #do not save 'do_blast' option
             if option['option'] == 'do_blast':    continue
-            if option['option'] == 'run_ipcress': continue
             #save all other
             if not config.has_section(option['section']):
                 config.add_section(option['section'])

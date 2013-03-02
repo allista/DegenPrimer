@@ -145,7 +145,7 @@ class UnifiedNN(object):
     
     #'standard' enthalpy, enthropy and Gibbs energy
     @classmethod
-    def _pair_delta_par(cls, seq, rev, parameter):
+    def pair_dPar_37(cls, seq, rev, parameter):
         '''return 'standard' parameter (henthalpy, enthropy or Gibbs energy) 
         for the given dinucleotide duplex'''
         fwd_key = seq+'/'+rev
@@ -165,15 +165,15 @@ class UnifiedNN(object):
     
     @classmethod
     def pair_dH_37(cls, seq, rev):
-        return cls._pair_delta_par(seq, rev, 'dH')
+        return cls.pair_dPar_37(seq, rev, 'dH')
     
     @classmethod
     def pair_dS_37(cls, seq, rev):
-        return cls._pair_delta_par(seq, rev, 'dS')
+        return cls.pair_dPar_37(seq, rev, 'dS')
     
     @classmethod
     def pair_dG_37(cls, seq, rev):
-        return cls._pair_delta_par(seq, rev, 'dG')
+        return cls.pair_dPar_37(seq, rev, 'dG')
 
 
     @classmethod

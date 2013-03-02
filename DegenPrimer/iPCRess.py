@@ -27,7 +27,6 @@ import subprocess
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from StringTools import wrap_text, time_hr, hr, print_exception
-#from PCR_Simulation import PCR_Simulation
 from iPCR_Interface import iPCR_Interface
 from SecStructures import Duplex
 
@@ -48,9 +47,6 @@ class iPCRess(iPCR_Interface):
         self._PCR_report_filename = job_id+'-ipcress-PCR-report.txt'
         #results
         self._PCR_Simulation = self._PCR_Simulation_factory()
-        self._results        = None
-        self._have_results   = False
-        self._have_report    = False
     #end def
     
     
@@ -80,10 +76,6 @@ class iPCRess(iPCR_Interface):
                 return self._ipcress_subprocess.pid
         return None
     #end def
-    
-    
-    #property functions
-    def have_results(self): return self._have_results
     
     
     def write_program(self):
@@ -195,61 +187,66 @@ class iPCRess(iPCR_Interface):
             print e.message
             return False
         #parse results file
-        self._results = []
-        hits = []
+        self._possible_products = []
         for line in ipcr_report:
             line = line.rstrip('\n')
             if not line: continue
             if line == 'Ipcress result':
-                self._results.append(dict())
+                self._possible_products.append(dict())
             else:
                 words = line.split()
                 if   words[0] == 'Experiment:':
-                    self._results[-1]['experiment']   = words[1]
+                    self._possible_products[-1]['experiment'] = words[1]
                 elif words[0] == 'Target:':
                     target_name = (''.join(w+' ' for w in words[1:])).strip()
                     target_name = self._clear_target_string(target_name)
-                    self._results[-1]['hit'] = target_name
-                    if not target_name in hits:
-                        hits.append(target_name)
+                    self._possible_products[-1]['hit'] = target_name
                 elif words[0] == 'Product:':
-                    self._results[-1]['length']  = int(words[1])
+                    self._possible_products[-1]['length'] = int(words[1])
                 elif words[0] == 'ipcress:':
-                    self._results[-1]['start']   = int(words[5])
-                    self._results[-1]['end']     = int(words[8])
+                    self._possible_products[-1]['start']  = int(words[5])
+                    self._possible_products[-1]['end']    = int(words[8])
                 elif words[-1] == 'forward':
                     seq = Seq(words[0].strip('.')[::-1], IUPAC.unambiguous_dna).complement()  #forward template 5'->3'
-                    self._results[-1]['fwd_seq'] = seq
+                    self._possible_products[-1]['fwd_seq'] = seq
                 elif words[-1] == 'primers':
-                    self._results[-1]['fwd_primer'] = Seq(words[0][3:-3], IUPAC.unambiguous_dna) #forward primer 5'->3'
-                    self._results[-1]['rev_primer'] = Seq(words[1][3:-3][::-1], IUPAC.unambiguous_dna) #reverse primer 5'->3'
+                    self._possible_products[-1]['fwd_primer'] = Seq(words[0][3:-3], IUPAC.unambiguous_dna) #forward primer 5'->3'
+                    self._possible_products[-1]['rev_primer'] = Seq(words[1][3:-3][::-1], IUPAC.unambiguous_dna) #reverse primer 5'->3'
                 elif words[-1] == 'revcomp':
                     seq = Seq(words[0].strip('.'), IUPAC.unambiguous_dna).complement() #reverse template 5'->3'
-                    self._results[-1]['rev_seq'] = seq
+                    self._possible_products[-1]['rev_seq'] = seq
         ipcr_report.close()
-        if not self._results:
+        if not self._possible_products:
             print '\nNo results found in raw iPCRess report:\n   %s' % self._raw_report_filename
-            self._results = None
+            self._possible_products = None
             return False
         return True
     #end def
     
     
     def simulate_PCR(self):
-        if not self._results: return False
+        if not self._possible_products: return False
         #add results to PCR_Simulation object
-        for result in self._results:
-            self._PCR_Simulation.add_product(result['hit'], 
+        for product in self._possible_products:
+            self._PCR_Simulation.add_product(product['hit'], 
                                              #ipcress counts nucleotides starting from 0
                                              #and defines start position as 5'-end of the forward primer
-                                             result['start']+len(result['fwd_primer'])+1,
-                                             result['end'],
-                                             Duplex(result['fwd_primer'], result['fwd_seq']), 
-                                             Duplex(result['rev_primer'], result['rev_seq']))
+                                             product['start']+len(product['fwd_primer'])+1,
+                                             product['end'],
+                                             (Duplex(product['fwd_primer'], product['fwd_seq']),), 
+                                             (Duplex(product['rev_primer'], product['rev_seq']),))
+        for hit in self._PCR_Simulation._products:
+            products = self._PCR_Simulation._products[hit].items()
+            products.sort()
+            print hit
+            for p_id, product in products:
+                print '\nproduct:', p_id
+                print product
         #compute PCR products quantities
         self._PCR_Simulation.run()
         if not self._PCR_Simulation:
-            print '\nAll results found in raw iPCRess report were filtered out'
+            print '\nNone of the possible PCR products satisfy given reaction ' \
+                  'parameters.'
             return False
         self._have_results = True
         return True
@@ -259,12 +256,7 @@ class iPCRess(iPCR_Interface):
     def write_PCR_report(self):
         if not self._have_results: return
         #open report file
-        try:
-            ipcr_report = open(self._PCR_report_filename, 'w')
-        except IOError, e:
-            print '\nFailed to open iPCRess report file for writing:\n   %s' % self._PCR_report_filename
-            print e.message
-            return
+        ipcr_report = self._open_report('iPCRess', self._PCR_report_filename)
         #header
         ipcr_report.write(time_hr())
         ipcr_report.write(wrap_text('All possible PCR products are ' 
@@ -307,14 +299,42 @@ class iPCRess(iPCR_Interface):
             ipcr_report.write(self._PCR_Simulation.all_graphs_grouped_by_hit())            
         ipcr_report.close()
         print '\niPCRess report was written to:\n   ',self._PCR_report_filename
-        self._have_report = True
-    #end def
-    
-    
-    def reports(self):
-        if self._have_report:
-            return ({'report_name': 'iPCRess report', 'report_file': self._PCR_report_filename},)
-        else: return None
+        self._add_report('iPCRess report', self._PCR_report_filename)
     #end def
 #end class
-        
+
+
+
+#tests
+if __name__ == '__main__':
+    from Primer import Primer, load_sequence
+    import TD_Functions
+    import sys
+    os.chdir('../')
+    fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'fwd_test', 'fwd_test'), 0.43e-6)
+    rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'rev_test', 'rev_test'), 0.43e-6)
+    ipcr = iPCRess('test-job', 
+               fwd_primer, 
+               rev_primer, 
+               50, 
+               1500, 
+               40000,
+               False, 
+               33)
+    TD_Functions.PCR_T = 58
+    TD_Functions.C_Mg  = 3e-3
+    TD_Functions.C_dNTP = 300e-6
+    TD_Functions.C_DNA = 1e-9
+    ipcr.write_program()
+    ipcr.execute_program(('ThGa.fa',), 5)
+    
+    out_file = open('iPCRess.out', 'w')
+    stdout = sys.stdout 
+    sys.stdout = out_file
+    
+    ipcr.load_results()
+    ipcr.simulate_PCR()
+    
+    sys.stdout = stdout
+    out_file.close()
+    ipcr.write_PCR_report()

@@ -36,6 +36,8 @@ from DegenPrimer.BlastPrimers import BlastPrimers
 from DegenPrimer.SecStructures import AllSecStructures
 from DegenPrimer.StringTools import hr, wrap_text, time_hr, print_exception
 from DegenPrimer.iPCRess import iPCRess
+from DegenPrimer.SeqDB import SeqDB
+from DegenPrimer.iPCR import iPCR
 try:
     from Bio import SeqIO
 except ImportError:
@@ -52,6 +54,8 @@ class ClassManager(BaseManager):
         else: return None
 #end class
 ClassManager.register('AllSecStructures', AllSecStructures)
+ClassManager.register('SeqDB', SeqDB)
+ClassManager.register('iPCR', iPCR)
 ClassManager.register('iPCRess', iPCRess)
 ClassManager.register('BlastPrimers', BlastPrimers)
 
@@ -107,7 +111,7 @@ def capture_to_queue(out_queue=None):
     oldout,olderr = sys.stdout, sys.stderr
     try:
         out = OutQueue(out_queue)
-        #need to left stderr out due to the http://bugs.python.org/issue14308
+        #need to leave stderr due to the http://bugs.python.org/issue14308
         sys.stdout = out #sys.stderr = out
         yield out
     except Exception, e:
@@ -250,38 +254,63 @@ class DegenPrimerPipeline(object):
         #ipcress program file and test for primers specificity by iPCR
         #this is only available for pairs of primers
         ipcress = None
-        if args.sense_primer and args.antisense_primer:
+#        if args.sense_primer and args.antisense_primer:
+#            with capture_to_queue() as out:
+#                p_entry = self._generate_subroutine_entry(out.queue)
+#                p_entry['manager'].start()
+#            ipcress = p_entry['manager'].iPCRess(job_id, 
+#                                                 fwd_primer, rev_primer, 
+#                                                 args.min_amplicon, 
+#                                                 args.max_amplicon, 
+#                                                 args.polymerase, 
+#                                                 args.with_exonuclease, 
+#                                                 args.cycles,
+#                                                 side_reactions, 
+#                                                 side_concentrations)
+#            #if target sequences are provided and the run_icress flag is set, run iPCRess...
+#            if args.run_ipcress and args.fasta_files:
+#                ipcress.write_program()
+#                _subroutine(ipcress.execute_and_analyze, 
+#                            (args.fasta_files, 
+#                             args.max_mismatches), out.queue, p_entry,
+#                            'Execute iPCRess program and simulate PCR using found products.')
+#                #get ipcress pid
+#                sleep(0.1) #wait some time for process to fork
+#                ipcress_pid = ipcress.ipcress_pid()
+#                if ipcress_pid != None:
+#                    p_entry['children'].append(ipcress_pid)
+#            #else, try to load previously saved results and analyze them with current parameters
+#            elif ipcress.load_results():
+#                print '\nFound raw iPCRess results from the previous ipcress run.'
+#                _subroutine(ipcress.simulate_PCR, None, out.queue, p_entry,
+#                            'Simulate PCR using possible products found by iPCRess.')
+#            else: self._print_queue(p_entry['queue'])
+        #----------------------------------------------------------------------#
+        
+        
+        #in silic PCR simulation. This is only available for pairs of primers 
+        #and only if fasta files are provided 
+        ipcr = None
+        if args.sense_primer and args.antisense_primer and args.fasta_files:
             with capture_to_queue() as out:
                 p_entry = self._generate_subroutine_entry(out.queue)
                 p_entry['manager'].start()
-            ipcress = p_entry['manager'].iPCRess(job_id, 
-                                                 fwd_primer, rev_primer, 
-                                                 args.min_amplicon, 
-                                                 args.max_amplicon, 
-                                                 args.polymerase, 
-                                                 args.with_exonuclease, 
-                                                 args.cycles,
-                                                 side_reactions, 
-                                                 side_concentrations)
-            #if target sequences are provided and the run_icress flag is set, run iPCRess...
-            if args.run_ipcress and args.fasta_files:
-                ipcress.write_program()
-                _subroutine(ipcress.execute_and_analyze, 
-                            (args.fasta_files, 
-                             args.max_mismatches), out.queue, p_entry,
-                            'Execute iPCRess program and simulate PCR using found products.')
-                #get ipcress pid
-                sleep(0.1) #wait some time for process to fork
-                ipcress_pid = ipcress.ipcress_pid()
-                if ipcress_pid != None:
-                    p_entry['children'].append(ipcress_pid)
-            #else, try to load previously saved results and analyze them with current parameters
-            elif ipcress.load_results():
-                print '\nFound raw iPCRess results from the previous ipcress run.'
-                _subroutine(ipcress.simulate_PCR, None, out.queue, p_entry,
-                            'Simulate PCR using possible products found by iPCRess.')
-            else: self._print_queue(p_entry['queue'])
+            ipcr = p_entry['manager'].iPCR(job_id, 
+                                           fwd_primer, rev_primer, 
+                                           args.min_amplicon, 
+                                           args.max_amplicon, 
+                                           args.polymerase, 
+                                           args.with_exonuclease, 
+                                           args.cycles,
+                                           side_reactions, 
+                                           side_concentrations)
+            #make DB from provided sequences
+            _subroutine(ipcr.find_and_analyze, 
+                        (args.fasta_files, 
+                         args.max_mismatches), out.queue, p_entry,
+                        'Simulate PCR using possible products found in provided sequences.')
         #----------------------------------------------------------------------#
+        
         
         #test for primers specificity by BLAST
         with capture_to_queue() as out:
@@ -354,19 +383,23 @@ class DegenPrimerPipeline(object):
             args.register_report('Tm and secondary structures', structures_short_report_filename)
     
         #write iPCRess reports if they are available
-        if ipcress != None and ipcress.have_results():
-            ipcress.write_PCR_report()
-            for report in ipcress.reports():
-                if report:
-                    args.register_report(**report)
+#        if ipcress != None and ipcress.have_results():
+#            ipcress.write_PCR_report()
+#            for report in ipcress.reports():
+#                args.register_report(**report)
+                
+        #write iPCR report if it is available
+        if ipcr != None and ipcr.have_results():
+            ipcr.write_PCR_report()
+            for report in ipcr.reports():
+                args.register_report(**report)
         
         #write BLAST reports
         if blast_primers.have_results():
             blast_primers.write_hits_report()
             blast_primers.write_PCR_report()
             for report in blast_primers.reports():
-                if report:
-                    args.register_report(**report)
+                args.register_report(**report)
                     
         #print last queued messages
         sleep(0.1)

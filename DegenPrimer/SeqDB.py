@@ -42,14 +42,23 @@ class SeqDB(object):
   
     
     def __init__(self):
-        self._db     = None
-        self._cursor = None
+        self._db       = None
+        self._cursor   = None
+        self._searcher = SearchEngine() 
     #end def
     
     def __nonzero__(self):
         return not self._cursor is None 
         
     
+    def _configure_connection(self):
+        self._cursor.execute('PRAGMA cache_size=64000')
+        self._cursor.execute('PRAGMA synchronous=OFF')
+        self._cursor.execute('PRAGMA count_changes=OFF')
+        self._cursor.execute('PRAGMA temp_store=MEMORY')
+    #end def
+    
+        
     def _init_db(self, filename):
         #if db exists, back it up
         if os.path.isfile(filename):
@@ -57,40 +66,50 @@ class SeqDB(object):
         #create new db
         self._db = sqlite3.connect(filename, isolation_level='DEFERRED')
         self._cursor = self._db.cursor()
+        self._configure_connection()
         #init tables
         self._cursor.execute(self._sequences_schema)
         self._db.commit()
-        self.close()
     #end def
     
     
-    def create_db(self, filename, sequences):
-        '''Create and SQLite database of sequences in a given file.'''
-        #create database tables
-        self._init_db(filename)
-        #connect to the new database
-        self.connect(filename)
+    def _populate_db(self, sequences):
         self._cursor.execute('PRAGMA cache_size=500000')
         #populate database with data
         for sequence in sequences:
             self._cursor.execute('''
             INSERT INTO sequences (name, sequence, length)
             VALUES (?, ?, ?)''', 
-            (sequence.id, sequence.format('fasta'), len(sequence)))
+            (sequence.description, sequence.format('fasta'), len(sequence)))
         self._db.commit()
-        self.close()
+        self._cursor.execute('PRAGMA cache_size=64000')
+    #end def
+    
+    
+    def create_db(self, filename, sequences):
+        '''Create and SQLite database of sequences in a given file.'''
+        self._init_db(filename)
+        self._populate_db(sequences)
+    #end def
+    
+    
+    def create_db_from_files(self, db_filename, files):
+        if not files: return
+        sequences = []
+        for filename in files:
+            sequences += SeqIO.parse(filename, 'fasta', IUPAC.unambiguous_dna)
+        if not sequences: return
+        self.create_db(db_filename, sequences)
     #end def
     
     
     def connect(self, filename):
         '''Connect to an existent file database of sequences.'''
-        if not os.path.isfile(filename): return False
+        if filename != ':memory:' and not os.path.isfile(filename): 
+            return False
         self._db = sqlite3.connect(filename, isolation_level='DEFERRED')
         self._cursor = self._db.cursor()
-        self._cursor.execute('PRAGMA cache_size=64000')
-        self._cursor.execute('PRAGMA synchronous=OFF')
-        self._cursor.execute('PRAGMA count_changes=OFF')
-        self._cursor.execute('PRAGMA temp_store=MEMORY')
+        self._configure_connection()
         return True
     #end def
     
@@ -103,11 +122,59 @@ class SeqDB(object):
     #end def
     
     
-    def get_names(self):
-        if self._db is None: return []
-        self._cursor.execute('''SELECT name, id from sequences''')
-        return list(self._cursor)
+    def get_names(self, seq_ids=None):
+        if self._db is None: return None
+        if seq_ids:
+            sql_string = '''
+            SELECT id, name from sequences
+            WHERE id IN (%s)
+            ''' % ','.join(['?']*len(seq_ids))
+            self._cursor.execute(sql_string, seq_ids)
+        else:
+            self._cursor.execute('''SELECT id, name from sequences''')
+        return dict(self._cursor)
     #end def
+    
+    
+    def get_seqs(self, seq_ids=None):
+        if self._db is None: return None
+        if seq_ids:
+            sql_string = '''
+            SELECT id, length, sequence from sequences
+            WHERE id IN (%s)
+            ''' % ','.join(['?']*len(seq_ids))
+            self._cursor.execute(sql_string, seq_ids)
+        else:
+            self._cursor.execute('''SELECT id, length, sequence from sequences''')
+        return [(sid, length, SeqIO.read(StringIO(seq), 'fasta')) 
+                for sid, length, seq in self._cursor]
+    #end def
+    
+    
+    def find_in_db(self, primer, mismatches, seq_ids=None):
+        '''In the connected DB find all occurrences of the possibly degenerate 
+        primer with number of mismatches less than or equal to the given number.
+        If an optional list of sequence ids is provided, search will be performed 
+        only within corresponding subset of sequences.
+        Return a dict of following structure: 
+        [sequence_id: [fwd_matches, rev_matches], ...]
+        where *_matches are lists:
+        [(3'-position, [matching duplexes]), ...]
+        If no DB is connected, return None.'''
+        if self._db is None: return None
+        seqs = self.get_seqs(seq_ids)
+        if not seqs: 
+            return None
+        elif len(seqs) == 1:
+            results = self._searcher.find(seqs[0][2], primer, mismatches)
+            if results: return {seqs[0][0]: results}
+            else: return None
+        else:
+            return self._searcher.batch_find(seqs, primer, mismatches)
+    #end def
+    
+    
+    def abort_search(self): self._searcher.abort()
 #end class
 
 
@@ -159,23 +226,25 @@ if __name__ == '__main__':
     signal.signal(signal.SIGQUIT, sig_handler)
     
     os.chdir('../')
-    try:
-        record_file = open('Ch5_gnm.fa', 'r')
-    except IOError, e:
-        print 'Unable to open Ch5_gnm.fa'
-        print_exception(e)
-        sys.exit(1)
-    record = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
-    record_file.close()
+#    try:
+#        record_file = open('Ch5_gnm.fa', 'r')
+#    except IOError, e:
+#        print 'Unable to open Ch5_gnm.fa'
+#        print_exception(e)
+#        sys.exit(1)
+#    record = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
+#    record_file.close()
     
     sdb = SeqDB()
-    sdb.create_db('test.db', (record,))
-    if sdb.connect('test.db'):
-        print sdb.get_names()
+    sdb.create_db_from_files(':memory:', ('Ch5_gnm.fa',))
+    print sdb.get_names()
+    seqs = sdb.get_seqs([1,])
+    if seqs:
+        print seqs[0][0]
+        print seqs[0][1]
     
-    query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+    query = Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6)
     
-    searcher = SearchEngine()
     
     def print_out(out, name):
         print name
@@ -190,6 +259,11 @@ if __name__ == '__main__':
                     print '\n'
                 print '\n'
     #end def
+    
+#    results = sdb.find_in_db(query, 3)
+#    for rid in results:
+#        print '\n'
+#        print_out(results[rid], rid)
     
 
     #searcher.find_mp(template[:1000], Primer(SeqRecord(query[:65], id='test'), 0.1e-6), 3)

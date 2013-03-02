@@ -123,17 +123,22 @@ class SearchEngine(object):
 
 
     @classmethod
-    def _compile_duplexes(cls, template, primer, matches):
+    def _compile_duplexes(cls, template, primer, matches, 
+                            t_len, p_len, max_mismatches, reverse=False):
         '''Given a template strand, a primer and a list of locations where the 
         primer matches the template, return a list of Duplexes formed by 
         unambiguous components of the primer at each match location.'''
-        p_len = len(primer)
         results = []
         for i in matches:
             duplexes = []
             for var in primer.sequences:
-                duplexes.append(Duplex(var, template[i:i+p_len].reverse_complement()))
-            results.append((i+p_len-1, duplexes))
+                dup = Duplex(var, template[i:i+p_len].complement()[::-1])
+                if dup.mismatches <= max_mismatches:
+                    duplexes.append(dup)
+            if not reverse:
+                results.append((i+p_len, duplexes))
+            else: 
+                results.insert(0, (t_len+1-(i+p_len), duplexes))
         return results
     #end def
     
@@ -223,95 +228,34 @@ class SearchEngine(object):
     
 
     @classmethod
-    def _start_find_worker(cls, jobs, queue, abort_e, start, fwd_chunk, rev_chunk, 
-                           p_fft, correction, t_len, p_len, c_size, c_stride):
-        def worker(queue, abort_e, start, fwd_chunk, rev_chunk, p_fft, 
-                   correction, t_len, p_len, c_size, c_stride):
+    def _start_find_worker(cls, jobs, queue, abort_e, start, fwd_slice, rev_slice, 
+                           p_fft, correction, s_size, s_stride, c_size, c_stride):
+        def worker(queue, abort_e, start, fwd_slice, rev_slice, p_fft, 
+                   correction, s_size, s_stride, c_size, c_stride):
             fwd_score = np.ndarray(0,dtype=float)
             rev_score = np.ndarray(0,dtype=float)
             pos = 0
-            while pos < t_len and not abort_e.is_set():
-                front = min(t_len, pos+c_size)
-                score = cls._find_in_chunk(fwd_chunk[pos:front], p_fft, correction,
+            while pos < s_size and not abort_e.is_set():
+                front = min(s_size, pos+c_size)
+                score = cls._find_in_chunk(fwd_slice[pos:front], p_fft, correction,
                                            c_size, c_stride)
                 fwd_score = np.concatenate([fwd_score, score])
-                score = cls._find_in_chunk(rev_chunk[pos:front], p_fft, correction,
+                score = cls._find_in_chunk(rev_slice[pos:front], p_fft, correction,
                                            c_size, c_stride)
                 rev_score = np.concatenate([rev_score, score])
                 pos += c_stride
             if abort_e.is_set():
                 queue.cancel_join_thread()
             else: queue.put((start, 
-                             fwd_score[:t_len-p_len], 
-                             rev_score[:t_len-p_len]))
+                             fwd_score[:s_stride], 
+                             rev_score[:s_stride]))
             queue.close()
             return
         #end def
-        job = mp.Process(target=worker, args=(queue, abort_e, start, fwd_chunk, rev_chunk, p_fft, 
-                                              correction, t_len, p_len, c_size, c_stride))
+        job = mp.Process(target=worker, args=(queue, abort_e, start, fwd_slice, rev_slice, p_fft, 
+                                              correction, s_size, s_stride, c_size, c_stride))
         job.start()
         jobs.append((job,queue))
-    #end def
-    
-    
-    def find_mp_test(self, template, primer, mismatches, mult):
-        '''Find all occurrences of a primer sequence in both strands of a 
-        template sequence with at most k mismatches. Multiprocessing version.'''
-        p_len,t_len  = len(primer),len(template)
-        self._check_length_inequality(t_len, p_len)
-        slice_size   = t_len/mult+p_len+1
-        slice_stride = slice_size-p_len
-        chunk_size   = self._calculate_chunk_size(slice_size, p_len)
-        chunk_stride = chunk_size-p_len
-        p_maps       = self._map_pattern(str(primer.master_sequence.seq), chunk_size)
-        p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
-        fwd_seq      = template.seq
-        rev_seq      = template.seq.reverse_complement()
-        correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
-        fwd_score    = []
-        rev_score    = []
-        jobs         = []
-        i = 0; abort_event = mp.Event()
-        self._abort_events.append(abort_event)
-        #start find_in_chunk jobs
-        while i < t_len and not abort_event.is_set():
-            front = min(t_len, i+slice_size)
-            self._start_find_worker(jobs, mp.Queue(), abort_event, i, 
-                                    fwd_seq[i:front], rev_seq[i:front], p_fft, 
-                                    correction, front-i, p_len, chunk_size, chunk_stride)
-            self._all_jobs.append(jobs[-1])
-            i += slice_stride
-        #join all jobs
-        def parse_out(out, fwd_list, rev_list):
-            fwd_list.append((out[0],out[1]))
-            rev_list.append((out[0],out[2]))
-        self._join_jobs(abort_event, list(jobs), parse_out, fwd_score, rev_score)
-        #if search was aborted, return empty results
-        if abort_event.is_set():
-            return [],[]
-        #else, cleanup
-        with self._abort_lock:
-            if abort_event in self._abort_events:
-                self._abort_events.remove(abort_event)
-            for job in jobs: 
-                if job in self._all_jobs:
-                    self._all_jobs.remove(job)
-        #sort, correct and concatenate scores
-        fwd_score.sort(key=lambda(x): x[0])
-        fwd_score = [result[1] for result in fwd_score]
-        rev_score.sort(key=lambda(x): x[0])
-        rev_score = [result[1] for result in rev_score]
-        fwd_score = np.concatenate(fwd_score)
-        rev_score = np.concatenate(rev_score)
-        #match indices
-        matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len)[fwd_score[:t_len-p_len] >= matches]
-        rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
-        del fwd_score, rev_score
-        #construct duplexes
-        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches)
-        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches)
-        return fwd_results,rev_results
     #end def
     
     
@@ -343,7 +287,7 @@ class SearchEngine(object):
             front = min(t_len, i+slice_size)
             self._start_find_worker(jobs, mp.Queue(), abort_event, i, 
                                     fwd_seq[i:front], rev_seq[i:front], p_fft, 
-                                    correction, front-i, p_len, chunk_size, chunk_stride)
+                                    correction, front-i, slice_stride, chunk_size, chunk_stride)
             self._all_jobs.append(jobs[-1])
             i += slice_stride
         #join all jobs
@@ -363,16 +307,19 @@ class SearchEngine(object):
         fwd_score = [result[1] for result in fwd_score]
         rev_score.sort(key=lambda(x): x[0])
         rev_score = [result[1] for result in rev_score]
-        fwd_score = np.concatenate(fwd_score)
-        rev_score = np.concatenate(rev_score)
+        fwd_score = np.concatenate(fwd_score)[:t_len]
+        rev_score = np.concatenate(rev_score)[:t_len]
         #match indices
         matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len)[fwd_score[:t_len-p_len] >= matches]
-        rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
+        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]
+        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]
         del fwd_score, rev_score
         #construct duplexes
-        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches)
-        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches)
+        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches, 
+                                             t_len, p_len, mismatches)
+        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches, 
+                                             t_len, p_len, mismatches, 
+                                             reverse=True)
         return fwd_results,rev_results
     #end def
 
@@ -407,12 +354,15 @@ class SearchEngine(object):
         rev_score = np.concatenate(rev_score)
         #match indices
         matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len)[fwd_score[:t_len-p_len] >= matches]
-        rev_matches = np.arange(t_len-p_len)[rev_score[:t_len-p_len] >= matches]
+        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]
+        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]
         del fwd_score, rev_score
         #construct duplexes
-        fwd_results = cls._compile_duplexes(fwd_seq, primer, fwd_matches)
-        rev_results = cls._compile_duplexes(rev_seq, primer, rev_matches)
+        fwd_results = cls._compile_duplexes(fwd_seq, primer, fwd_matches, 
+                                            t_len, p_len, mismatches)
+        rev_results = cls._compile_duplexes(rev_seq, primer, rev_matches, 
+                                            t_len, p_len, mismatches, 
+                                            reverse=True)
         return fwd_results,rev_results
     #end def
     
@@ -459,7 +409,7 @@ class SearchEngine(object):
         short_templates = []
         long_templates  = []
         for t in templates:
-            if self._mp_better(t[0], p_len):
+            if self._mp_better(t[1], p_len):
                 long_templates.append(t)
             else: short_templates.append(t)
         #add abort event
@@ -468,7 +418,7 @@ class SearchEngine(object):
         #first, launch short jobs if there're more than 1 short template
         if len(short_templates) > 1:
             jobs = []
-            for t_len, t_id, template in short_templates:
+            for t_id, t_len, template in short_templates:
                 if abort_event.is_set(): break
                 self._start_short_find_job(jobs, mp.Queue(), abort_event, t_id, 
                                            template, primer, t_len, p_len, mismatches)
@@ -477,11 +427,11 @@ class SearchEngine(object):
                 results[out[0]] = out[1]
             self._join_jobs(abort_event, list(jobs), parse_out, results)
         elif short_templates: #if there's only one short template, just find in it
-            t_len, t_id, template = short_templates[0]
+            t_id, t_len, template = short_templates[0]
             results[t_id] = self._find(template, primer, t_len, p_len, 
                                        mismatches, abort_event)
         #when they are finished, launch long searches one by one
-        for t_len, t_id, template in long_templates:
+        for t_id, t_len, template in long_templates:
             if abort_event.is_set(): break
             results[t_id] = self._find_mp(template, primer, t_len, p_len, 
                                           mismatches, abort_event)
@@ -579,6 +529,8 @@ if __name__ == '__main__':
     record_file.close()
     
     query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+    query = Seq('GACTAATGCTAACGGGGGATT', IUPAC.ambiguous_dna)
+    query = Seq('AGGGTTAGAAGNACTCAAGGAAA', IUPAC.ambiguous_dna)
     
     template = record+record+record+record
     query    = query+query+query+query+query
@@ -594,63 +546,9 @@ if __name__ == '__main__':
                     print res[0]
                     for dup in res[1]:
                         print dup
+                        print 'mismatches:', dup.mismatches
                     print '\n'
                 print '\n'
-    #end def
-    
-    
-    T,P,mult = 0,0,0
-    def gather_statistics(start_len, end_len, delta):
-        global ppid, data1, data2, T,P,mult
-        ppid  = os.getpid()
-        mults = range(searcher._cpu_count, max(searcher._cpu_count, end_len/50000)+10)
-        patts = range(20,21,5)
-        data1  = [['multiplier']]
-        data1 += [[mult] for mult in range(1,max(mults)+1)]
-        data2  = [('t_len', 'p_len', 'min multiplier', 'min time (sec)')]
-        for t_len in range(start_len, end_len+1, delta):
-            print 't_len:',t_len
-            l_mults = range(searcher._cpu_count, max(searcher._cpu_count,t_len/50000)+10)
-            for p_len in patts:
-                print 'p_len:',p_len
-                data1[0].append('%d-%d' % (t_len, p_len))
-                times = dict([(m,[]) for m in l_mults])
-                for i in range(5):
-                    print 'iteration:', i
-                    for mult in l_mults:
-                        print 'mult:',mult
-                        T = template[:t_len]
-                        P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
-                        et = timeit.timeit('searcher.find_mp_test(T, P, 3, mult)', 
-                                           setup='from __main__ import T,P,mult,searcher', 
-                                           number=1)
-                        times[mult].append(et)
-                        print ''
-                for mult in mults:
-                    if mult in l_mults:
-                        data1[mult].append(min(times[mult]))
-                    else:
-                        data1[mult].append(None)
-                min_mult = min(l_mults)
-                min_time = data1[min_mult][-1]
-                for mult in l_mults:
-                    if  data1[mult][-1] < min_time:
-                        min_time = data1[mult][-1]
-                        min_mult = mult
-                data2.append((t_len, p_len, min_mult, min_time))
-        filename1 = 'find_mp_data1-%d-%d-%d.csv' % (start_len, end_len, time())
-        filename2 = 'find_mp_data2-%d-%d-%d.csv' % (start_len, end_len, time())
-        out_file = open(filename1, 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data1)
-        out_file.close()
-        out_file = open(filename2, 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data2)
-        out_file.close()
-        data1 = []
-        data2 = []
-        print 'Gather statistics: data was written to %s and %s' % (filename1, filename2)
     #end def
     
     
@@ -696,8 +594,23 @@ if __name__ == '__main__':
 
     ppid = os.getpid()
     
+    t0 = time()
+    results = searcher.find(template[:2388527], Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 6)
+    print_out(results, 'test')
+    print 'elapsed %f seconds\n' % (time()-t0)
     
-    gather_statistics1(5000, 500000, 5000)
+#    t0 = time()
+#    templates = [(1,2388527,template[:2388527]),
+#                 (2,23435,template[:23435]),
+#                 (3,4383562,template[:4383562]),
+#                 (4,2432,template[:2432]),
+#                 (5,538827,template[:538827])]
+#    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 5)
+#    for rid in results:
+#        print '\n'
+#        print_out(results[rid], rid)
+#    print 'elapsed %f seconds\n' % (time()-t0)
+    #gather_statistics1(5000, 500000, 5000)
     
 #    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
 #        searcher.set_max_chunk(l)

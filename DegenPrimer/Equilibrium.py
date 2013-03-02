@@ -69,11 +69,12 @@ class Equilibrium(object):
         #dictionaries for 'navigation' within the system
         reaction_i = 0 #reaction index
         reactant_i = 0 #reactant index
-        self._rev_r_dict      = dict() #reaction hash by index
-        self._Ri_reactions    = list() #indexed list of reactions in which reactant Ri participates
-        self._ireactions      = list() #indexed list of reactions
-        self._iconcentrations = list() #indexed list of concentrations
-        self._reactants_dict  = dict() #dict of reactant indices
+        self._rev_r_dict        = dict() #reaction hash by index
+        self._Ri_reactions      = list() #indexed list of reactions in which reactant Ri participates
+        self._ireactions        = list() #indexed list of reactions
+        self._iconcentrations   = list() #indexed list of concentrations
+        self._reactants_dict    = dict() #dict of reactant indices
+        self._min_concentration = min(self.concentrations.values())
         for r_hash in self.reactions:
             R  = self.reactions[r_hash]
             #check reactants
@@ -183,7 +184,7 @@ class Equilibrium(object):
                 C_AB = C_A if C_A < C_B else C_B
                 _A += C_AB*r[ri]
             elif r_type == '2A': _A += C_A*r[ri]
-            elif r_type == 'A' : _A += C_A*r[ri]
+            else: _A += C_A*r[ri] #if r_type == 'A' 
         _B = 0
         if Bi != None:
             C_B = self._iconcentrations[Bi]
@@ -200,7 +201,7 @@ class Equilibrium(object):
                     C_AB = C_A if C_A < C_B else C_B
                     _B += C_AB*r[ri]
                 elif r_type == '2A': _B += C_B*r[ri]
-                elif r_type == 'A':  _B += C_B*r[ri]
+                else:  _B += C_B*r[ri] #if r_type == 'A'
         return _A, _B
     #end def
     
@@ -212,6 +213,7 @@ class Equilibrium(object):
         Ai       = reaction[1]
         C_A      = self._iconcentrations[Ai]
         K        = reaction[0]
+        C_A_2    = C_A/2.0
         if r_type   == 'AB':
             Bi   = reaction[2]
             C_B  = self._iconcentrations[Bi]
@@ -219,19 +221,19 @@ class Equilibrium(object):
             def func(r):
                 ABi = C_AB*r[i]
                 _A, _B = self._reactants_consumption(r, Ai, Bi)
-                return (ABi - (C_A - _A)*(C_B - _B)*K)
+                return (ABi - (C_A - _A)*(C_B - _B)*K)/self._min_concentration
             return func
         elif r_type == '2A':
             def func(r):
-                Ai2 = C_A*r[i]/2.0
+                Ai2 = C_A_2*r[i]
                 _A, _B = self._reactants_consumption(r, Ai)
-                return (Ai2 - ((C_A - _A)**2)*K)
+                return (Ai2 - ((C_A - _A)**2)*K)/self._min_concentration
             return func
         elif r_type == 'A':
             def func(r):
                 A1i = C_A*r[i]
                 _A, _B = self._reactants_consumption(r, Ai)
-                return (A1i - (C_A - _A)*K)
+                return (A1i - (C_A - _A)*K)/self._min_concentration
             return func
     #end def
     
@@ -243,18 +245,19 @@ class Equilibrium(object):
         for ri in range(len(self.reactions)):
             l_funcs.append(self._function_factory(ri))
         #system function for fsolve and objective function for fmin_ 
-        sys_func = lambda(r): tuple(l_funcs[i](r) for i in range(len(l_funcs)))
-        objective_function = lambda(r): sum((l_funcs[i](r))**2 for i in range(len(l_funcs)))
+        sys_func = lambda(r): tuple(l_func(r) for l_func in l_funcs)
+        objective_function = lambda(r): sum((l_func(r))**2 for l_func in l_funcs)
         #try to find the solution using fsolve
         sol = fsolve(sys_func, r0, full_output=True)
         #if failed for the first time, iterate fsolve while jitter r0 a little
-        r0_value = objective_function(r0)
-        while objective_function(sol[0]) >= r0_value \
-        or    objective_function(sol[0]) >  self._precision \
+        r0_obj = objective_function(sol[0])
+        while r0_obj > self._precision \
         or    min(sol[0]) < 0 \
         or    max(sol[0]) > 1:
             sol = fsolve(sys_func, [ri+(random_sample(1)[0]-ri)*0.3 for ri in r0], xtol=1e-10, full_output=True)
-            if  min(sol[0]) >= 0 and max(sol[0]) <= 1: r0 = sol[0]
+            if  min(sol[0]) >= 0 and max(sol[0]) <= 1: 
+                r0 = sol[0]
+                r0_obj = objective_function(sol[0])
         r0 = sol[0]
         #in any case use the best guess for the solution
         self._solution = r0
@@ -269,7 +272,8 @@ class Equilibrium(object):
 
 #tests
 if __name__ == '__main__':
-    from time import time
+    from scipy.stats import sem, histogram
+    import numpy as np
     reactions = {'A1A2': {'constant': 1e15,
                        'Ai': 1,
                        'Bi': 2,
@@ -293,22 +297,45 @@ if __name__ == '__main__':
                  }
 
 
+    import cProfile, os
+    os.chdir('../')
     ov_sum = 0
-    size = 100
+    size = 1000
     scale = 1e-2/size
-    time0 = time()
-    for C_A1, C_A2 in zip(random_sample(size), random_sample(size)):
-        print 'A1: %f, A2: %f' % ((1+C_A1*size)*scale, (1+C_A2*size)*scale)
-        C_dict = {1: (1+C_A1*size)*scale, 2: (1+C_A2*size)*scale}
-        eq_system = Equilibrium(reactions, C_dict)
-        sol, obj = eq_system.calculate()
-        ov_sum += obj
-        print 'objective function value at the solution: %e' % obj
-        print 'solution:', sol
-        for R in reactions:
-            print 'Reaction %s [%s]: %e' % (R, reactions[R]['type'], eq_system[R])
-        print ''
-    time1 = time()
-    print 'Total time: %fs' %  (time1 - time0)
-    print 'Mean time:  %fs' % ((time1 - time0)/size)
-    print 'OV_mean:    %e'  % (ov_sum/size)
+    
+    C_A1, C_A2 = 0.6543, 0.0353
+    C_dict = {1: (1+C_A1*size)*scale, 2: (1+C_A2*size)*scale}
+    solutions = []
+#    pow = lambda x: x**2
+#    cProfile.run('''
+#for i in range(1000):
+#    abs(-123.464)
+#    x = pow(-123.464)''',
+#'abs-power.profile')
+    cProfile.run('''
+for i in range(size):
+    eq_system = Equilibrium(reactions, C_dict, 1e-10)
+    solutions.append(eq_system.calculate())
+''',
+'equilibrium.profile')
+    sols = dict((key, []) for key in solutions[0][0].keys())
+    for sol, obj in solutions:
+        for s in sol:
+            sols[s].append(sol[s])
+    for s in sols:
+        print s, np.mean(sols[s]), sem(sols[s])
+        print histogram(sols[s])
+        print '\n'
+#    for C_A1, C_A2 in zip(random_sample(size), random_sample(size)):
+#        print 'A1: %f, A2: %f' % ((1+C_A1*size)*scale, (1+C_A2*size)*scale)
+#        C_dict = {1: (1+C_A1*size)*scale, 2: (1+C_A2*size)*scale}
+#        eq_system = Equilibrium(reactions, C_dict)
+#        sol, obj = eq_system.calculate()
+#        ov_sum += obj
+#        print 'objective function value at the solution: %e' % obj
+#        print 'solution:', sol
+#        for R in reactions:
+#            print 'Reaction %s [%s]: %e' % (R, reactions[R]['type'], eq_system[R])
+#        print ''
+
+    print 'Done'

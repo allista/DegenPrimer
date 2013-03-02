@@ -60,16 +60,14 @@ class BlastPrimers(iPCR_Interface):
         self._format_query()
         #PCR parameters
         self._PCR_Simulations  = dict()
-        #flags
-        self._have_hits_report = False
-        self._have_PCR_report  = False
-        self._have_results     = False
         #results
         self._results_filename = self._job_id+'-blast.xml'
         self._query_filename   = self._job_id+'-blast.cfg'
         #reports
-        self._PCR_report_filename = self._job_id + '-blast-PCR-report.txt'
-        self._hits_report_filename     = self._job_id + '-blast-hits-report.txt'
+        self._PCR_report_filename  = self._job_id + '-blast-PCR-report.txt'
+        self._hits_report_filename = self._job_id + '-blast-hits-report.txt'
+        #flags
+        self._have_blast_results = False
     #end def
    
     
@@ -153,17 +151,15 @@ class BlastPrimers(iPCR_Interface):
             print '\nFailed to obtain BLAST query results from NCBI.'
             print_exception(e)
             return False
-        self._have_results = (len(self._blast_results) > 0 
+        self._have_blast_results = (len(self._blast_results) > 0 
                               and max(len(record.alignments) 
-                                      for record in self._blast_results) > 0) 
-        if not self._have_results:
+                                      for record in self._blast_results) > 0)
+        if not self._have_blast_results:
             print '\nNCBI provided no results for the BLAST query.'
-        return self._have_results
+        return self._have_blast_results
     #end def
 
 
-    def have_results(self): return self._have_results 
-        
     def load_results(self):
         #check for file existence
         if  not os.path.isfile(self._results_filename) \
@@ -184,7 +180,7 @@ class BlastPrimers(iPCR_Interface):
             results_file = open(self._results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
             results_file.close()
-            self._have_results = True
+            self._have_blast_results = True
         except Exception, e:
             print '\nFailed to load blast results:\n   %s\n   %s' \
                 % (self._results_filename, self._query_filename)
@@ -197,7 +193,7 @@ class BlastPrimers(iPCR_Interface):
     
     
     def simulate_PCR(self):
-        if not self._have_results: return False
+        if not self._have_blast_results: return False
         sorted_hits = []
         for record in self._blast_results:
             _PCR_Sim = self._PCR_Simulation_factory()
@@ -231,8 +227,8 @@ class BlastPrimers(iPCR_Interface):
                             _PCR_Sim.add_product(hit_title,
                                                  fwd_hit['start'], 
                                                  rev_hit['end'],
-                                                 fwd_hit['fwd_duplex'],
-                                                 rev_hit['rev_duplex'])
+                                                 (fwd_hit['fwd_duplex'],),
+                                                 (rev_hit['rev_duplex'],))
             #compute PCR products quantities
             _PCR_Sim.run()
             #remove empty query products dict
@@ -241,6 +237,7 @@ class BlastPrimers(iPCR_Interface):
         if not self._PCR_Simulations:
             print '\nNo possible PCR products have been found using BLAST hits.'
             return False
+        self._have_results = True
         return True
     #end def
     
@@ -253,13 +250,7 @@ class BlastPrimers(iPCR_Interface):
     
     def write_PCR_report(self):
         if not self._have_results: return
-        if not self._PCR_Simulations: return
-        try:
-            blast_report = open(self._PCR_report_filename, 'w')
-        except IOError, e:
-            print '\nFailed to open blast PCR report file for writing:\n   %s' % self._PCR_report_filename
-            print e.message
-            return
+        blast_report = self._open_report('BLAST PCR', self._PCR_report_filename)
         #header
         blast_report.write(time_hr())
         blast_report.write(wrap_text('For each hit all alignments are sorted '
@@ -297,12 +288,12 @@ class BlastPrimers(iPCR_Interface):
         blast_report.close()
         print '\nPossible PCR products defined by hits from BLAST search were written to:\n   ' + \
             self._PCR_report_filename
-        self._have_PCR_report = True
+        self._add_report('BLAST PCR', self._PCR_report_filename)
     #end def
     
         
     def write_hits_report(self):
-        if not self._have_results: return
+        if not self._have_blast_results: return
         try:
             blast_report = open(self._hits_report_filename, 'w')
         except IOError, e:
@@ -410,16 +401,6 @@ class BlastPrimers(iPCR_Interface):
         blast_report.close()
         print '\nTop hits with top HSPs from BLAST results were written to:\n   ' + \
             self._hits_report_filename
-        self._have_hits_report = True
+        self._add_report('BLAST hits', self._hits_report_filename)
     #end def
-    
-    
-    def reports(self):
-        reports = []
-        if self._have_hits_report: 
-            reports.append({'report_name': 'BLAST hits', 'report_file': self._hits_report_filename})
-        if self._have_PCR_report:
-            reports.append({'report_name': 'BLAST PCR', 'report_file': self._PCR_report_filename})
-        if reports: return reports
-        else: return None
 #end class
