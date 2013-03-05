@@ -477,6 +477,9 @@ class DegenPrimerConfig(object):
         self.max_mismatches = None
     #end def
 
+    @property
+    def reports(self): return self._reports
+
     def __str__(self):
         ret = ''
         for option in self._options:
@@ -636,7 +639,7 @@ class DegenPrimerConfig(object):
     #end def
     
     
-    def save_configuration(self):
+    def save_configuration(self, silent=False):
         config = SafeConfigParser()
         config.optionxform = str
         for option in self._options:
@@ -657,10 +660,11 @@ class DegenPrimerConfig(object):
             print '\nFailed to write configuration file:\n   %s' % config_filename
             print e.message
             return
-        print '\nConfiguration was written to:\n   ', config_filename
-        print ('NOTE: you may always re-run current analysis with this file\n'
-               '      or use it as a template to run the analysis with modified\n'
-               '      parameters.')
+        if not silent:
+            print '\nConfiguration was written to:\n   ', config_filename
+            print ('NOTE: you may always re-run current analysis with this file\n'
+                   '      or use it as a template to run the analysis with modified\n'
+                   '      parameters.')
     #end def
     
     

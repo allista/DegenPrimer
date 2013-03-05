@@ -24,6 +24,7 @@ Created on Jul 11, 2012
 
 import os
 import re
+from math import log
 try:
     from Bio.Alphabet import IUPAC
     from Bio.Seq import Seq
@@ -216,6 +217,15 @@ class Primer(object):
                 records.append(record)
         return records
     #end def
+    
+    
+    def find_id(self, seq):
+        '''Return id of an unubmiguous primer defined by seq'''
+        for record in self.seq_records:
+            if str(record.seq) == str(seq):
+                return record.id
+        return ''
+    #end def
 
 
     @classmethod
@@ -238,11 +248,13 @@ class Primer(object):
             else: raise ValueError('Unknown letter %s in sequence:\n%s' % (letter, str(seq_rec)))
         #make a list of SeqRecords
         unambiguous_seq_list = list()
-        if len(unambiguous_strings) < 2: return unambiguous_seq_list
-        for s in range(len(unambiguous_strings)):
+        num_unambiguous = len(unambiguous_strings)
+        id_template = '%s_%0' + '%d' % int(log(num_unambiguous, 10)+1) + 'd'
+        if num_unambiguous < 2: return unambiguous_seq_list
+        for s in range(num_unambiguous):
             un_seq = Seq(unambiguous_strings[s], IUPAC.unambiguous_dna)
             unambiguous_seq_list.append(SeqRecord(un_seq, description=seq_rec.description, 
-                                                  id=seq_rec.id+"_"+str(s)))
+                                                  id=(id_template % (seq_rec.id, s+1))))
         return unambiguous_seq_list
     #end def
 #end class

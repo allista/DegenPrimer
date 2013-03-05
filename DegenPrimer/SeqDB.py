@@ -159,7 +159,7 @@ class SeqDB(object):
         Return a dict of following structure: 
         [sequence_id: [fwd_matches, rev_matches], ...]
         where *_matches are lists:
-        [(3'-position, [matching duplexes]), ...]
+        [(3'-position, [(matching duplex, id), ...]), ...]
         If no DB is connected, return None.'''
         if self._db is None: return None
         seqs = self.get_seqs(seq_ids)

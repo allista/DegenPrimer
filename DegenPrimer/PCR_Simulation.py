@@ -42,19 +42,21 @@ class Region(object):
             raise ValueError('Region: start of a sequence region should be less than it\'s end')
         self.start  = start
         self.end    = end
-        self._len   = end - start +1
     #end def
-    
-    def __repr__(self):
-        rep  = '\n'
-        rep += 'name:   %s\n' % self.name
+
+    def pretty_print(self, with_name=True):
+        rep  = ''
+        if with_name:
+            rep += 'target: %s\n' % self.name
         rep += 'start:  %d\n' % self.start
         rep += 'end:    %d\n' % self.end
         rep += 'length: %d\n' % len(self)
         return rep
     #end def
     
-    def __len__(self): return self._len
+    def __str__(self): return self.pretty_print()
+    
+    def __len__(self): return self.end - self.start +1
         
     def __hash__(self): return hash((self.name, self.start, self.end))
     
@@ -86,10 +88,11 @@ class Product(Region):
     region bounded by start and end positions which correspond to 3' ends of 
     primers (forward and reverse) which produce this product.'''
     def __init__(self, template_name, start, end, 
-                 fwd_primer_duplexes=None, rev_primer_duplexes=None):
+                 fwd_primers=None, rev_primers=None):
         Region.__init__(self, template_name, start, end)
-        #quantity
-        self._quantity     = 0
+        #quantity and number of cycles
+        self._quantity    = 0
+        self._cycles      = 0
         #primers and templates
         self._fwd_ids     = set()
         self._rev_ids     = set()
@@ -100,27 +103,61 @@ class Product(Region):
         if self._fwd_margin < 1: self._fwd_margin = 1
         self.fwd_template = Region(template_name, self._fwd_margin, self._fwd_margin)
         self.rev_template = Region(template_name, self._rev_margin, self._rev_margin)
-        for duplex in fwd_primer_duplexes:
-            self.add_fwd_primer(duplex)
-        for duplex in rev_primer_duplexes:
-            self.add_rev_primer(duplex)
+        for primer in fwd_primers:
+            self.add_fwd_primer(primer)
+        for primer in rev_primers:
+            self.add_rev_primer(primer)
     #end def
     
-    def __repr__(self):
-        rep  = Region.__repr__(self)
-        rep += 'quantity: %s\n' % TD_Functions.format_concentration(self._quantity)
-        rep += '------\n'
-        rep += 'forward template: %s\n' % repr(self._fwd_template)
-        rep += 'reverse template: %s\n' % repr(self._rev_template)
-        rep += '------\n'
-        rep += 'forward primers:\n'
-        for primer in self._fwd_primers:
-            rep += repr(primer) + '\n'
-        rep += 'reverse primers:\n'
-        for primer in self._rev_primers:
-            rep += repr(primer) + '\n'
+    
+    def pretty_print(self, with_name=True):
+        rep  = Region.pretty_print(self, with_name=with_name)
+        rep += '\n'
+        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self._quantity)
+        rep += 'number of cycles: %d\n' % self.cycles
+        rep += '\n'
+        rep += hr(' forward annealing site ')
+        rep += self.fwd_template.pretty_print(with_name=False)
+        rep += '\n'
+        rep += hr(' reverse annealing site ')
+        rep += self.rev_template.pretty_print(with_name=False)
+        rep += '\n'
+        rep += hr(' forward primers ')
+        fwd_primers = list(self.fwd_primers)
+        fwd_primers.sort(key=lambda x: x[1])
+        for primer, _id in fwd_primers:
+            rep += _id + ':\n' + repr(primer) + '\n'
+        rep += '\n'
+        rep += hr(' reverse primers ')
+        rev_primers = list(self.rev_primers)
+        rev_primers.sort(key=lambda x: x[1])
+        for primer, _id in rev_primers:
+            rep += _id + ':\n' + repr(primer) + '\n'
         return rep
     #end def
+    
+    
+    def __str__(self):
+        rep  = Region.pretty_print(self)
+        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self._quantity)
+        rep += 'number of cycles: %d\n' % self.cycles
+        rep += '\nforward annealing site:\n'
+        rep += str(self.fwd_template)
+        rep += '\nreverse annealing site:\n'
+        rep += str(self.rev_template)
+        rep += '\nforward primers:\n'
+        fwd_primers = list(self.fwd_primers)
+        fwd_primers.sort(key=lambda x: x[1])
+        for primer, _id in fwd_primers:
+            rep += _id + ':\n' + repr(primer) + '\n'
+        rep += '\nreverse primers:\n'
+        rev_primers = list(self.rev_primers)
+        rev_primers.sort(key=lambda x: x[1])
+        for primer, _id in rev_primers:
+            rep += _id + ':\n' + repr(primer) + '\n'
+        return rep
+    #end def
+    
     
     def __iadd__(self, T):
         if self.name != T.name: return self
@@ -129,25 +166,20 @@ class Product(Region):
             self._fwd_margin  = T._fwd_margin
             self.fwd_template = deepcopy(T.fwd_template)
             self.fwd_primers  = deepcopy(T.fwd_primers)
-            self._fwd_ids     = set(T._fwd_ids)
         elif self.start == T.start:
             for _primer in T.fwd_primers:
                 self.add_fwd_primer(_primer)
-            for _id in T._fwd_ids:
-                self.add_fwd_id(_id)
         if self.end < T.end:
             self.end          = T.end
             self._rev_margin  = T._rev_margin
             self.rev_template = deepcopy(T.rev_template)
             self.rev_primers  = deepcopy(T.rev_primers)
-            self._rev_ids     = set(T._rev_ids)
         elif self.end == T.end:
             for _primer in T.rev_primers:
                 self.add_rev_primer(_primer)
-            for _id in T._rev_ids:
-                self.add_rev_id(_id)
         return self
     #end def
+    
     
     @property
     def quantity(self): return self._quantity
@@ -157,36 +189,30 @@ class Product(Region):
         
     @property
     def fwd_ids(self):
-        _ids = list(self._fwd_ids)
+        _ids = [primer[1] for primer in self.fwd_primers]
         _ids.sort() 
         return _ids
     
     @property
     def rev_ids(self): 
-        _ids = list(self._rev_ids)
+        _ids = [primer[1] for primer in self.rev_primers]
         _ids.sort() 
         return _ids
 
-    def add_fwd_id(self, _id): self._fwd_ids.add(_id)
-    
-    def add_rev_id(self, _id): self._rev_ids.add(_id)
-
-    def add_fwd_primer(self, primer_duplex):
-        if not primer_duplex: return
-        if primer_duplex in self.fwd_primers: return
-        self.fwd_primers.add(primer_duplex)
+    def add_fwd_primer(self, primer):
+        if primer in self.fwd_primers: return
+        self.fwd_primers.add(primer)
         self.fwd_template += Region(self.name, 
-                                    max(self.start-primer_duplex.fwd_len, 1), 
+                                    max(self.start-primer[0].fwd_len, 1), 
                                     max(self.start-1, 1))
     #end def
         
-    def add_rev_primer(self, primer_duplex):
-        if not primer_duplex: return
-        if primer_duplex in self.rev_primers: return
-        self.rev_primers.add(primer_duplex)
+    def add_rev_primer(self, primer):
+        if primer in self.rev_primers: return
+        self.rev_primers.add(primer)
         self.rev_template += Region(self.name, 
                                     self.end+1, 
-                                    self.end+primer_duplex.fwd_len)
+                                    self.end+primer[0].fwd_len)
     #end def
 #end class
     
@@ -266,47 +292,46 @@ class PCR_Simulation(object):
                     hit,          #name of the target sequence
                     start,        #start position of the product on the target sequence
                     end,          #end position of the product on the target sequence
-                    fwd_duplexes, #duplex of forward primer with corresponding template sequence
-                    rev_duplexes,   #duplex of reverse primer with corresponding template sequence
+                    fwd_duplexes, #duplexes of forward primers with corresponding template sequence
+                    rev_duplexes, #duplexes of reverse primers with corresponding template sequence
                     ):
-        '''add a new product to the list'''
+        '''
+        Add a new product to the simulation.
+        hit -- name of template sequence (termed as in BLAST)
+        start, end -- positions in the sequence (starting form 1) corresponding 
+        to the beginning and the end of PCR prduct
+        *_duplexes -- lists of tuples of the form (duplex_object, id), where 
+        duplex_object represents annealed primer and id is it's name 
+        '''
         #check amplicon length
         if not (self._min_amplicon <= end-start+1 <= self._max_amplicon): 
             return False
         #check fwd primers
         valid_fwd = []
-        for fwd_duplex in fwd_duplexes:
+        for fwd_duplex, _id in fwd_duplexes:
             #check equilibrium constant
             if fwd_duplex.K < self._min_K: continue
             #check 3' mismatches
             if not self._with_exonuclease and fwd_duplex.fwd_3_mismatch:
                 continue
             #check if there are such primers in the system at all
-            cur_valid = False
             for primer in self._primers:
                 if fwd_duplex.fwd_seq in primer:
-                    cur_valid = True
+                    valid_fwd.append((fwd_duplex, _id))
                     break
-            #add primer
-            if cur_valid:
-                valid_fwd.append(fwd_duplex)
         #check rev primers
         valid_rev = []
-        for rev_duplex in rev_duplexes:
+        for rev_duplex, _id in rev_duplexes:
             #check equilibrium constant
             if rev_duplex.K < self._min_K: continue
             #check 3' mismatches
             if not self._with_exonuclease and rev_duplex.fwd_3_mismatch:
                 continue
             #check if there are such primers in the system at all
-            cur_valid = False
             for primer in self._primers:
                 if rev_duplex.fwd_seq in primer:
-                    cur_valid = True
+                    valid_rev.append((rev_duplex, _id))
                     break
-            #add primer
-            if cur_valid:
-                valid_rev.append(rev_duplex)
         #if there are no valid fwd and rev primers, return
         if not valid_fwd or not valid_rev: return False
         #initialize new product and reset nonzero flag
@@ -355,13 +380,13 @@ class PCR_Simulation(object):
         for hit_id in hit_ids:
             for product in self._products[hit_id].values():
                 fwd_template = self._find_template(hit_id, product.fwd_template)
-                for fwd_primer in product.fwd_primers:
+                for fwd_primer, _id in product.fwd_primers:
                     r_hash = hash((fwd_primer.fwd_seq, fwd_template))
                     reactions[r_hash] = Equilibrium.compose_reaction(fwd_primer.K, 
                                                                      fwd_primer.fwd_seq, 
                                                                      hash(fwd_template), 'AB')
                 rev_template = self._find_template(hit_id, product.rev_template)
-                for rev_primer in product.rev_primers:
+                for rev_primer, _id in product.rev_primers:
                     r_hash = hash((rev_primer.fwd_seq, rev_template))
                     reactions[r_hash] = Equilibrium.compose_reaction(rev_primer.K, 
                                                                      rev_primer.fwd_seq, 
@@ -407,15 +432,14 @@ class PCR_Simulation(object):
             cur_state  = [TD_Functions.C_dNTP*4.0, #a matrix is considered to have equal quantities of each letter
                           dict(self._primer_concentrations), []]
             self._reaction_ends[hit_id] = {'poly':[],
-                                           'cycles':3,
-                                           'products':dict().fromkeys(self._products[hit_id].keys(),0)}
+                                           'cycles':3}
             cur_primers,cur_variants = cur_state[1],cur_state[2]
             for product_id in self._products[hit_id]:
                 product = self._products[hit_id][product_id]
                 #forward primer annealing, first cycle
                 fwd_strands_1 = dict()
                 fwd_template  = self._find_template(hit_id, product.fwd_template)
-                for fwd_primer in product.fwd_primers:
+                for fwd_primer, _id in product.fwd_primers:
                     r_hash = hash((fwd_primer.fwd_seq, fwd_template))
                     if r_hash in solution:
                         fwd_strands_1[fwd_primer.fwd_seq] = [solution[r_hash],
@@ -425,7 +449,7 @@ class PCR_Simulation(object):
                 #reverse primer annealing, first cycle
                 rev_strands_1 = dict()
                 rev_template  = self._find_template(hit_id, product.rev_template)
-                for rev_primer in product.rev_primers:
+                for rev_primer, _id in product.rev_primers:
                     r_hash = hash((rev_primer.fwd_seq, rev_template))
                     if r_hash in solution:
                         rev_strands_1[rev_primer.fwd_seq] = [solution[r_hash],
@@ -447,14 +471,6 @@ class PCR_Simulation(object):
                         cur_primers[f_id] -= rev_strand_2
                         cur_primers[r_id] -= fwd_strand_2
                         cur_state[0] -= (fwd_strand_2+rev_strand_2)*len(product)
-                        #add primer ids to the product
-                        for primer in self._primers:
-                            if f_id in primer:
-                                for record in primer.find_records(f_id):
-                                    product.add_fwd_id(record.id)
-                            if r_id in primer:
-                                for record in primer.find_records(r_id):
-                                    product.add_rev_id(record.id)
             if not cur_variants:
                 self._products[hit_id] = dict() 
                 continue
@@ -493,8 +509,8 @@ class PCR_Simulation(object):
                 self._correct_cycle(hit_id, cycle, prev_state, cur_state)
                 #count the cycle of each synthesized products
                 for var0, var1 in zip(prev_state[2], cur_state[2]):
-                    if var0[2] != var1[2]:
-                        self._reaction_ends[hit_id]['products'][var1[3]] = cycle
+                    if var0[2] != var1[2]: 
+                        self._products[hit_id][var1[3]].cycles = cycle
                 #count the cycle of the reaction
                 self._reaction_ends[hit_id]['cycles'] = cycle
                 #if no dNTP left, end the reaction
@@ -615,8 +631,7 @@ class PCR_Simulation(object):
                               product.end)
             #print last cycle of the reaction where this product was still generating
             if reaction_ends:
-                product_spec += ' %d cycles' \
-                              % reaction_ends[product.name]['products'][hash(product)]
+                product_spec += ' %d cycles' % product.cycles
             product_spec += '\n'
             #print primers which give this product
             if not with_titles:
@@ -828,7 +843,38 @@ class PCR_Simulation(object):
                                  'not include primers.\n\n')
         expl_string += '\n'
         return expl_string
-    #end def    
+    #end def
+    
+    
+    def format_products_report(self):
+        prod_string  = ''
+        prod_string += wrap_text('For each target sequence a list of possible '
+                                 'PCR products which were predicted by the '
+                                 'simulation is given. ' 
+                                 'Information about each product includes:\n'
+                                 '-start and end positions on a target sequence.\n'
+                                 '   *the first nucleotide of a sequence is at the position 1\n'
+                                 '   *primers are not included, so their 3\'-ends are located at '
+                                 'start-1 and end+1 positions.\n'
+                                 '-length in base pairs.\n'
+                                 '   *the length too do not include primers.\n'
+                                 '-concentration which was calculated during PCR simulation.\n'
+                                 '-number of PCR cycles during which the product has been generated.\n'
+                                 '   *if this number is lower than the number of simulated reaction cycles '
+                                 'it means that primers producing the product were depleted.\n'
+                                 '-lists of forward and reverse primers which produced the product'
+                                 '\n\n\n')
+        for hit in self._products:
+            prod_string += hr(' %s ' % hit, '*')
+            products = self._products[hit].values()
+            products.sort(key=lambda x: x.start)
+            for pi, product in enumerate(products):
+                prod_string += hr(' product %d ' % (pi+1), '=')
+                prod_string += product.pretty_print(with_name=False)
+                prod_string += hr('', '=')
+            prod_string += hr('', '*')
+        prod_string += '\n'
+        return prod_string
 #end class
 
 

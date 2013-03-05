@@ -110,9 +110,11 @@ class Equilibrium(object):
             if Bi != None: self._Ri_reactions[Bi].append(reaction_i)
             #next reaction
             reaction_i += 1
-        #solution
-        self._solution = None #pure solver output
-        self.solution  = None #solution mapped to reaction hashes
+        #solution:
+        #indexed list of reactants consumption
+        self._consumptions = None
+        self._solution     = None #pure solver output
+        self.solution      = None #solution mapped to reaction hashes
         self.solution_objective_value = -1
     #end def
     
@@ -150,8 +152,9 @@ class Equilibrium(object):
         if not Ai in self._reactants_dict:
             return 0, 0
         if Bi is None or not Bi in self._reactants_dict:
-            return self._reactants_consumption(self._solution, self._reactants_dict[Ai])
-        return self._reactants_consumption(self._solution, self._reactants_dict[Ai], self._reactants_dict[Bi])
+            return (self._consumptions[self._reactants_dict[Ai]], None)
+        return (self._consumptions[self._reactants_dict[Ai]], 
+                self._consumptions[self._reactants_dict[Bi]])
     #end def
     
     
@@ -168,9 +171,9 @@ class Equilibrium(object):
     #end def
     
         
-    def _reactants_consumption(self, r, Ai, Bi=None):
-        _A  = 0
+    def _reactants_consumption_factory(self, Ai):
         C_A = self._iconcentrations[Ai]
+        _A_list = []
         for ri in self._Ri_reactions[Ai]:
             reaction = self._ireactions[ri]
             r_type   = reaction[3]
@@ -182,28 +185,16 @@ class Equilibrium(object):
                 else:
                     C_B = self._iconcentrations[r_Ai]
                 C_AB = C_A if C_A < C_B else C_B
-                _A += C_AB*r[ri]
-            elif r_type == '2A': _A += C_A*r[ri]
-            else: _A += C_A*r[ri] #if r_type == 'A' 
-        _B = 0
-        if Bi != None:
-            C_B = self._iconcentrations[Bi]
-            for ri in self._Ri_reactions[Bi]:
-                reaction = self._ireactions[ri]
-                r_type   = reaction[3]
-                if   r_type == 'AB':
-                    r_Ai = reaction[1]
-                    r_Bi = reaction[2]
-                    if Bi == r_Ai:
-                        C_A = self._iconcentrations[r_Bi]
-                    else:
-                        C_A = self._iconcentrations[r_Ai]
-                    C_AB = C_A if C_A < C_B else C_B
-                    _B += C_AB*r[ri]
-                elif r_type == '2A': _B += C_B*r[ri]
-                else:  _B += C_B*r[ri] #if r_type == 'A'
-        return _A, _B
-    #end def
+                _A_list.append((C_AB, ri))
+            else: _A_list.append((C_A, ri)) 
+        #consumption function for indexed reactant Ai
+        def _reactant_consumption(r, Ai):
+            _A = 0
+            for _C_max, ri in _A_list:
+                _A += _C_max*r[ri]
+            return _A
+        #end def
+        return _reactant_consumption
     
     
     #factory for left side functions of the system's equations
@@ -218,35 +209,41 @@ class Equilibrium(object):
             Bi   = reaction[2]
             C_B  = self._iconcentrations[Bi]
             C_AB = min(C_A, C_B) 
-            def func(r):
+            def func(r, consumptions):
                 ABi = C_AB*r[i]
-                _A, _B = self._reactants_consumption(r, Ai, Bi)
+                _A  = consumptions[Ai]
+                _B  = consumptions[Bi]
                 return (ABi - (C_A - _A)*(C_B - _B)*K)/self._min_concentration
             return func
         elif r_type == '2A':
-            def func(r):
+            def func(r, consumptions):
                 Ai2 = C_A_2*r[i]
-                _A, _B = self._reactants_consumption(r, Ai)
+                _A  = consumptions[Ai]
                 return (Ai2 - ((C_A - _A)**2)*K)/self._min_concentration
             return func
         elif r_type == 'A':
-            def func(r):
+            def func(r, consumptions):
                 A1i = C_A*r[i]
-                _A, _B = self._reactants_consumption(r, Ai)
+                _A  = consumptions[Ai]
                 return (A1i - (C_A - _A)*K)/self._min_concentration
             return func
     #end def
     
     
     def calculate(self):
-        #all left-side functions and initial root estimation
-        l_funcs  = []
-        r0       = [1e-6,]*len(self.reactions)
-        for ri in range(len(self.reactions)):
-            l_funcs.append(self._function_factory(ri))
-        #system function for fsolve and objective function for fmin_ 
-        sys_func = lambda(r): tuple(l_func(r) for l_func in l_funcs)
-        objective_function = lambda(r): sum((l_func(r))**2 for l_func in l_funcs)
+        #all left-side functions
+        l_funcs  = [self._function_factory(ri) 
+                    for ri in range(len(self.reactions))]
+        #reactant consumption functions
+        rc_funcs = [(Ai, self._reactants_consumption_factory(Ai)) 
+                     for Ai in range(len(self._iconcentrations))]
+        #initial evaluation point
+        r0 = [1e-6,]*len(self.reactions)
+        #system function for fsolve and objective function for fmin_
+        def sys_func(r):
+            consumptions = [func(r, Ai) for Ai, func in rc_funcs]
+            return tuple(l_func(r, consumptions) for l_func in l_funcs)
+        objective_function = lambda(r): sum(sf**2 for sf in sys_func(r))
         #try to find the solution using fsolve
         sol = fsolve(sys_func, r0, full_output=True)
         #if failed for the first time, iterate fsolve while jitter r0 a little
@@ -260,8 +257,9 @@ class Equilibrium(object):
                 r0_obj = objective_function(sol[0])
         r0 = sol[0]
         #in any case use the best guess for the solution
-        self._solution = r0
-        self.solution  = dict()
+        self._consumptions = [func(r0, Ai) for Ai, func in rc_funcs]
+        self._solution     = r0
+        self.solution      = dict()
         for ri in range(len(r0)):
             self.solution[self._rev_r_dict[ri]] = r0[ri]
         self.solution_objective_value = objective_function(r0)

@@ -37,7 +37,8 @@ class iPCR(iPCR_Interface):
         self._seq_db         = SeqDB()
         self._max_mismatches = None
         #report files
-        self._PCR_report_filename = job_id+'-iPCR-report.txt'
+        self._PCR_report_filename   = job_id+'-iPCR-report.txt'
+        self._PCR_products_filename = job_id+'-iPCR-products.txt'
         #results
         self._PCR_Simulation = self._PCR_Simulation_factory()
     #end def
@@ -74,16 +75,10 @@ class iPCR(iPCR_Interface):
             if rev_primer_ann and rev_primer_ann[seq_id]:
                 fwd_annealings.extend(rev_primer_ann[seq_id][0])
                 rev_annealings.extend(rev_primer_ann[seq_id][1])
-            seq_name = seq_names[seq_id]
-            for fwd_p in fwd_annealings:
-                start = fwd_p[0]+1
-                for rev_p in rev_annealings:
-                    end   = rev_p[0]-1  
-                    if start < end:
-                        if self._PCR_Simulation.add_product(seq_name, start, end, 
-                                                            fwd_p[1], rev_p[1]):
-                            if not self._possible_products:
-                                self._possible_products = True
+            self._possible_products |= self._add_products(self._PCR_Simulation, 
+                                                          seq_names[seq_id], 
+                                                          fwd_annealings, 
+                                                          rev_annealings)
         if not self._possible_products:
             print '\nNone of the possible PCR products satisfy given reaction ' \
                   'parameters.'
@@ -103,15 +98,21 @@ class iPCR(iPCR_Interface):
         self._PCR_Simulation.run()
         if self._PCR_Simulation:
             self._have_results = True
-            #write detailed products report
-#            for hit in self._PCR_Simulation._products:
-#                products = self._PCR_Simulation._products[hit].items()
-#                products.sort()
-#                print hit
-#                for p_id, product in products:
-#                    print '\nproduct:', p_id
-#                    print product
         return self._have_results
+    #end def
+    
+    
+    def write_products_report(self):
+        if not self._have_results: return
+        #open report file
+        ipcr_products = self._open_report('iPCR products', self._PCR_products_filename)
+        ipcr_products.write(time_hr())
+        if self._PCR_Simulation:
+            ipcr_products.write(self._PCR_Simulation.format_products_report())
+        else: ipcr_products.write(hr(' No PCR products have been found ', symbol='!')) 
+        ipcr_products.close()
+        print '\nThe list of PCR products was written to:\n   ',self._PCR_products_filename
+        self._add_report('iPCR products', self._PCR_products_filename)
     #end def
     
     
@@ -122,14 +123,14 @@ class iPCR(iPCR_Interface):
         #header
         ipcr_report.write(time_hr())
         ipcr_report.write(wrap_text('All possible PCR products are ' 
-                                     'filtered by amplicon size.\n'
-                                     'If --no-exonuclease option was ' 
-                                     'provided, products formed by primers with ' 
-                                     "mismatches on 3'-end are ignored.\n"
-                                     'Quantities of the remaining products ' 
-                                     'are estimated using equilibrium equations '
-                                     'and current PCR parameters.\n'))
-        ipcr_report.write('\n')
+                                    'filtered by amplicon size.\n'
+                                    'If --no-exonuclease option was ' 
+                                    'provided, products which may be formed by '
+                                    'primers with ' 
+                                    "mismatches on 3'-end are ignored.\n"
+                                    'Quantities of the remaining products ' 
+                                    'are estimated using equilibrium equations '
+                                    'and current PCR parameters.\n\n'))
         #filter parameters
         ipcr_report.write(self._PCR_Simulation.format_report_header())
         if self._max_mismatches != None:
@@ -184,7 +185,7 @@ if __name__ == '__main__':
                40000,
                False, 
                33)
-    TD_Functions.PCR_T = 58
+    TD_Functions.PCR_T = 53
     TD_Functions.C_Mg  = 3e-3
     TD_Functions.C_dNTP = 300e-6
     TD_Functions.C_DNA = 1e-9
@@ -213,4 +214,6 @@ ipcr.simulate_PCR()''',
 #    sys.stdout = stdout
 #    out_file.close()
     
+    
+    ipcr.write_products_report()
     ipcr.write_PCR_report()

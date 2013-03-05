@@ -30,11 +30,13 @@ from math import log
 text_width = 80
 
 def print_exception(e):
-    print '\n%s: %s\n' % (type(e).__name__, e.message or 'no message.')
+    print '\n%s: error code %s; %s\n' % (type(e).__name__,
+                                         hasattr(e, 'errno') and str(e.errno) or 'N/A',  
+                                         e.message or 'no message.')
     
     
 def random_text(length):
-    return ''.join(random.choice(string.ascii_uppercase + string.digits) for i in range(length))
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _unused in range(length))
 #end def
 
 
@@ -133,11 +135,13 @@ def format_quantity(quantity, unit='U'):
     if not quantity: return '0.0  %s' % unit
     if quantity < 0: return 'N/A  %s' % unit
     mag = -1*log(quantity, 10)
-    if 0  <  max < 1:  return '%.1f  %s' % (quantity,      unit)
+    if 0  <  mag < 1:  return '%.1f  %s' % (quantity,      unit)
     if 1  <= mag < 3:  return '%.1f m%s' % (quantity*1e3,  unit)
     if 3  <= mag < 6:  return '%.1f u%s' % (quantity*1e6,  unit)
     if 6  <= mag < 9:  return '%.1f n%s' % (quantity*1e9,  unit)
     if 9  <= mag < 12: return '%.1f p%s' % (quantity*1e12, unit)
     if 12 <= mag < 15: return '%.1f f%s' % (quantity*1e15, unit)
     if 15 <= mag:      return '%.1f a%s' % (quantity*1e18, unit)
+    #if everything fails for some unknown reason
+    return 'N/A  %s' % unit
 #end def

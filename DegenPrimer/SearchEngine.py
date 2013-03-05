@@ -123,22 +123,101 @@ class SearchEngine(object):
 
 
     @classmethod
-    def _compile_duplexes(cls, template, primer, matches, 
-                            t_len, p_len, max_mismatches, reverse=False):
+    def _join_jobs(cls, abort_e, jobs, timeout, parser, *args):
+        while jobs and not abort_e.is_set():
+            finished_job = None
+            for i,job in enumerate(jobs):
+                try: 
+                    out = job[1].get(True, timeout)
+                    parser(out, *args)
+                    job[0].join()
+                    finished_job = i
+                    break
+                except Empty: 
+                    continue
+                except IOError, e:
+                    if e.errno == errno.EINTR:
+                        continue
+                    else:
+                        print 'Unhandled IOError:', e.message
+                        raise
+                except Exception, e:
+                    print 'Unhandled Exception:'
+                    print_exception(e)
+                    raise
+            if finished_job is not None:
+                del jobs[finished_job]
+    #end def
+    
+    
+    def _new_event(self):
+        abort_event = mp.Event()
+        self._abort_events.append(abort_event)
+        return abort_event
+    #end def
+    
+    
+    def _clean_jobs(self, jobs):
+        with self._abort_lock:
+            for job in jobs: 
+                if job in self._all_jobs:
+                    self._all_jobs.remove(job)
+    #end def
+    
+    
+    def _clean_abort_even(self, abort_event):
+        with self._abort_lock:
+            if abort_event in self._abort_events:
+                self._abort_events.remove(abort_event)
+    #end def
+    
+
+    def _compile_duplexes(self, template, primer, matches, t_len, p_len, 
+                             max_mismatches, abort_e, reverse=False):
         '''Given a template strand, a primer and a list of locations where the 
         primer matches the template, return a list of Duplexes formed by 
         unambiguous components of the primer at each match location.'''
-        results = []
-        for i in matches:
-            duplexes = []
-            for var in primer.sequences:
-                dup = Duplex(var, template[i:i+p_len].complement()[::-1])
-                if dup.mismatches <= max_mismatches:
-                    duplexes.append(dup)
-            if not reverse:
-                results.append((i+p_len, duplexes))
-            else: 
-                results.insert(0, (t_len+1-(i+p_len), duplexes))
+        #multiprocessing worker
+        def worker(queue, abort_e, template, primer, matches, 
+                   t_len, p_len, max_mismatches, reverse):
+            results = []
+            for i in matches:
+                if abort_e.is_set(): break
+                duplexes = []
+                for var in primer.seq_records:
+                    dup = Duplex(var.seq, template[i:i+p_len].complement()[::-1])
+                    if dup.mismatches <= max_mismatches:
+                        duplexes.append((dup, var.id))
+                if not reverse:
+                    results.append((i+p_len, duplexes))
+                else: 
+                    results.insert(0, (t_len+1-(i+p_len), duplexes))
+            if abort_e.is_set():
+                queue.cancel_join_thread()
+            queue.put(results)
+            queue.close()
+        #process matches in chunks
+        results     = []
+        num_matches = len(matches)
+        chunk_size  = int(num_matches/(self._cpu_count*2)+1)
+        jobs        = []
+        start       = 0
+        while start < num_matches and not abort_e.is_set():
+            end   = min(start+chunk_size, num_matches)
+            queue = mp.Queue()
+            job   = mp.Process(target=worker, args=(queue, abort_e, template, primer, 
+                                                    matches[start:end], t_len, p_len, 
+                                                    max_mismatches, reverse))
+            job.start()
+            jobs.append((job,queue))
+            start += chunk_size
+        #join all jobs
+        def parse_out(out, results): results.extend(out)
+        self._join_jobs(abort_e, list(jobs), 5e-3, parse_out, results)
+        #if aborted, return None
+        if abort_e.is_set(): return None
+        #else, cleanup
+        self._clean_jobs(jobs)
         return results
     #end def
     
@@ -197,36 +276,15 @@ class SearchEngine(object):
     @classmethod
     def _mp_better(cls, t_len, p_len):
         return cls._cpu_count > 1 and t_len > 25000
-
-
+    
+    
     @classmethod
-    def _join_jobs(cls, abort_e, jobs, parser, *args):
-        while jobs and not abort_e.is_set():
-            finished_job = None
-            for i,job in enumerate(jobs):
-                try: 
-                    out = job[1].get(True,1e-3)
-                    parser(out, *args)
-                    job[0].join()
-                    finished_job = i
-                    break
-                except Empty: 
-                    continue
-                except IOError, e:
-                    if e.errno == errno.EINTR:
-                        continue
-                    else:
-                        print 'Unhandled IOError:', e.message
-                        raise
-                except Exception, e:
-                    print 'Unhandled Exception:'
-                    print_exception(e)
-                    raise
-            if finished_job is not None:
-                del jobs[finished_job]
+    def _optimal_slices(cls, t_len, p_len):
+        linear = max(cls._cpu_count, int(t_len*1.75e-5 + 1.75))
+        return min(60, linear, t_len/p_len)
     #end def
     
-
+    
     @classmethod
     def _start_find_worker(cls, jobs, queue, abort_e, start, fwd_slice, rev_slice, 
                            p_fft, correction, s_size, s_stride, c_size, c_stride):
@@ -259,13 +317,6 @@ class SearchEngine(object):
     #end def
     
     
-    @classmethod
-    def _optimal_slices(cls, t_len, p_len):
-        linear = max(cls._cpu_count, int(t_len*1.75e-5 + 1.75))
-        return min(60, linear, t_len/p_len)
-    #end def
-    
-    
     def _find_mp(self, template, primer, t_len, p_len, mismatches, abort_event):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
@@ -294,14 +345,11 @@ class SearchEngine(object):
         def parse_out(out, fwd_list, rev_list):
             fwd_list.append((out[0],out[1]))
             rev_list.append((out[0],out[2]))
-        self._join_jobs(abort_event, list(jobs), parse_out, fwd_score, rev_score)
+        self._join_jobs(abort_event, list(jobs), 1e-3, parse_out, fwd_score, rev_score)
         #if search was aborted, return empty results
         if abort_event.is_set(): return None
         #else, cleanup
-        with self._abort_lock:
-            for job in jobs: 
-                if job in self._all_jobs:
-                    self._all_jobs.remove(job)
+        self._clean_jobs(jobs)
         #sort, correct and concatenate scores
         fwd_score.sort(key=lambda(x): x[0])
         fwd_score = [result[1] for result in fwd_score]
@@ -316,21 +364,20 @@ class SearchEngine(object):
         del fwd_score, rev_score
         #construct duplexes
         fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches, 
-                                             t_len, p_len, mismatches)
+                                             t_len, p_len, mismatches, abort_event)
         rev_results = self._compile_duplexes(rev_seq, primer, rev_matches, 
-                                             t_len, p_len, mismatches, 
+                                             t_len, p_len, mismatches, abort_event, 
                                              reverse=True)
         return fwd_results,rev_results
     #end def
 
     
-    @classmethod
-    def _find(cls, template, primer, t_len, p_len, mismatches, abort_event):
+    def _find(self, template, primer, t_len, p_len, mismatches, abort_event):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches.'''
-        chunk_size   = cls._calculate_chunk_size(t_len, p_len)
+        chunk_size   = self._calculate_chunk_size(t_len, p_len)
         chunk_stride = chunk_size-p_len
-        p_maps       = cls._map_pattern(str(primer.master_sequence.seq), chunk_size)
+        p_maps       = self._map_pattern(str(primer.master_sequence.seq), chunk_size)
         p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
         fwd_seq      = template.seq
         rev_seq      = template.seq.reverse_complement()
@@ -341,11 +388,11 @@ class SearchEngine(object):
         i = 0
         while i < t_len and not abort_event.is_set():
             front = min(t_len, i+chunk_size)
-            fwd_score.append(cls._find_in_chunk(fwd_seq[i:front], p_fft, correction, 
-                                                chunk_size, chunk_stride))
+            fwd_score.append(self._find_in_chunk(fwd_seq[i:front], p_fft, correction, 
+                                                 chunk_size, chunk_stride))
             
-            rev_score.append(cls._find_in_chunk(rev_seq[i:front], p_fft, correction, 
-                                                chunk_size, chunk_stride))
+            rev_score.append(self._find_in_chunk(rev_seq[i:front], p_fft, correction, 
+                                                 chunk_size, chunk_stride))
             i += chunk_stride
         #if search was aborted, return empty results
         if abort_event.is_set(): return None
@@ -358,10 +405,10 @@ class SearchEngine(object):
         rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]
         del fwd_score, rev_score
         #construct duplexes
-        fwd_results = cls._compile_duplexes(fwd_seq, primer, fwd_matches, 
-                                            t_len, p_len, mismatches)
-        rev_results = cls._compile_duplexes(rev_seq, primer, rev_matches, 
-                                            t_len, p_len, mismatches, 
+        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches, 
+                                            t_len, p_len, mismatches, abort_event)
+        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches, 
+                                            t_len, p_len, mismatches, abort_event, 
                                             reverse=True)
         return fwd_results,rev_results
     #end def
@@ -389,15 +436,13 @@ class SearchEngine(object):
     def find(self, template, primer, mismatches):
         p_len,t_len = len(primer),len(template)
         self._check_length_inequality(t_len, p_len)
-        abort_event = mp.Event()
-        self._abort_events.append(abort_event)
+        abort_event = self._new_event()
         results = None
         if self._mp_better(t_len, p_len):
             results = self._find_mp(template, primer, t_len, p_len, mismatches, abort_event)
         else:
             results = self._find(template, primer, t_len, p_len, mismatches, abort_event)
-        if abort_event in self._abort_events:
-            self._abort_events.remove(abort_event)
+        self._clean_abort_even(abort_event)
         return results
     #end def
     
@@ -413,8 +458,7 @@ class SearchEngine(object):
                 long_templates.append(t)
             else: short_templates.append(t)
         #add abort event
-        abort_event = mp.Event()
-        self._abort_events.append(abort_event)
+        abort_event = self._new_event()
         #first, launch short jobs if there're more than 1 short template
         if len(short_templates) > 1:
             jobs = []
@@ -422,10 +466,12 @@ class SearchEngine(object):
                 if abort_event.is_set(): break
                 self._start_short_find_job(jobs, mp.Queue(), abort_event, t_id, 
                                            template, primer, t_len, p_len, mismatches)
+                self._all_jobs.append(jobs[-1])
             #join all launched jobs and gather the results
-            def parse_out(out, results):
-                results[out[0]] = out[1]
-            self._join_jobs(abort_event, list(jobs), parse_out, results)
+            def parse_out(out, results): results[out[0]] = out[1]
+            self._join_jobs(abort_event, list(jobs), 1e-4, parse_out, results)
+            #clean started jobs
+            self._clean_jobs(jobs)
         elif short_templates: #if there's only one short template, just find in it
             t_id, t_len, template = short_templates[0]
             results[t_id] = self._find(template, primer, t_len, p_len, 
@@ -438,12 +484,7 @@ class SearchEngine(object):
         #if abort event is set, return None
         if abort_event.is_set(): return None
         #else, cleanup
-        with self._abort_lock:
-            if abort_event in self._abort_events:
-                self._abort_events.remove(abort_event)
-            for job in jobs: 
-                if job in self._all_jobs:
-                    self._all_jobs.remove(job)
+        self._clean_abort_even(abort_event)
         return results
     #end def
     
@@ -544,7 +585,8 @@ if __name__ == '__main__':
             else:
                 for res in results:
                     print res[0]
-                    for dup in res[1]:
+                    for dup, _id in res[1]:
+                        print _id
                         print dup
                         print 'mismatches:', dup.mismatches
                     print '\n'

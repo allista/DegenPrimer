@@ -75,8 +75,7 @@ class BlastPrimers(iPCR_Interface):
         '''Construct a concatenated query: primer1NNNNNNNprimer2NNNNNNprimer3...
         Also save primer boundaries positions in the concatenate.'''
         all_primers = []
-        if self._fwd_primer: all_primers += self._fwd_primer.sequences
-        if self._rev_primer: all_primers += self._rev_primer.sequences
+        for primer in self._primers: all_primers.extend(primer.sequences)
         self._bounds = [[[1,1],]]
         query = ''
         for p in range(len(all_primers)):
@@ -91,6 +90,10 @@ class BlastPrimers(iPCR_Interface):
                 next_start = self._bounds[-1][0][1] + len(self.spacer)+1
                 self._bounds.append([[next_start, next_start],])
         self._query = SeqRecord(Seq(query, IUPAC.ambiguous_dna), self._job_id)
+    #end def
+    
+    
+    def _save_query_config(self):
         #save query config
         query_config   = SafeConfigParser()
         query_config.optionxform = str
@@ -110,8 +113,8 @@ class BlastPrimers(iPCR_Interface):
     
     
     def _duplex_from_hsp(self, hsp):
-        query_start  = hsp.query_start
-        query_end    = hsp.query_end
+        query_start = hsp.query_start
+        query_end   = hsp.query_end
         for bounds,primer in self._bounds:
             if query_start < bounds[0] \
             or query_end   > bounds[1]:
@@ -122,10 +125,12 @@ class BlastPrimers(iPCR_Interface):
                     dimer.add(query_start-bounds[0]+i,i)
             template = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement()
             return Duplex(primer, template, dimer)
+        return None
     #end def 
     
     
     def blast_query(self, entrez_query=''):
+        self._save_query_config()
         try:
             blast_results = NCBIWWW.qblast('blastn', 
                                            self.database, 
@@ -163,7 +168,8 @@ class BlastPrimers(iPCR_Interface):
     def load_results(self):
         #check for file existence
         if  not os.path.isfile(self._results_filename) \
-        and not os.path.isfile(self._query_filename): return False
+        or  not os.path.isfile(self._query_filename): 
+            return False
         #load blast results
         try:
             #load query configuration
@@ -194,41 +200,35 @@ class BlastPrimers(iPCR_Interface):
     
     def simulate_PCR(self):
         if not self._have_blast_results: return False
-        sorted_hits = []
         for record in self._blast_results:
             _PCR_Sim = self._PCR_Simulation_factory()
             self._PCR_Simulations[record.query] = _PCR_Sim
-            sorted_hits.append(dict())
-            record_hits = sorted_hits[-1]
             for alignment in record.alignments:
                 hit_title = (alignment.title.split('|')[-1]).strip()
-                record_hits[hit_title] = {'fwd':list(), 'rev':list()}
-                hits = record_hits[hit_title]
+                fwd_annealings = []
+                rev_annealings = []
                 #check and sort all hsps
                 for hsp in alignment.hsps:
-                    hsp_duplex = self._duplex_from_hsp(hsp) 
+                    #construct annealing duplex
+                    hsp_duplex = self._duplex_from_hsp(hsp)
+                    #find id of the primer
+                    hsp_id = ''
+                    for primer in self._primers:
+                        hsp_id = primer.find_id(hsp_duplex.fwd_seq)
+                        if hsp_id: break
                     #add hsp_duplex to corresponding dictionary
                     primer_dir = hsp.frame[0]
                     target_dir = hsp.frame[1]
                     #fwd hsp
                     if primer_dir == 1 and target_dir == 1:
-                        product_bound = hsp.sbjct_end + hsp_duplex.fwd_3_overhang + 1
-                        hits['fwd'].append({'start':product_bound,
-                                            'fwd_duplex':hsp_duplex})
+                        product_bound = hsp.sbjct_end + hsp_duplex.fwd_3_overhang
+                        fwd_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
                     #rev hsp
                     elif primer_dir == 1 and target_dir == -1:
-                        product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang - 1
-                        hits['rev'].append({'end':product_bound,
-                                            'rev_duplex':hsp_duplex})
-                #search for possible PCR products
-                for fwd_hit in hits['fwd']:
-                    for rev_hit in hits['rev']:
-                        if fwd_hit['start'] < rev_hit['end']:
-                            _PCR_Sim.add_product(hit_title,
-                                                 fwd_hit['start'], 
-                                                 rev_hit['end'],
-                                                 (fwd_hit['fwd_duplex'],),
-                                                 (rev_hit['rev_duplex'],))
+                        product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang
+                        rev_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
+                #add possible PCR products
+                self._add_products(_PCR_Sim, hit_title, fwd_annealings, rev_annealings)
             #compute PCR products quantities
             _PCR_Sim.run()
             #remove empty query products dict
@@ -373,29 +373,29 @@ class BlastPrimers(iPCR_Interface):
                 blast_report.write(wrap_text('All hits were filtered out.\n'))
             #write report to the file
             else:
-                blast_report.write(hr(' %d hits ' % len(hits),  symbol='#'))
+                #print the short list of all hits
+                num_hits     = len(hits)
+                num_hits_len = len(str(num_hits))
                 #sort hits by minimum dG
                 hits.sort(key=lambda(x): x[0])
-                #print the short list of all hits
-                num_hits_len = len(str(len(hits)))
-                for h in range(len(hits)):
-                    hit = hits[h]
+                #print header
+                blast_report.write(hr(' %d hits ' % num_hits,  symbol='#'))
+                for h, hit in enumerate(hits):
                     spacer    = ' '*(num_hits_len-len(str(h)))
                     blast_report.write(wrap_text('%d.%s %s\n' 
                                                  % (h+1, spacer, 
-                                                    (hit[1].split('|')[-1]).strip())))
+                                                   (hit[1].split('|')[-1]).strip())))
                     blast_report.write(('%s  min dG: %.2f; score: %d; bits: %d; '
                                         'E-value: %.2e; alignments: %d\n\n')
                                        % (' '*num_hits_len, hit[0], hit[2], 
                                           hit[3], hit[4], hit[5]))
                 blast_report.write('\n')
                 #print each formatted hit
-                for h in range(len(hits)):
-                    hit = hits[h]
+                for h, hit in enumerate(hits):
                     blast_report.write(hr(' Hit #%d ' % (h+1), symbol='='))
                     blast_report.write(hit[6])
                     blast_report.write(hr('', symbol='='))
-                    if h < len(hits)-1: blast_report.write('\n\n')
+                    if h < num_hits-1: blast_report.write('\n\n')
             blast_report.write(hr('', symbol='#'))
             if r < len(self._blast_results)-1: blast_report.write('\n\n')
         blast_report.close()

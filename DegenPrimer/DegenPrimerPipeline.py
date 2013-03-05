@@ -35,7 +35,6 @@ from DegenPrimer.TD_Functions import format_PCR_conditions
 from DegenPrimer.BlastPrimers import BlastPrimers
 from DegenPrimer.SecStructures import AllSecStructures
 from DegenPrimer.StringTools import hr, wrap_text, time_hr, print_exception
-from DegenPrimer.iPCRess import iPCRess
 from DegenPrimer.SeqDB import SeqDB
 from DegenPrimer.iPCR import iPCR
 try:
@@ -56,7 +55,6 @@ class ClassManager(BaseManager):
 ClassManager.register('AllSecStructures', AllSecStructures)
 ClassManager.register('SeqDB', SeqDB)
 ClassManager.register('iPCR', iPCR)
-ClassManager.register('iPCRess', iPCRess)
 ClassManager.register('BlastPrimers', BlastPrimers)
 
 
@@ -100,7 +98,20 @@ class WaitThread(Thread):
         except IOError, e:
             if e.errno == errno.EINTR:
                 return
-            else: raise
+            elif e.errno == errno.EBADMSG:
+                print 'Error in thread: %s' % self.name
+                print e.message
+                print '\n*** It seems that an old degen_primer_gui ' \
+                'subprocess is running in the system. Kill it and try again. ***\n'
+                return
+            else:
+                print 'Error in thread: %s' % self.name
+                print e.message
+                return
+        except Exception, e:
+            print 'Error in thread: %s' % self.name
+            print e.message
+            return
     #end def
 #end class
 
@@ -251,47 +262,10 @@ class DegenPrimerPipeline(object):
                     'Calculate conversion degree of secondary structures.')
         #----------------------------------------------------------------------#
         
-        #ipcress program file and test for primers specificity by iPCR
-        #this is only available for pairs of primers
-        ipcress = None
-#        if args.sense_primer and args.antisense_primer:
-#            with capture_to_queue() as out:
-#                p_entry = self._generate_subroutine_entry(out.queue)
-#                p_entry['manager'].start()
-#            ipcress = p_entry['manager'].iPCRess(job_id, 
-#                                                 fwd_primer, rev_primer, 
-#                                                 args.min_amplicon, 
-#                                                 args.max_amplicon, 
-#                                                 args.polymerase, 
-#                                                 args.with_exonuclease, 
-#                                                 args.cycles,
-#                                                 side_reactions, 
-#                                                 side_concentrations)
-#            #if target sequences are provided and the run_icress flag is set, run iPCRess...
-#            if args.run_ipcress and args.fasta_files:
-#                ipcress.write_program()
-#                _subroutine(ipcress.execute_and_analyze, 
-#                            (args.fasta_files, 
-#                             args.max_mismatches), out.queue, p_entry,
-#                            'Execute iPCRess program and simulate PCR using found products.')
-#                #get ipcress pid
-#                sleep(0.1) #wait some time for process to fork
-#                ipcress_pid = ipcress.ipcress_pid()
-#                if ipcress_pid != None:
-#                    p_entry['children'].append(ipcress_pid)
-#            #else, try to load previously saved results and analyze them with current parameters
-#            elif ipcress.load_results():
-#                print '\nFound raw iPCRess results from the previous ipcress run.'
-#                _subroutine(ipcress.simulate_PCR, None, out.queue, p_entry,
-#                            'Simulate PCR using possible products found by iPCRess.')
-#            else: self._print_queue(p_entry['queue'])
-        #----------------------------------------------------------------------#
         
-        
-        #in silic PCR simulation. This is only available for pairs of primers 
-        #and only if fasta files are provided 
+        #in silic PCR simulation. This is only available if fasta files are provided 
         ipcr = None
-        if args.sense_primer and args.antisense_primer and args.fasta_files:
+        if args.fasta_files:
             with capture_to_queue() as out:
                 p_entry = self._generate_subroutine_entry(out.queue)
                 p_entry['manager'].start()
@@ -304,7 +278,6 @@ class DegenPrimerPipeline(object):
                                            args.cycles,
                                            side_reactions, 
                                            side_concentrations)
-            #make DB from provided sequences
             _subroutine(ipcr.find_and_analyze, 
                         (args.fasta_files, 
                          args.max_mismatches), out.queue, p_entry,
@@ -325,7 +298,7 @@ class DegenPrimerPipeline(object):
                                                         args.cycles,
                                                         side_reactions, 
                                                         side_concentrations)
-        #if --do-blast command was provided, make an actual query
+        #if --do-blast flag was provided, make an actual query
         if args.do_blast:
             #construct Entrez query
             entrez_query = ''
@@ -333,11 +306,11 @@ class DegenPrimerPipeline(object):
                 for organism in args.organisms:
                     if entrez_query: entrez_query += ' OR '
                     entrez_query += organism+'[organism]'
-            #do the blast and analyze results
+            #do the blast and analyze the results
             _subroutine(blast_primers.blast_and_analyze, 
                         (entrez_query,),
                         out.queue, p_entry,
-                        'Make BLAST query and simulate PCR using returned alignments.')
+                        'Make BLAST query, then simulate PCR using returned alignments.')
         #else, try to load previously saved results and analyze them with current parameters
         elif blast_primers.load_results():
             print '\nFound saved BLAST results.'
@@ -347,6 +320,7 @@ class DegenPrimerPipeline(object):
                         'Simulate PCR using alignments in BLAST results.')
         else: self._print_queue(p_entry['queue'])
         #----------------------------------------------------------------------#
+        
         
         #collect subroutines output, write it to stdout, wait for them to finish
         try: self._listen_subroutines()
@@ -381,15 +355,10 @@ class DegenPrimerPipeline(object):
             print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
             print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
             args.register_report('Tm and secondary structures', structures_short_report_filename)
-    
-        #write iPCRess reports if they are available
-#        if ipcress != None and ipcress.have_results():
-#            ipcress.write_PCR_report()
-#            for report in ipcress.reports():
-#                args.register_report(**report)
                 
         #write iPCR report if it is available
         if ipcr != None and ipcr.have_results():
+            ipcr.write_products_report()
             ipcr.write_PCR_report()
             for report in ipcr.reports():
                 args.register_report(**report)
@@ -405,7 +374,7 @@ class DegenPrimerPipeline(object):
         sleep(0.1)
         for p_entry in self._subroutines:
             self._print_queue(p_entry['queue'])
-        #----------------------------------------------------------------------#
+#        #----------------------------------------------------------------------#
         
         #terminate managers and delete queues
         self.terminate()
