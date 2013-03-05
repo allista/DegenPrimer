@@ -353,6 +353,12 @@ class PCR_Simulation(object):
     #end def
     
     
+    def _add_alternative_annealing(self, duplex, _id, max_3_matches):
+        '''Add alternative annealig of a primer to a template as a side reaction'''
+        pass
+    #end def
+    
+    
     def _add_template(self, hit, new_template):
         #add new template
         if hit not in self._templates:

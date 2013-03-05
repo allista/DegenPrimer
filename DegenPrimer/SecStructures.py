@@ -264,6 +264,27 @@ class Duplex(object):
         effective_len = self.fwd_len-fwd_3_overhang-fwd_5_overhang
         #mismatches
         return effective_len - self._dimer.num_matches
+    #end def
+    
+    def strip_3_matches(self, max_matches):
+        '''If the number of matches on 3'-end of a duplex to the 
+        nearest mismatch is less than or equal to max_matches, 
+        replace self._dimer with a new Dimer which lacks these 3'-matches'''
+        fwd_matches = self._dimer.fwd_matches
+        rev_fwd = fwd_matches[::-1]
+        _3_matches = 1
+        for fi, match in enumerate(rev_fwd[:-1]):
+            if match-rev_fwd[fi+1] == 1:
+                _3_matches += 1
+            else: break
+            if _3_matches > max_matches: break
+        if _3_matches > max_matches: return False
+        rev_matches = self._dimer.rev_matches
+        self._dimer = Dimer(fwd_matches[:-_3_matches],
+                            rev_matches[:-_3_matches])
+        self._dimer.dG = dimer_dG_corrected(self._dimer, self._fwd_sequence, self._rev_sequence)
+        self._K        = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
+    #end def
 #end class
 
 
