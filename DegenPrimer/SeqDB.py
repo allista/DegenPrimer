@@ -94,18 +94,24 @@ class SeqDB(object):
     
     
     def create_db_from_files(self, db_filename, files):
-        if not files: return
+        if not files: return False
         sequences = []
         for filename in files:
-            sequences += SeqIO.parse(filename, 'fasta', IUPAC.unambiguous_dna)
-        if not sequences: return
+            if os.path.isfile(filename):
+                sequences += SeqIO.parse(filename, 'fasta', IUPAC.unambiguous_dna)
+            else: print '\nSeqDB: no such file %s' % filename
+        if not sequences:
+            print '\nNo sequences were found in given fasta files.' 
+            return False
         self.create_db(db_filename, sequences)
+        return True
     #end def
     
     
     def connect(self, filename):
         '''Connect to an existent file database of sequences.'''
-        if filename != ':memory:' and not os.path.isfile(filename): 
+        if filename != ':memory:' and not os.path.isfile(filename):
+            print '\nNo such file: %s' % filename 
             return False
         self._db = sqlite3.connect(filename, isolation_level='DEFERRED')
         self._cursor = self._db.cursor()

@@ -99,18 +99,18 @@ class WaitThread(Thread):
             if e.errno == errno.EINTR:
                 return
             elif e.errno == errno.EBADMSG:
-                print 'Error in thread: %s' % self.name
+                print '\nError in thread: %s' % self.name
                 print e.message
                 print '\n*** It seems that an old degen_primer_gui ' \
                 'subprocess is running in the system. Kill it and try again. ***\n'
                 return
             else:
-                print 'Error in thread: %s' % self.name
-                print e.message
+                print '\nError in thread: %s' % self.name
+                print print_exception(e)
                 return
         except Exception, e:
-            print 'Error in thread: %s' % self.name
-            print e.message
+            print '\nError in thread: %s' % self.name
+            print print_exception(e)
             return
     #end def
 #end class
@@ -222,19 +222,8 @@ class DegenPrimerPipeline(object):
         TD_Functions.C_DMSO = args.DMSO
         TD_Functions.PCR_T  = args.PCR_T
         
-        #check if at least one primer is provided
-        if not args.sense_primer and not args.antisense_primer:
-            print 'At least one primer (sense or antisense) should be provided.'
-            return False
-        #test for self-complementarity
-        for primer in primers:
-            if primer.self_complement:
-                print 'Error: %s primer "%s" [%s] is self-complementary.' \
-                    % (primer.master_sequence.description, 
-                       primer.master_sequence.id, 
-                       primer.master_sequence.seq)
-                print 'You should not use self-complementary oligonucleotides as primers.\n'
-                return False
+        #check configuration
+        if not args.check_configuration(): return False
         #save the configuration only after preliminary checks
         args.save_configuration()
         print ''
@@ -263,9 +252,9 @@ class DegenPrimerPipeline(object):
         #----------------------------------------------------------------------#
         
         
-        #in silic PCR simulation. This is only available if fasta files are provided 
+        #in silic PCR simulation. This is only available if sequence database is provided in some form 
         ipcr = None
-        if args.fasta_files:
+        if args.fasta_files or args.sequence_db:
             with capture_to_queue() as out:
                 p_entry = self._generate_subroutine_entry(out.queue)
                 p_entry['manager'].start()
@@ -277,10 +266,14 @@ class DegenPrimerPipeline(object):
                                            args.with_exonuclease, 
                                            args.cycles,
                                            side_reactions, 
-                                           side_concentrations)
+                                           side_concentrations,
+                                           args.analyze_all_annealings)
+            #connect to sequence database
+            seq_files = []
+            if args.sequence_db: seq_files.append(args.sequence_db)
+            else: seq_files = args.fasta_files
             _subroutine(ipcr.find_and_analyze, 
-                        (args.fasta_files, 
-                         args.max_mismatches), out.queue, p_entry,
+                        (seq_files, args.max_mismatches,), out.queue, p_entry,
                         'Simulate PCR using possible products found in provided sequences.')
         #----------------------------------------------------------------------#
         
@@ -297,7 +290,8 @@ class DegenPrimerPipeline(object):
                                                         args.with_exonuclease, 
                                                         args.cycles,
                                                         side_reactions, 
-                                                        side_concentrations)
+                                                        side_concentrations,
+                                                        args.analyze_all_annealings)
         #if --do-blast flag was provided, make an actual query
         if args.do_blast:
             #construct Entrez query

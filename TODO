@@ -1,9 +1,6 @@
-- PCR_Simulation: add primer annealing regions which do not produce PCR product as side-reactions.
-- PCR_Simulation: also add primer annealing variants with dissociated 3' end as side-reactions.
-  
 - Add some progress bar.
 - Add search capability to the GUI view tabs.
-- Make Entrez query of PCR products.
+? Make Entrez query of PCR products.
   
 ? take into account primer-dimers synthesis.
 ? use some graphics library to make PDF plots of PCR phoresis (apparently, mathplotlib).

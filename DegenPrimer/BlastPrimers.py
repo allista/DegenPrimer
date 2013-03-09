@@ -227,8 +227,8 @@ class BlastPrimers(iPCR_Interface):
                     elif primer_dir == 1 and target_dir == -1:
                         product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang
                         rev_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
-                #add possible PCR products
-                self._add_products(_PCR_Sim, hit_title, fwd_annealings, rev_annealings)
+                #add primers' annealings to PCR simulation
+                _PCR_Sim.add_annealings(hit_title, fwd_annealings, rev_annealings)
             #compute PCR products quantities
             _PCR_Sim.run()
             #remove empty query products dict

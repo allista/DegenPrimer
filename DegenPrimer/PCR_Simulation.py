@@ -34,20 +34,22 @@ from StringTools import wrap_text, line_by_line, hr
 
 class Region(object):
     '''Region of a sequence.'''
-    def __init__(self, name, start, end):
-        self.name  = name
+    def __init__(self, name, start, end, forward):
         if start < 1 or end < 1:
             raise ValueError('Region: start and end of a sequence region should be grater than 1.')
         if start > end:
             raise ValueError('Region: start of a sequence region should be less than it\'s end')
-        self.start  = start
-        self.end    = end
+        self.name    = name
+        self.start   = start
+        self.end     = end
+        self.forward = forward
     #end def
 
     def pretty_print(self, with_name=True):
         rep  = ''
         if with_name:
             rep += 'target: %s\n' % self.name
+        rep += 'strand: %s\n' % ('forward' if self.forward else 'reverse')
         rep += 'start:  %d\n' % self.start
         rep += 'end:    %d\n' % self.end
         rep += 'length: %d\n' % len(self)
@@ -58,7 +60,7 @@ class Region(object):
     
     def __len__(self): return self.end - self.start +1
         
-    def __hash__(self): return hash((self.name, self.start, self.end))
+    def __hash__(self): return hash((self.name, self.start, self.end, self.forward))
     
     def __eq__(self, other):
         return self.__hash__() == other.__hash__()
@@ -67,7 +69,8 @@ class Region(object):
         return self.__hash__() != other.__hash__()
         
     def __iadd__(self, T):
-        if self.name != T.name: return self
+        if self.name != T.name \
+        or self.forward != T.forward: return self
         self.start = min(self.start, T.start)
         self.end   = max(self.end, T.end)
         return self
@@ -75,6 +78,8 @@ class Region(object):
     
     def overlaps(self, T):
         return (self.name == T.name 
+                and
+                self.forward == T.forward
                 and
                 (self.start <= T.start <= self.end)
                 or
@@ -89,7 +94,7 @@ class Product(Region):
     primers (forward and reverse) which produce this product.'''
     def __init__(self, template_name, start, end, 
                  fwd_primers=None, rev_primers=None):
-        Region.__init__(self, template_name, start, end)
+        Region.__init__(self, template_name, start, end, forward=True)
         #quantity and number of cycles
         self._quantity    = 0
         self._cycles      = 0
@@ -101,8 +106,8 @@ class Product(Region):
         self._fwd_margin  = self.start-1
         self._rev_margin  = self.end+1
         if self._fwd_margin < 1: self._fwd_margin = 1
-        self.fwd_template = Region(template_name, self._fwd_margin, self._fwd_margin)
-        self.rev_template = Region(template_name, self._rev_margin, self._rev_margin)
+        self.fwd_template = Region(template_name, self._fwd_margin, self._fwd_margin, forward=True)
+        self.rev_template = Region(template_name, self._rev_margin, self._rev_margin, forward=False)
         for primer in fwd_primers:
             self.add_fwd_primer(primer)
         for primer in rev_primers:
@@ -160,7 +165,8 @@ class Product(Region):
     
     
     def __iadd__(self, T):
-        if self.name != T.name: return self
+        if self.name != T.name \
+        or self.forward != T.forward: return self
         if self.start > T.start:
             self.start        = T.start
             self._fwd_margin  = T._fwd_margin
@@ -204,7 +210,7 @@ class Product(Region):
         self.fwd_primers.add(primer)
         self.fwd_template += Region(self.name, 
                                     max(self.start-primer[0].fwd_len, 1), 
-                                    max(self.start-1, 1))
+                                    max(self.start-1, 1), forward=True)
     #end def
         
     def add_rev_primer(self, primer):
@@ -212,7 +218,7 @@ class Product(Region):
         self.rev_primers.add(primer)
         self.rev_template += Region(self.name, 
                                     self.end+1, 
-                                    self.end+primer[0].fwd_len)
+                                    self.end+primer[0].fwd_len, forward=False)
     #end def
 #end class
     
@@ -236,6 +242,8 @@ class PCR_Simulation(object):
     _min_K               = 100
     #products with quantity less than maximum quantity multiplied by this factor will not be included in the report
     _min_quantity_factor = 0.001
+    #maximum 3' matches to remove in alternative primer annealing
+    _max_3_matches       = 3
 
 
     def __init__(self, 
@@ -245,21 +253,26 @@ class PCR_Simulation(object):
                  polymerase,             #polymerase concentration in Units per liter
                  with_exonuclease=False, #if polymerase does have have 3' exonuclease activity, products of primers with 3'-mismatches will also be icluded
                  num_cycles=20,          #number of PCR cycles
+                 include_side_annealings=False, #if True, include annealings which do not give any products into equilibrium system as side reactions
                  ):
-        self._primers             = primers
-        self._min_amplicon        = min_amplicon
-        self._max_amplicon        = max_amplicon
-        self._polymerase          = polymerase
-        self._with_exonuclease    = with_exonuclease
-        self._elongation_time     = max_amplicon/1000.0 #minutes
-        self._num_cycles          = num_cycles
-        self._reaction_ends       = dict()
+        self._primers               = primers
+        self._min_amplicon          = min_amplicon
+        self._max_amplicon          = max_amplicon
+        self._polymerase            = polymerase
+        self._with_exonuclease      = with_exonuclease
+        self._include_side_annealings = include_side_annealings
+        self._elongation_time       = max_amplicon/1000.0 #minutes
+        self._num_cycles            = num_cycles
+        self._reaction_ends         = dict()
 
-        self._nonzero   = False  #true if there're some products and their quantities were calculated
+        self._nonzero               = False  #true if there're some products and their quantities were calculated
         
-        self._templates = dict() #list of all templates
-        self._products  = dict() #dictionary of all possible products
-        self._side_reactions = dict() #dictionary of all reactions
+        self._annealings            = dict() #dictionary of all primer annealings
+        self._templates             = dict() #dictionary of all templates
+        self._used_primer_ids       = set()
+        self._products              = dict() #dictionary of all possible products
+        
+        self._side_reactions        = dict() #dictionary of all reactions
         self._side_concentrations   = dict()
         self._primer_concentrations = dict()
         for primer in self._primers:
@@ -274,11 +287,14 @@ class PCR_Simulation(object):
     def __nonzero__(self):
         return self._nonzero
 
+
     def hits(self):
         return list(self._products.keys())
     
+    
     def add_side_concentrations(self, concentrations):
         if concentrations: self._side_concentrations.update(concentrations)
+        
         
     def add_side_reactions(self, reactions):
         if not reactions: return 
@@ -286,15 +302,129 @@ class PCR_Simulation(object):
                                           if R[1]['constant'] >= self._min_K
                                           or R[1]['type'] == 'A']))
     #end def
-        
-
-    def add_product(self, 
-                    hit,          #name of the target sequence
-                    start,        #start position of the product on the target sequence
-                    end,          #end position of the product on the target sequence
-                    fwd_duplexes, #duplexes of forward primers with corresponding template sequence
-                    rev_duplexes, #duplexes of reverse primers with corresponding template sequence
-                    ):
+    
+    
+    def _register_added_duplexes(self, hit, _pos, _duplexes, _template):
+        self._annealings[hit].append((_pos, _duplexes, _template))
+        self._add_template(hit, _template)
+        alt_annealings  = (_pos, [], _template)
+        for _duplex, _id in _duplexes:
+            self._used_primer_ids.add(_id)
+            #if no exonuclease, try to add alternative annealing without 3' matches to side_annealings
+            if not self._with_exonuclease and not _duplex.fwd_3_mismatch:
+                #try to add alternative annealing without 3' matches to side annealings
+                new_duplex = deepcopy(_duplex)
+                if new_duplex.strip_3_matches(self._max_3_matches) \
+                and new_duplex.K >= self._min_K:
+                    alt_annealings[1].append((new_duplex, _id))
+        if alt_annealings[1]: self._annealings[hit].append(alt_annealings)
+    #end def
+    
+    
+    def _register_side_annealings(self, hit, sorted_annealings):
+        for _pos, _duplexes, _template in sorted_annealings:
+            registered_annealings = (_pos, [], _template)
+            for _duplex, _id in _duplexes:
+                if _id in self._used_primer_ids:
+                    registered_annealings[1].append((_duplex, _id))
+            if registered_annealings[1]: 
+                self._annealings[hit].append(registered_annealings)
+                self._add_template(hit, _template)
+    #end def
+            
+    
+    def _sort_annealings(self, hit, strand, annealings, good, bad):
+        for _pos, _duplexes in annealings:
+            if strand:
+                _template = Region(hit, _pos-_duplexes[0][0].fwd_len+1, _pos, strand)
+            else:
+                _template = Region(hit, _pos, _pos+_duplexes[0][0].fwd_len-1, strand)
+            good_annealings = (_pos, [], _template)
+            bad_annealings  = (_pos, [], _template)
+            for _duplex, _id in _duplexes:
+                #check equilibrium constant
+                if _duplex.K < self._min_K: continue
+                #check if there are such primers in the system at all
+                duplex_with_primer = False
+                for primer in self._primers:
+                    if _duplex.fwd_seq in primer:
+                        duplex_with_primer = True
+                        break
+                if not duplex_with_primer: continue
+                #check 3' mismatches
+                if self._with_exonuclease: #if poly has 3'-5'-exonuclease, add to the good annealings
+                    good_annealings[1].append((_duplex, _id))
+                elif not _duplex.fwd_3_mismatch: #if not, check 3' annealing
+                    good_annealings[1].append((_duplex, _id))
+                else:
+                    bad_annealings[1].append((_duplex, _id))
+            #add annealings
+            if good_annealings[1]: good[strand].append(good_annealings)
+            if bad_annealings[1]:  bad.append(bad_annealings)
+    #end def
+    
+    
+    def add_annealings(self, hit, fwd_annealings, rev_annealings):
+        '''Add primer annealing sites to the simulation. Within them find 
+        PCR products, add other annealings as side reactions.
+        hit - name of a target sequence
+        fwd_annealings - a list of primer annealing sites on a direct strand 
+        of the target sequence: [(position, [(duplex, primer_id), ...]), ...]
+        rev_annealings - a list of primer annealing sites on a reverse strand 
+        of the target sequence (the structure is the same).
+        Return True if some products produced by the annealings were added. 
+        False otherwise.'''
+        if not fwd_annealings or not rev_annealings: return False
+        self._annealings[hit] = []
+        good_annealings       = ([], []) #0 is reverse strand, 1 is forward
+        bad_annealings        = []
+        #sort annealings into good (ones that are suitable for product generation) 
+        #and bad (ones that are not) 
+        self._sort_annealings(hit, 1, fwd_annealings, good_annealings, bad_annealings)
+        self._sort_annealings(hit, 0, rev_annealings, good_annealings, bad_annealings)
+        #sort good annealings by position
+        good_annealings[1].sort(key=lambda x: x[0])
+        good_annealings[0].sort(key=lambda x: x[0])
+        #find possible products in range [min_amplicon, max_amplicon]
+        products_added  = False
+        added_positons  = (set(), set())
+        rev_start       = 0
+        for fwd_pos, fwd_dups, fwd_templ in good_annealings[1]:
+            start = fwd_pos+1
+            for rev_pi, (rev_pos, rev_dups, rev_templ) in enumerate(good_annealings[0][rev_start:]):
+                end = rev_pos-1
+                if start >= end:
+                    rev_start = rev_pi
+                    continue
+                if not (self._min_amplicon <= end-start+1 <= self._max_amplicon): 
+                    break
+                self._add_product(hit, start, end, fwd_dups, rev_dups)
+                if fwd_pos not in added_positons[1]:
+                    self._register_added_duplexes(hit, fwd_pos, fwd_dups, fwd_templ)
+                if rev_pos not in added_positons[0]:
+                    self._register_added_duplexes(hit, rev_pos, rev_dups, rev_templ)
+                if not products_added: products_added = True
+        if not products_added: #delete all annealings if no products have been added
+            del self._annealings[hit]
+        else: 
+            self._nonzero = False
+            if self._include_side_annealings:
+                self._register_side_annealings(hit, [ann for ann in good_annealings[1]
+                                                     if ann[0] not in added_positons[1]])
+                self._register_side_annealings(hit, [ann for ann in good_annealings[0]
+                                                     if ann[0] not in added_positons[0]])
+                self._register_side_annealings(hit, bad_annealings)
+        return products_added
+    #end def
+    
+    
+    def _add_product(self, 
+                       hit,          #name of the target sequence
+                       start,        #start position of the product on the target sequence
+                       end,          #end position of the product on the target sequence
+                       fwd_duplexes, #duplexes of forward primers with corresponding template sequence
+                       rev_duplexes, #duplexes of reverse primers with corresponding template sequence
+                      ):
         '''
         Add a new product to the simulation.
         hit -- name of template sequence (termed as in BLAST)
@@ -303,40 +433,8 @@ class PCR_Simulation(object):
         *_duplexes -- lists of tuples of the form (duplex_object, id), where 
         duplex_object represents annealed primer and id is it's name 
         '''
-        #check amplicon length
-        if not (self._min_amplicon <= end-start+1 <= self._max_amplicon): 
-            return False
-        #check fwd primers
-        valid_fwd = []
-        for fwd_duplex, _id in fwd_duplexes:
-            #check equilibrium constant
-            if fwd_duplex.K < self._min_K: continue
-            #check 3' mismatches
-            if not self._with_exonuclease and fwd_duplex.fwd_3_mismatch:
-                continue
-            #check if there are such primers in the system at all
-            for primer in self._primers:
-                if fwd_duplex.fwd_seq in primer:
-                    valid_fwd.append((fwd_duplex, _id))
-                    break
-        #check rev primers
-        valid_rev = []
-        for rev_duplex, _id in rev_duplexes:
-            #check equilibrium constant
-            if rev_duplex.K < self._min_K: continue
-            #check 3' mismatches
-            if not self._with_exonuclease and rev_duplex.fwd_3_mismatch:
-                continue
-            #check if there are such primers in the system at all
-            for primer in self._primers:
-                if rev_duplex.fwd_seq in primer:
-                    valid_rev.append((rev_duplex, _id))
-                    break
-        #if there are no valid fwd and rev primers, return
-        if not valid_fwd or not valid_rev: return False
         #initialize new product and reset nonzero flag
-        new_product = Product(hit, start, end, valid_fwd, valid_rev)
-        self._nonzero = False
+        new_product = Product(hit, start, end, fwd_duplexes, rev_duplexes)
         #if there was no such hit before, add it
         if hit not in self._products:
             self._products[hit] = dict()
@@ -346,57 +444,42 @@ class PCR_Simulation(object):
             self._products[hit][new_product_hash]  = new_product
         else: #append primers
             self._products[hit][new_product_hash] += new_product
-        #add templates
-        self._add_template(hit, self._products[hit][new_product_hash].fwd_template)
-        self._add_template(hit, self._products[hit][new_product_hash].rev_template)
-        return True
-    #end def
-    
-    
-    def _add_alternative_annealing(self, duplex, _id, max_3_matches):
-        '''Add alternative annealig of a primer to a template as a side reaction'''
-        pass
     #end def
     
     
     def _add_template(self, hit, new_template):
         #add new template
         if hit not in self._templates:
-            self._templates[hit] = []
-        self._templates[hit].append(new_template)
-        self._templates[hit].sort(key=lambda(x): x.start)
-        compacted = [self._templates[hit][0]]
-        for T in self._templates[hit]:
+            self._templates[hit] = [[],[]]
+        strand = new_template.forward
+        self._templates[hit][strand].append(new_template)
+        self._templates[hit][strand].sort(key=lambda(x): x.start)
+        compacted = [self._templates[hit][strand][0]]
+        for T in self._templates[hit][strand]:
             if T.overlaps(compacted[-1]):
                 compacted[-1] += T
             else: compacted.append(T)
-        self._templates[hit] = compacted
+        self._templates[hit][strand] = compacted
     #end def
     
     
     def _find_template(self, hit, query_template):
-        for T in self._templates[hit]:
+        for T in self._templates[hit][query_template.forward]:
             if T.overlaps(query_template):
                 return T
         return None
     
     
-    def _construct_reactions(self, hit_ids):
+    def _construct_annealing_reactions(self, hit_id, annealings):
         reactions = dict()
-        for hit_id in hit_ids:
-            for product in self._products[hit_id].values():
-                fwd_template = self._find_template(hit_id, product.fwd_template)
-                for fwd_primer, _id in product.fwd_primers:
-                    r_hash = hash((fwd_primer.fwd_seq, fwd_template))
-                    reactions[r_hash] = Equilibrium.compose_reaction(fwd_primer.K, 
-                                                                     fwd_primer.fwd_seq, 
-                                                                     hash(fwd_template), 'AB')
-                rev_template = self._find_template(hit_id, product.rev_template)
-                for rev_primer, _id in product.rev_primers:
-                    r_hash = hash((rev_primer.fwd_seq, rev_template))
-                    reactions[r_hash] = Equilibrium.compose_reaction(rev_primer.K, 
-                                                                     rev_primer.fwd_seq, 
-                                                                     hash(rev_template), 'AB')
+        for _pos, _duplexes, _template in annealings:
+            template = self._find_template(hit_id, _template)
+            template_hash = hash(template)
+            for _duplex, _id in _duplexes:
+                r_hash = hash((_duplex.fwd_seq, template))
+                reactions[r_hash] = Equilibrium.compose_reaction(_duplex.K, 
+                                                                 _duplex.fwd_seq, 
+                                                                 template_hash, 'AB')
         return reactions
     #end def
     
@@ -406,14 +489,16 @@ class PCR_Simulation(object):
         self._max_objective_value = 0
         for hit_id in self._products.keys():
             #assemble reactions and concentrations for this hit
-            reactions = self._construct_reactions((hit_id,))
+            reactions = self._construct_annealing_reactions(hit_id, self._annealings[hit_id])
             if not reactions:
                 self._solutions[hit_id] = None
                 continue
             reactions.update(self._side_reactions)
             concentrations = dict(self._primer_concentrations)
             concentrations.update([(hash(T), TD_Functions.C_DNA) 
-                                   for T in self._templates[hit_id]])
+                                   for T in self._templates[hit_id][1]])
+            concentrations.update([(hash(T), TD_Functions.C_DNA) 
+                                   for T in self._templates[hit_id][0]])
             concentrations.update(self._side_concentrations)
             #calculate equilibrium
             equilibrium = Equilibrium(reactions, concentrations)

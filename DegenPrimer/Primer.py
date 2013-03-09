@@ -34,6 +34,7 @@ except ImportError:
     print'The BioPython must be installed in your system.'
     raise
 import TD_Functions
+from StringTools import print_exception
 
 
 class Primer(object):
@@ -262,22 +263,44 @@ class Primer(object):
 
 def load_sequence(seq_string, rec_id=None, desc=None):
     '''generate a SeqRecord object with sequence from a raw string or a file'''
-    #check if seq_string is a filename
-    if os.path.isfile(seq_string):
+    #check seq_string to be a sequence
+    _is_sequence  = True
+    full_alphabet = ['A', 'T', 'C', 'G'] + Primer.IUPAC_ambiguous.keys() 
+    for letter in seq_string:
+        _is_sequence &= letter in full_alphabet
+        if not _is_sequence: break
+    #if it is, make a SeqRecord out of it
+    if _is_sequence:
+        try:
+            record = SeqRecord(Seq(seq_string, IUPAC.ambiguous_dna).upper(), 
+                               id=rec_id, name=desc, description=desc)
+        except Exception, e:
+            print_exception(e)
+            raise ValueError('Primer.load_sequence: unable to interpret %s as a sequence data.' % seq_string)
+        return record
+    #else, check if seq_string is an existing file
+    elif os.path.isfile(seq_string):
         filename = seq_string
         #check file format by extension
         genbank_pattern = re.compile(".*(\.gb|\.gbk)$")
-        fasta_pattern   = re.compile(".*(\.fa|\.fasta)$")
+        fasta_pattern   = re.compile(".*(\.fa|\.faa|\.fasta)$")
         if genbank_pattern.match(filename): filetype = "gb"
         elif fasta_pattern.match(filename): filetype = "fasta"
         else:
-            print 'Unable to guess format of', filename
-            print '*it is expected that GenBank files have .gb or .gbk extension ' \
-                + 'and FASTA files have .fa or .fasta extension.'
+            raise ValueError(('Unable to guess format of %s'
+                              '*it is expected that GenBank '
+                              'files have .gb or .gbk extension '
+                              'and FASTA files have .fa, .faa or '
+                              '.fasta extension.') % filename)
         #parse file
-        print 'Parsing', filename
+        print '\nParsing', filename
         #only the first record is loaded
-        record = SeqIO.parse(filename, filetype).next().upper()
+        try:
+            record = SeqIO.parse(filename, filetype).next().upper()
+        except Exception, e:
+            print_exception(e)
+            raise ValueError('Primer.load_sequence: unable parse %s.' % filename)
+        #set record id, name and description
         if rec_id: 
             record.id = rec_id
         if not record.name:
@@ -285,7 +308,6 @@ def load_sequence(seq_string, rec_id=None, desc=None):
         if not record.description:
             record.description = desc
         return record
-    #if not, treat it as a raw sequence
-    else: return SeqRecord(Seq(seq_string, IUPAC.ambiguous_dna).upper(), 
-                           id=rec_id, name=desc, description=desc)
+    else:
+        raise ValueError('No such file o directory: %s' % seq_string)
 #end def

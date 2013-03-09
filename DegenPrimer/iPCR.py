@@ -21,7 +21,7 @@ Created on Feb 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from StringTools import wrap_text, time_hr, hr
+from StringTools import wrap_text, time_hr, hr, print_exception
 from iPCR_Interface import iPCR_Interface
 from SeqDB import SeqDB
 
@@ -35,6 +35,7 @@ class iPCR(iPCR_Interface):
         iPCR_Interface.__init__(self, *args, **kwargs)
         #ipcr parameters
         self._seq_db         = SeqDB()
+        self._db_filename    = None
         self._max_mismatches = None
         #report files
         self._PCR_report_filename   = job_id+'-iPCR-report.txt'
@@ -52,10 +53,19 @@ class iPCR(iPCR_Interface):
     
     def find_possible_products(self, seq_files, max_mismatches, seq_ids=None):
         if not seq_files: return False
-        if seq_files[0].endswith('.db'):
-            self._seq_db.connect(seq_files[0])
-        else: self._seq_db.create_db_from_files(':memory:', seq_files)
         self._max_mismatches = max_mismatches
+        #create database from given files
+        try:
+            if len(seq_files) == 1 and seq_files[0].endswith('.db'):
+                if os.path.isfile(seq_files[0]):
+                    self._seq_db.connect(seq_files[0])
+                else: print '\niPCR: no such file: %s' % seq_files[0]
+            elif not self._seq_db.create_db_from_files(':memory:', seq_files): 
+                print '\niPCR: unable to create sequence database from given files.'
+                return False
+        except Exception, e:
+            print_exception(e)
+            return False
         #find annealing sites
         seq_names      = self._seq_db.get_names(seq_ids)
         fwd_primer_ann = self._seq_db.find_in_db(self._fwd_primer, 
@@ -75,10 +85,9 @@ class iPCR(iPCR_Interface):
             if rev_primer_ann and rev_primer_ann[seq_id]:
                 fwd_annealings.extend(rev_primer_ann[seq_id][0])
                 rev_annealings.extend(rev_primer_ann[seq_id][1])
-            self._possible_products |= self._add_products(self._PCR_Simulation, 
-                                                          seq_names[seq_id], 
-                                                          fwd_annealings, 
-                                                          rev_annealings)
+            self._possible_products |= self._PCR_Simulation.add_annealings(seq_names[seq_id], 
+                                                                           fwd_annealings, 
+                                                                           rev_annealings)
         if not self._possible_products:
             print '\nNone of the possible PCR products satisfy given reaction ' \
                   'parameters.'
@@ -86,8 +95,8 @@ class iPCR(iPCR_Interface):
     #end def
     
     
-    def find_and_analyze(self, seq_db, max_mismatches, seq_ids=None):
-        return self.find_possible_products(seq_db, max_mismatches) \
+    def find_and_analyze(self, seq_files, max_mismatches, seq_ids=None):
+        return self.find_possible_products(seq_files, max_mismatches) \
             and self.simulate_PCR()
     #end def
     
@@ -184,11 +193,12 @@ if __name__ == '__main__':
                1500, 
                40000,
                False, 
-               33)
+               33,
+               include_side_annealings=True)
     TD_Functions.PCR_T = 53
     TD_Functions.C_Mg  = 3e-3
     TD_Functions.C_dNTP = 300e-6
-    TD_Functions.C_DNA = 1e-9
+    TD_Functions.C_DNA = 1e-10
     
 #    out_file = open('iPCR.out', 'w')
 #    stdout = sys.stdout 
@@ -207,7 +217,7 @@ if __name__ == '__main__':
 #'iadd-extend.profile')
     
     cProfile.run('''
-ipcr.find_possible_products(('ThGa.fa',), 6)
+ipcr.find_possible_products(('ThGa.fa',), 5)
 ipcr.simulate_PCR()''',
     'iPCR.profile')
     

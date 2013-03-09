@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # coding=utf-8
 #
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
@@ -37,7 +36,8 @@ class iPCR_Interface(ReporterInterface):
                  with_exonuclease,
                  num_cycles,
                  side_reactions=None,
-                 side_concentrations=None):
+                 side_concentrations=None,
+                 include_side_annealings=False):
         ReporterInterface.__init__(self)
         #parameters
         self._fwd_primer          = fwd_primer
@@ -56,6 +56,7 @@ class iPCR_Interface(ReporterInterface):
         
         self._side_reactions      = side_reactions
         self._side_concentrations = side_concentrations
+        self._include_side_annealings = include_side_annealings
         
         self._PCR_report_filename = None
         self._possible_products   = None
@@ -70,44 +71,13 @@ class iPCR_Interface(ReporterInterface):
                                          self._max_amplicon,
                                          self._polymerase,
                                          self._with_exonuclease,
-                                         self._num_cycles)
+                                         self._num_cycles,
+                                         self._include_side_annealings)
         if self._side_reactions:
             _PCR_simulation.add_side_reactions(self._side_reactions)
         if self._side_concentrations:
             _PCR_simulation.add_side_concentrations(self._side_concentrations)
         return _PCR_simulation
-    #end def
-    
-    
-    def _add_products(self, simulation, hit, fwd_annealings, rev_annealings):
-        '''
-        Add possible products to the simulation:
-        simulation - a PCR_Simulation object to add products to
-        hit - name of a target sequence
-        fwd_annealings - a list of primer annealing sites on a direct strand 
-        of the target sequence: [(position, [(duplex, primer_id), ...]), ...]
-        rev_annealings - a list of primer annealing sites on a reverse strand 
-        of the target sequence (the structure is the same).
-        Return True if some products were added. False otherwise.
-        '''
-        products_added = False
-        #sort lists
-        fwd_annealings.sort(key=lambda x: x[0])
-        rev_annealings.sort(key=lambda x: x[0])
-        #check only those annealing that are in range [min_amplicon, max_amplicon]
-        rev_start = 0
-        for fwd_p in fwd_annealings:
-            start = fwd_p[0]+1
-            for rev_pi, rev_p in enumerate(rev_annealings[rev_start:]):
-                end = rev_p[0]-1
-                if start >= end:
-                    rev_start = rev_pi
-                    continue
-                if not (self._min_amplicon <= end-start+1 <= self._max_amplicon): 
-                    break
-                if simulation.add_product(hit, start, end, fwd_p[1], rev_p[1]):
-                    if not products_added: products_added = True
-        return products_added
     #end def
     
     

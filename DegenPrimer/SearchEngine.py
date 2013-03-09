@@ -18,19 +18,19 @@ Created on Jan 1, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import os
 import errno
 import numpy as np
 import multiprocessing as mp
 from Queue import Empty
-from time import time, sleep
+from time import sleep
 from array import array
 from scipy.fftpack import fft, ifft
 from SecStructures import Duplex
 from StringTools import print_exception
+from MultiprocessingBase import MultiprocessingBase
 
 
-class SearchEngine(object):
+class SearchEngine(MultiprocessingBase):
     '''Fast search of a pattern sequence in a given set of template sequences 
     with parallelization using multiprocessing.'''
     
@@ -82,17 +82,11 @@ class SearchEngine(object):
     #template sequences grater than this value will be split into slices of 
     #approximately that size 
     _max_chunk_size = 2**12
-    
-    #maximum jobs to launch within a single search
-    _cpu_count   = mp.cpu_count()
-    
     ###########################################################################
 
 
     def __init__(self):
-        self._all_jobs        = []
-        self._abort_lock      = mp.Lock()
-        self._abort_events    = []
+        MultiprocessingBase.__init__(self)
     #end def
     
     
@@ -120,56 +114,6 @@ class SearchEngine(object):
             GC_map[i] = cls._map_letter(letter, cls._P_GC_mapping)
         return (AT_map, GC_map)
     #end def
-
-
-    @classmethod
-    def _join_jobs(cls, abort_e, jobs, timeout, parser, *args):
-        while jobs and not abort_e.is_set():
-            finished_job = None
-            for i,job in enumerate(jobs):
-                try: 
-                    out = job[1].get(True, timeout)
-                    parser(out, *args)
-                    job[0].join()
-                    finished_job = i
-                    break
-                except Empty: 
-                    continue
-                except IOError, e:
-                    if e.errno == errno.EINTR:
-                        continue
-                    else:
-                        print 'Unhandled IOError:', e.message
-                        raise
-                except Exception, e:
-                    print 'Unhandled Exception:'
-                    print_exception(e)
-                    raise
-            if finished_job is not None:
-                del jobs[finished_job]
-    #end def
-    
-    
-    def _new_event(self):
-        abort_event = mp.Event()
-        self._abort_events.append(abort_event)
-        return abort_event
-    #end def
-    
-    
-    def _clean_jobs(self, jobs):
-        with self._abort_lock:
-            for job in jobs: 
-                if job in self._all_jobs:
-                    self._all_jobs.remove(job)
-    #end def
-    
-    
-    def _clean_abort_even(self, abort_event):
-        with self._abort_lock:
-            if abort_event in self._abort_events:
-                self._abort_events.remove(abort_event)
-    #end def
     
 
     def _compile_duplexes(self, template, primer, matches, t_len, p_len, 
@@ -177,9 +121,9 @@ class SearchEngine(object):
         '''Given a template strand, a primer and a list of locations where the 
         primer matches the template, return a list of Duplexes formed by 
         unambiguous components of the primer at each match location.'''
-        #multiprocessing worker
-        def worker(queue, abort_e, template, primer, matches, 
-                   t_len, p_len, max_mismatches, reverse):
+        @MultiprocessingBase._worker
+        def worker(abort_e, template, primer, matches, 
+                    t_len, p_len, max_mismatches, reverse):
             results = []
             for i in matches:
                 if abort_e.is_set(): break
@@ -192,10 +136,7 @@ class SearchEngine(object):
                     results.append((i+p_len, duplexes))
                 else: 
                     results.insert(0, (t_len+1-(i+p_len), duplexes))
-            if abort_e.is_set():
-                queue.cancel_join_thread()
-            queue.put(results)
-            queue.close()
+            return results
         #process matches in chunks
         results     = []
         num_matches = len(matches)
@@ -210,6 +151,7 @@ class SearchEngine(object):
                                                     max_mismatches, reverse))
             job.start()
             jobs.append((job,queue))
+            self._all_jobs.append(jobs[-1])
             start += chunk_size
         #join all jobs
         def parse_out(out, results): results.extend(out)
@@ -288,7 +230,8 @@ class SearchEngine(object):
     @classmethod
     def _start_find_worker(cls, jobs, queue, abort_e, start, fwd_slice, rev_slice, 
                            p_fft, correction, s_size, s_stride, c_size, c_stride):
-        def worker(queue, abort_e, start, fwd_slice, rev_slice, p_fft, 
+        @MultiprocessingBase._worker
+        def worker(abort_e, start, fwd_slice, rev_slice, p_fft, 
                    correction, s_size, s_stride, c_size, c_stride):
             fwd_score = np.ndarray(0,dtype=float)
             rev_score = np.ndarray(0,dtype=float)
@@ -302,16 +245,13 @@ class SearchEngine(object):
                                            c_size, c_stride)
                 rev_score = np.concatenate([rev_score, score])
                 pos += c_stride
-            if abort_e.is_set():
-                queue.cancel_join_thread()
-            else: queue.put((start, 
-                             fwd_score[:s_stride], 
-                             rev_score[:s_stride]))
-            queue.close()
-            return
+            return (start, 
+                    fwd_score[:s_stride], 
+                    rev_score[:s_stride])
         #end def
-        job = mp.Process(target=worker, args=(queue, abort_e, start, fwd_slice, rev_slice, p_fft, 
-                                              correction, s_size, s_stride, c_size, c_stride))
+        job = mp.Process(target=worker, 
+                         args=(queue, abort_e, start, fwd_slice, rev_slice, p_fft, 
+                               correction, s_size, s_stride, c_size, c_stride))
         job.start()
         jobs.append((job,queue))
     #end def
@@ -414,20 +354,16 @@ class SearchEngine(object):
     #end def
     
     
-    @classmethod
-    def _start_short_find_job(cls, jobs, queue, abort_event, t_id, 
-                              template, primer, t_len, p_len, mismatches):
-        def worker(searcher, queue, abort_event, t_id, 
-                   template, primer, t_len, p_len, mismatches):
-            result = searcher._find(template, primer, t_len, p_len, mismatches, abort_event)
-            if abort_event.is_set():
-                queue.cancel_join_thread()
-            else: queue.put((t_id, result))
-            queue.close()
-            return
+    def _start_short_find_job(self, jobs, queue, abort_event, t_id, 
+                                 template, primer, t_len, p_len, mismatches):
+        @MultiprocessingBase._worker
+        def worker(abort_e, t_id, template, primer, t_len, p_len, mismatches):
+            result = self._find(template, primer, t_len, p_len, mismatches, abort_event)
+            return (t_id, result)
         #end def
-        job = mp.Process(target=worker, args=(cls, queue, abort_event, t_id, 
-                                              template, primer, t_len, p_len, mismatches))
+        job = mp.Process(target=worker, 
+                         args=(queue, abort_event, t_id, 
+                               template, primer, t_len, p_len, mismatches))
         job.start()
         jobs.append((job,queue))
     #end def
@@ -487,29 +423,6 @@ class SearchEngine(object):
         self._clean_abort_even(abort_event)
         return results
     #end def
-    
-    
-    def abort(self):
-        if self._abort_events:
-            with self._abort_lock:
-                for event in self._abort_events:
-                    event.set()
-            sleep(1)
-            with self._abort_lock:
-                while self._all_jobs:
-                    finished_job = None
-                    for i,job in enumerate(self._all_jobs):
-                        try: 
-                            while True: job[1].get_nowait()
-                        except Empty: pass
-                        if not job[0].is_alive():
-                            job[0].join()
-                            finished_job = i
-                            break
-                    if finished_job is not None:
-                        del self._all_jobs[finished_job]
-                self._abort_events = []
-    #end def
 #end class
 
 
@@ -517,7 +430,8 @@ class SearchEngine(object):
 #tests
 import signal
 import cProfile
-import sys, csv, timeit
+from time import time
+import sys, os, csv, timeit
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -636,22 +550,22 @@ if __name__ == '__main__':
 
     ppid = os.getpid()
     
-    t0 = time()
-    results = searcher.find(template[:2388527], Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 6)
-    print_out(results, 'test')
-    print 'elapsed %f seconds\n' % (time()-t0)
-    
 #    t0 = time()
-#    templates = [(1,2388527,template[:2388527]),
-#                 (2,23435,template[:23435]),
-#                 (3,4383562,template[:4383562]),
-#                 (4,2432,template[:2432]),
-#                 (5,538827,template[:538827])]
-#    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 5)
-#    for rid in results:
-#        print '\n'
-#        print_out(results[rid], rid)
+#    results = searcher.find(template[:23885], Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 6)
+#    print_out(results, 'test')
 #    print 'elapsed %f seconds\n' % (time()-t0)
+    
+    t0 = time()
+    templates = [(1,23885,template[:23885]),
+                 (2,23435,template[:23435]),
+                 (3,23835,template[:23835]),
+                 (4,2432,template[:2432]),
+                 (5,538827,template[:538827])]
+    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 5)
+    for rid in results:
+        print '\n'
+        print_out(results[rid], rid)
+    print 'elapsed %f seconds\n' % (time()-t0)
     #gather_statistics1(5000, 500000, 5000)
     
 #    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:

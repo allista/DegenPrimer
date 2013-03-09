@@ -22,8 +22,10 @@ Created on Nov 25, 2012
 '''
 from scipy.optimize import fsolve
 from numpy.random import random_sample
+from MultiprocessingBase import MultiprocessingBase
+from time import time
 
-class Equilibrium(object):
+class Equilibrium(MultiprocessingBase):
     '''
     Calculate equilibrium parameters in a system of concurrent reactions.
     The system is defined as a dictionary of dicts: 
@@ -62,6 +64,7 @@ class Equilibrium(object):
     
 
     def __init__(self, reactions, concentrations, precision = 1e-10):
+        MultiprocessingBase.__init__(self)
         #system in parameters
         self._precision     = precision
         self.reactions      = reactions
@@ -188,7 +191,7 @@ class Equilibrium(object):
                 _A_list.append((C_AB, ri))
             else: _A_list.append((C_A, ri)) 
         #consumption function for indexed reactant Ai
-        def _reactant_consumption(r, Ai):
+        def _reactant_consumption(r):
             _A = 0
             for _C_max, ri in _A_list:
                 _A += _C_max*r[ri]
@@ -204,28 +207,26 @@ class Equilibrium(object):
         Ai       = reaction[1]
         C_A      = self._iconcentrations[Ai]
         K        = reaction[0]
-        C_A_2    = C_A/2.0
         if r_type   == 'AB':
             Bi   = reaction[2]
             C_B  = self._iconcentrations[Bi]
-            C_AB = min(C_A, C_B) 
+            C_AB = C_A if C_A < C_B else C_B
             def func(r, consumptions):
-                ABi = C_AB*r[i]
-                _A  = consumptions[Ai]
-                _B  = consumptions[Bi]
-                return (ABi - (C_A - _A)*(C_B - _B)*K)/self._min_concentration
+                return (C_AB*r[i] - 
+                        (C_A - consumptions[Ai])*
+                        (C_B - consumptions[Bi])*K)/self._min_concentration
             return func
         elif r_type == '2A':
+            C_A_2 = C_A/2.0
             def func(r, consumptions):
-                Ai2 = C_A_2*r[i]
-                _A  = consumptions[Ai]
-                return (Ai2 - ((C_A - _A)**2)*K)/self._min_concentration
+                return (C_A_2*r[i] - 
+                        ((C_A - consumptions[Ai])**2)*K)/self._min_concentration
             return func
         elif r_type == 'A':
+            C_A_K = C_A*K
             def func(r, consumptions):
-                A1i = C_A*r[i]
-                _A  = consumptions[Ai]
-                return (A1i - (C_A - _A)*K)/self._min_concentration
+                return (C_A*r[i] - 
+                        C_A_K + consumptions[Ai]*K)/self._min_concentration
             return func
     #end def
     
@@ -235,13 +236,13 @@ class Equilibrium(object):
         l_funcs  = [self._function_factory(ri) 
                     for ri in range(len(self.reactions))]
         #reactant consumption functions
-        rc_funcs = [(Ai, self._reactants_consumption_factory(Ai)) 
+        rc_funcs = [self._reactants_consumption_factory(Ai) 
                      for Ai in range(len(self._iconcentrations))]
         #initial evaluation point
         r0 = [1e-6,]*len(self.reactions)
         #system function for fsolve and objective function for fmin_
         def sys_func(r):
-            consumptions = [func(r, Ai) for Ai, func in rc_funcs]
+            consumptions = [func(r) for func in rc_funcs]
             return tuple(l_func(r, consumptions) for l_func in l_funcs)
         objective_function = lambda(r): sum(sf**2 for sf in sys_func(r))
         #try to find the solution using fsolve
@@ -251,13 +252,14 @@ class Equilibrium(object):
         while r0_obj > self._precision \
         or    min(sol[0]) < 0 \
         or    max(sol[0]) > 1:
-            sol = fsolve(sys_func, [ri+(random_sample(1)[0]-ri)*0.3 for ri in r0], xtol=1e-10, full_output=True)
+            sol = fsolve(sys_func, [ri+(random_sample(1)[0]-ri)*0.3 for ri in r0], 
+                         xtol=1e-10, full_output=True)
             if  min(sol[0]) >= 0 and max(sol[0]) <= 1: 
                 r0 = sol[0]
                 r0_obj = objective_function(sol[0])
         r0 = sol[0]
         #in any case use the best guess for the solution
-        self._consumptions = [func(r0, Ai) for Ai, func in rc_funcs]
+        self._consumptions = [func(r0) for func in rc_funcs]
         self._solution     = r0
         self.solution      = dict()
         for ri in range(len(r0)):

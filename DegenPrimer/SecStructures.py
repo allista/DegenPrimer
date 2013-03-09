@@ -273,17 +273,26 @@ class Duplex(object):
         fwd_matches = self._dimer.fwd_matches
         rev_fwd = fwd_matches[::-1]
         _3_matches = 1
+        #find the number of 3' matches
         for fi, match in enumerate(rev_fwd[:-1]):
             if match-rev_fwd[fi+1] == 1:
                 _3_matches += 1
             else: break
             if _3_matches > max_matches: break
         if _3_matches > max_matches: return False
+        #also count all single matches from 3' end
+        rev_fwd = rev_fwd[_3_matches:]
+        for fi, match in enumerate(rev_fwd[:-1]):
+            if match-rev_fwd[fi+1] == 1:
+                break
+            else: _3_matches +=1
+        #remove 3' matches
         rev_matches = self._dimer.rev_matches
         self._dimer = Dimer(fwd_matches[:-_3_matches],
                             rev_matches[:-_3_matches])
         self._dimer.dG = dimer_dG_corrected(self._dimer, self._fwd_sequence, self._rev_sequence)
         self._K        = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
+        return True
     #end def
 #end class
 
