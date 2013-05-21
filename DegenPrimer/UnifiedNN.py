@@ -7,7 +7,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -100,14 +100,14 @@ class UnifiedNN(object):
     
     
     #constants
-    R                  =  1.9872 #Universal gas constant cal/(K*mol)
-    K0                 = -273.15 #Absolute temperature zero in degree Celsius
-    K37                = 37 - K0 #37C
+    R                       =  1.9872 #Universal gas constant cal/(K*mol)
+    K0                      = -273.15 #Absolute temperature zero in degree Celsius
+    K37                     = 37 - K0 #37C
     dG_Na_coefficient_oligo = -0.114 #kcal/mol for oligomers with length =< 16
     dG_Na_coefficient_poly  = -0.175 #kcal/mol for longer polymers
-    dS_Na_coefficient  = +0.368 #e.u.
-    T_DMSP_coefficient = 0.75
-    Loop_coefficient   =  2.44
+    dS_Na_coefficient       = +0.368 #e.u.
+    T_DMSP_coefficient      = 0.75
+    Loop_coefficient        =  2.44
     #The NN stabilities at 37◦ C range from −1.23 to −0.21 kcal/mol 
     #for CG/GA and AC/TC, respectively
     Terminal_mismatch_mean  = (-1.23 + -0.21)/2

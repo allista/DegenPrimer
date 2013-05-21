@@ -8,7 +8,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -21,83 +21,33 @@ Created on Feb 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from StringTools import wrap_text, time_hr, hr, print_exception
-from iPCR_Interface import iPCR_Interface
-from SeqDB import SeqDB
+from StringTools import wrap_text, time_hr, hr
+from iPCR_Base import iPCR_Base
 
-class iPCR(iPCR_Interface):
+class iPCR(iPCR_Base):
     '''
     Using PCR_Simulation and SeqDB classes runs PCR simulation with given 
     primers and report results in human readable form in a text file.
     '''
-
-    def __init__(self, job_id, *args, **kwargs):
-        iPCR_Interface.__init__(self, *args, **kwargs)
-        #ipcr parameters
-        self._seq_db         = SeqDB()
-        self._db_filename    = None
-        self._max_mismatches = None
-        #report files
-        self._PCR_report_filename   = job_id+'-iPCR-report.txt'
-        self._PCR_products_filename = job_id+'-iPCR-products.txt'
-        #results
+    
+    def __init__(self, *args, **kwargs):
+        iPCR_Base.__init__(self, *args, **kwargs)
+        self._PCR_products_filename = \
+        '%s-%s-products.txt' % (self._job_id, self._PCR_report_suffix)
         self._PCR_Simulation = self._PCR_Simulation_factory()
     #end def
     
     
-    def __del__(self):
-        self._seq_db.abort_search()
-        self._seq_db.close()
-    #end def
     
-    
-    def find_possible_products(self, seq_files, max_mismatches, seq_ids=None):
-        if not seq_files: return False
-        self._max_mismatches = max_mismatches
-        #create database from given files
-        try:
-            if len(seq_files) == 1 and seq_files[0].endswith('.db'):
-                if os.path.isfile(seq_files[0]):
-                    self._seq_db.connect(seq_files[0])
-                else: print '\niPCR: no such file: %s' % seq_files[0]
-            elif not self._seq_db.create_db_from_files(':memory:', seq_files): 
-                print '\niPCR: unable to create sequence database from given files.'
-                return False
-        except Exception, e:
-            print_exception(e)
-            return False
-        #find annealing sites
-        seq_names      = self._seq_db.get_names(seq_ids)
-        fwd_primer_ann = self._seq_db.find_in_db(self._fwd_primer, 
-                                                 max_mismatches, seq_ids)
-        rev_primer_ann = self._seq_db.find_in_db(self._rev_primer, 
-                                                 max_mismatches, seq_ids)
-        self._seq_db.close()
-        #find possible products
-        if not seq_ids: seq_ids = seq_names.keys()
-        self._possible_products = False
-        for seq_id in seq_ids:
-            fwd_annealings = []
-            rev_annealings = []
-            if fwd_primer_ann and fwd_primer_ann[seq_id]:
-                fwd_annealings.extend(fwd_primer_ann[seq_id][0])
-                rev_annealings.extend(fwd_primer_ann[seq_id][1])
-            if rev_primer_ann and rev_primer_ann[seq_id]:
-                fwd_annealings.extend(rev_primer_ann[seq_id][0])
-                rev_annealings.extend(rev_primer_ann[seq_id][1])
-            self._possible_products |= self._PCR_Simulation.add_annealings(seq_names[seq_id], 
-                                                                           fwd_annealings, 
-                                                                           rev_annealings)
+    def find_possible_products(self, seq_files, seq_ids=None):
+        if not self._find_annealings(seq_files, seq_ids): return False
+        #add annealings to the simulation
+        self._possible_products = self._add_annealings_for_seqs(self._PCR_Simulation)
+        del self._seq_annealings; self._seq_annealings = None
         if not self._possible_products:
-            print '\nNone of the possible PCR products satisfy given reaction ' \
+            print '\niPCR: None of the possible PCR products satisfy given reaction ' \
                   'parameters.'
         return self._possible_products
-    #end def
-    
-    
-    def find_and_analyze(self, seq_files, max_mismatches, seq_ids=None):
-        return self.find_possible_products(seq_files, max_mismatches) \
-            and self.simulate_PCR()
     #end def
     
     
@@ -105,9 +55,14 @@ class iPCR(iPCR_Interface):
         if not self._possible_products: return False
         #compute PCR products quantities
         self._PCR_Simulation.run()
-        if self._PCR_Simulation:
-            self._have_results = True
+        self._have_results = bool(self._PCR_Simulation)
         return self._have_results
+    #end def
+
+
+    def find_and_analyse(self, seq_files, seq_ids=None):
+        return self.find_possible_products(seq_files, seq_ids) \
+            and self.simulate_PCR()
     #end def
     
     
@@ -125,53 +80,43 @@ class iPCR(iPCR_Interface):
     #end def
     
     
-    def write_PCR_report(self):
-        if not self._have_results: return
-        #open report file
-        ipcr_report = self._open_report('iPCR', self._PCR_report_filename)
-        #header
-        ipcr_report.write(time_hr())
-        ipcr_report.write(wrap_text('All possible PCR products are ' 
-                                    'filtered by amplicon size.\n'
-                                    'If --no-exonuclease option was ' 
-                                    'provided, products which may be formed by '
-                                    'primers with ' 
-                                    "mismatches on 3'-end are ignored.\n"
-                                    'Quantities of the remaining products ' 
-                                    'are estimated using equilibrium equations '
-                                    'and current PCR parameters.\n\n'))
-        #filter parameters
-        ipcr_report.write(self._PCR_Simulation.format_report_header())
-        if self._max_mismatches != None:
-            ipcr_report.write('Number of mismatches allowed: %d\n\n' % self._max_mismatches)
-        #if no PCR products have been found
-        if not self._PCR_Simulation:
-            ipcr_report.write(hr(' No PCR products have been found ', symbol='!'))
-            ipcr_report.close()
-            return
-        #else...
-        ipcr_report.write(self._PCR_Simulation.format_quantity_explanation())
+    def _format_header(self):
+        header =  wrap_text('All possible PCR products are ' 
+                            'filtered by amplicon size.\n'
+                            'If --no-exonuclease option was ' 
+                            'provided, products which may be formed by '
+                            'primers with ' 
+                            "mismatches on 3'-end are ignored.\n"
+                            'Quantities of the remaining products ' 
+                            'are estimated using equilibrium equations '
+                            'and current PCR parameters.\n\n')
+        header += iPCR_Base._format_header(self)
+        header += self._PCR_Simulation.format_report_header()
+        return header
+    #end def
+    
+    
+    def _format_report_body(self):
+        body = ''
         #PCR products by hit 
         if len(self._PCR_Simulation.hits()) == 1:
             #all products histogram
             hit = self._PCR_Simulation.hits()[0]
-            ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-            ipcr_report.write(self._PCR_Simulation.per_hit_header(hit))
-            ipcr_report.write(self._PCR_Simulation.per_hit_histogram(hit))
-            ipcr_report.write('\n')
-            ipcr_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
-            ipcr_report.write(self._PCR_Simulation.per_hit_electrophoresis(hit))
+            body += hr(' histogram of all possible PCR products ', symbol='=')
+            body += self._PCR_Simulation.per_hit_header(hit)
+            body += self._PCR_Simulation.per_hit_histogram(hit)
+            body += '\n'
+            body += hr(' electrophorogram of all possible PCR products ', symbol='=')
+            body += self._PCR_Simulation.per_hit_electrophoresis(hit)
         else:
             #all products histogram
-            ipcr_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-            ipcr_report.write(self._PCR_Simulation.all_products_histogram())
-            ipcr_report.write('\n\n\n')
+            body += hr(' histogram of all possible PCR products ', symbol='=')
+            body += self._PCR_Simulation.all_products_histogram()
+            body += '\n\n\n'
             #per hit histogram and phoresis
-            ipcr_report.write(hr(' histograms and electrophorograms of PCR products of each hit ', symbol='='))
-            ipcr_report.write(self._PCR_Simulation.all_graphs_grouped_by_hit())            
-        ipcr_report.close()
-        print '\niPCR report was written to:\n   ',self._PCR_report_filename
-        self._add_report('iPCR report', self._PCR_report_filename)
+            body += hr(' histograms and electrophorograms of PCR products of each hit ', symbol='=')
+            body += self._PCR_Simulation.all_graphs_grouped_by_hit()     
+        return body
     #end def
 #end class
 
@@ -184,21 +129,22 @@ if __name__ == '__main__':
     import cProfile
     import os, sys
     os.chdir('../')
+    TD_Functions.PCR_P.PCR_T = 53
+    TD_Functions.PCR_P.Mg    = 3e-3
+    TD_Functions.PCR_P.dNTP  = 300e-6
+    TD_Functions.PCR_P.DNA   = 1e-10
     fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'fwd_test', 'fwd_test'), 0.43e-6)
     rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'rev_test', 'rev_test'), 0.43e-6)
-    ipcr = iPCR('test-job', 
-               fwd_primer, 
-               rev_primer, 
+    ipcr = iPCR(5, 'test-job', 
+               [fwd_primer,
+               rev_primer],
                50, 
                1500, 
                40000,
                False, 
                33,
-               include_side_annealings=True)
-    TD_Functions.PCR_T = 53
-    TD_Functions.C_Mg  = 3e-3
-    TD_Functions.C_dNTP = 300e-6
-    TD_Functions.C_DNA = 1e-10
+               include_side_annealings=False)
+
     
 #    out_file = open('iPCR.out', 'w')
 #    stdout = sys.stdout 
@@ -217,7 +163,7 @@ if __name__ == '__main__':
 #'iadd-extend.profile')
     
     cProfile.run('''
-ipcr.find_possible_products(('ThGa.fa',), 5)
+ipcr.find_possible_products(('ThGa.fa',))
 ipcr.simulate_PCR()''',
     'iPCR.profile')
     
@@ -226,4 +172,4 @@ ipcr.simulate_PCR()''',
     
     
     ipcr.write_products_report()
-    ipcr.write_PCR_report()
+    ipcr.write_report()

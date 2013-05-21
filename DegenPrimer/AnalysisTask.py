@@ -5,7 +5,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -30,15 +30,16 @@ from multiprocessing import Queue
 from multiprocessing.managers import BaseManager
 from threading import Thread
 from contextlib import contextmanager
-from DegenPrimer import TD_Functions    
-from DegenPrimer.TD_Functions import format_PCR_conditions
-from DegenPrimer.BlastPrimers import BlastPrimers
-from DegenPrimer.SecStructures import AllSecStructures
-from DegenPrimer.StringTools import hr, wrap_text, time_hr, print_exception
-from DegenPrimer.SeqDB import SeqDB
-from DegenPrimer.iPCR import iPCR
+import TD_Functions
+from PrimerTaskBase import PrimerTaskBase
+from BlastPrimers import BlastPrimers
+from SecStructures import AllSecStructures
+from StringTools import hr, wrap_text, time_hr, print_exception
+from SeqDB import SeqDB
+from iPCR import iPCR
 try:
     from Bio import SeqIO
+#    from Bio.SeqUtils import GC
 except ImportError:
     print'The BioPython must be installed in your system.'
     raise
@@ -160,7 +161,7 @@ def _subroutine(func, args, queue, p_entry, p_name=None):
 #end def
 
 
-class DegenPrimerPipeline(object):
+class AnalysisTask(PrimerTaskBase):
     '''This class gathers all calculations in a single pipeline with 
     parallelized subroutines for CPU-intensive computations.'''
     
@@ -169,12 +170,10 @@ class DegenPrimerPipeline(object):
     
 
     def __init__(self):
+        PrimerTaskBase.__init__(self)
         self._subroutines = [] #list of launched processes with their managers and output queues
         self._terminated  = False #flag which is set when pipeline is terminated
     #end def
-
-    def __del__(self):
-        self.terminate()
 
 
     def terminate(self):
@@ -209,42 +208,32 @@ class DegenPrimerPipeline(object):
         #reset global state of the module
         self._terminated  = False
         self._subroutines = []
-        
-        #set job ID and primers list
-        primers = args.primers
-        job_id  = args.job_id
-        
-        #set concentrations
-        TD_Functions.C_Na   = args.Na
-        TD_Functions.C_Mg   = args.Mg
-        TD_Functions.C_dNTP = args.dNTP
-        TD_Functions.C_DNA  = args.DNA
-        TD_Functions.C_DMSO = args.DMSO
-        TD_Functions.PCR_T  = args.PCR_T
-        
-        #check configuration
-        if not args.check_configuration(): return False
-        #save the configuration only after preliminary checks
-        args.save_configuration()
-        print ''
-        #----------------------------------------------------------------------#
-        
+
         #zero time, used to calculate elapsed time in the end
         time0 = time()
         
-        #save primers 
-        if not self._save_primers(primers, job_id): return False
+        #set PCR parameters
+        TD_Functions.PCR_P.set(args.options)
         
-        fwd_primer  = primers[0]
-        rev_primer  = primers[1]
+        #calculate primers' Tm
+        for primer in args.primers: primer.calculate_Tms()
+        
+        #save primers 
+        if not self._save_primers(args.primers): return False
         #----------------------------------------------------------------------#
+        
+#        #if only_tm flag is set, report Tm and exit#
+#        if args.only_tm:
+#            for primer in args.primers:
+#                print 'Tm, %f, GC, %f' % (primer.Tm_mean, GC(primer.master_sequence.seq)) 
+#            return True
     
         #following computations are CPU intensive, so they need parallelization#
         #check primers for hairpins, dimers and cross-dimers
         with capture_to_queue() as out:
             p_entry = self._generate_subroutine_entry(out.queue)
             p_entry['manager'].start()
-        all_sec_structures  = p_entry['manager'].AllSecStructures(fwd_primer, rev_primer)
+        all_sec_structures  = p_entry['manager'].AllSecStructures(args.primers)
         side_reactions      = all_sec_structures.reactions()
         side_concentrations = all_sec_structures.concentrations()
         _subroutine(all_sec_structures.calculate_equilibrium, None, out.queue, p_entry,
@@ -258,8 +247,9 @@ class DegenPrimerPipeline(object):
             with capture_to_queue() as out:
                 p_entry = self._generate_subroutine_entry(out.queue)
                 p_entry['manager'].start()
-            ipcr = p_entry['manager'].iPCR(job_id, 
-                                           fwd_primer, rev_primer, 
+            ipcr = p_entry['manager'].iPCR(args.max_mismatches,
+                                           args.job_id, 
+                                           args.primers, 
                                            args.min_amplicon, 
                                            args.max_amplicon, 
                                            args.polymerase, 
@@ -267,13 +257,14 @@ class DegenPrimerPipeline(object):
                                            args.cycles,
                                            side_reactions, 
                                            side_concentrations,
-                                           args.analyze_all_annealings)
+                                           args.analyse_all_annealings)
             #connect to sequence database
             seq_files = []
             if args.sequence_db: seq_files.append(args.sequence_db)
             else: seq_files = args.fasta_files
-            _subroutine(ipcr.find_and_analyze, 
-                        (seq_files, args.max_mismatches,), out.queue, p_entry,
+            _subroutine(ipcr.find_and_analyse, 
+                        (seq_files, 
+                         args.use_sequences), out.queue, p_entry,
                         'Simulate PCR using possible products found in provided sequences.')
         #----------------------------------------------------------------------#
         
@@ -282,8 +273,8 @@ class DegenPrimerPipeline(object):
         with capture_to_queue() as out:
             p_entry = self._generate_subroutine_entry(out.queue)
             p_entry['manager'].start()
-        blast_primers = p_entry['manager'].BlastPrimers(job_id, 
-                                                        fwd_primer, rev_primer, 
+        blast_primers = p_entry['manager'].BlastPrimers(args.job_id, 
+                                                        args.primers, 
                                                         args.min_amplicon, 
                                                         args.max_amplicon, 
                                                         args.polymerase, 
@@ -291,7 +282,7 @@ class DegenPrimerPipeline(object):
                                                         args.cycles,
                                                         side_reactions, 
                                                         side_concentrations,
-                                                        args.analyze_all_annealings)
+                                                        args.analyse_all_annealings)
         #if --do-blast flag was provided, make an actual query
         if args.do_blast:
             #construct Entrez query
@@ -317,20 +308,19 @@ class DegenPrimerPipeline(object):
         
         
         #collect subroutines output, write it to stdout, wait for them to finish
-        try: self._listen_subroutines()
-        except: self.terminate()
+        self._listen_subroutines()
         #if subroutines have been terminated, abort pipeline
         if self._terminated:
-            print '\nAborted.' 
-            return False
+            print '\nDegenPrimer Pipeline aborted.' 
+            return -1
         #----------------------------------------------------------------------#
         
         
         #---------------------now write all the reports------------------------#
         #write full and short reports
         print ''
-        structures_full_report_filename  = job_id+'-full-report.txt'
-        structures_short_report_filename = job_id+'-short-report.txt'
+        structures_full_report_filename  = args.job_id+'-full-report.txt'
+        structures_short_report_filename = args.job_id+'-short-report.txt'
         try:
             full_structures_file  = open(structures_full_report_filename, 'w')
             short_structures_file = open(structures_short_report_filename, 'w')
@@ -340,7 +330,7 @@ class DegenPrimerPipeline(object):
         else:
             #write header
             for f in (full_structures_file, short_structures_file):
-                f.write(self._format_primers_report_header(primers, args.polymerase))
+                f.write(self._format_primers_report_header(args.primers, args.polymerase))
             #write secondary structures information
             full_structures_file.write(all_sec_structures.print_structures())
             short_structures_file.write(all_sec_structures.print_structures_short())
@@ -353,14 +343,14 @@ class DegenPrimerPipeline(object):
         #write iPCR report if it is available
         if ipcr != None and ipcr.have_results():
             ipcr.write_products_report()
-            ipcr.write_PCR_report()
+            ipcr.write_report()
             for report in ipcr.reports():
                 args.register_report(**report)
         
         #write BLAST reports
         if blast_primers.have_results():
             blast_primers.write_hits_report()
-            blast_primers.write_PCR_report()
+            blast_primers.write_report()
             for report in blast_primers.reports():
                 args.register_report(**report)
                     
@@ -373,31 +363,29 @@ class DegenPrimerPipeline(object):
         #terminate managers and delete queues
         self.terminate()
         
-        print 'Done. Total elapsed time: %s' % timedelta(seconds=time()-time0)
-        return True
+        print '\nDone. Total elapsed time: %s' % timedelta(seconds=time()-time0)
+        return 1
     #end def
 
 
     @classmethod
-    def _save_primers(cls, primers, job_id):
-        fmt_filename = job_id+'.'+cls._fmt
-        primers_list = list()
+    def _save_primers(cls, primers):
         for primer in primers:
             if not primer: continue
-            primers_list += primer.seq_records
-        try:
-            SeqIO.write(primers_list, fmt_filename, cls._fmt)
-        except Exception, e:
-            print 'Failed to write unambiguous primers to:\n   %s' % fmt_filename
-            print_exception(e)
-            return False 
-        print '\nUnambiguous primers were written to:\n   %s' % fmt_filename
+            filename = primer.id+'.'+cls._fmt
+            try:
+                SeqIO.write(primer.all_seq_records, filename, cls._fmt)
+            except Exception, e:
+                print '\nFailed to write %s primer and it\'s unambiguous components to:\n   %s' % (primer.id, filename)
+                print_exception(e)
+                return False 
+            print '\n%s primer and it\'s unambiguous components were written to:\n   %s' % (primer.id, filename)
         return True
     #end def
     
     
-    @classmethod
-    def _print_queue(cls, queue):
+    @staticmethod
+    def _print_queue(queue):
         output = []
         while True:
             try: output.append(queue.get(False))
@@ -423,27 +411,28 @@ class DegenPrimerPipeline(object):
                     else:
                         p_entry['process'].join()
                         p_entry['process'] = None
-                        print ''.join(message for message in p_entry['output'])
+                        print ''.join(unicode(message) for message in p_entry['output'])
                     continue
                 except IOError, e:
                     if e.errno == errno.EINTR:
                         processes_alive = True
                         continue
                     else:
-                        print 'Unhandled IOError:', e.message
-                        raise
+                        print '\nAnalysisTask._listen_subroutines:'
+                        print_exception(e)
+                        self.terminate()
                 except Exception, e:
-                    print 'Unhandled Exception:'
+                    print '\nAnalysisTask._listen_subroutines:'
                     print_exception(e)
-                    raise
+                    self.terminate()
                 processes_alive = True
             if not processes_alive: break
             sleep(0.1)
     #end def
     
     
-    @classmethod
-    def _format_primers_report_header(cls, primers, polymerase):
+    @staticmethod
+    def _format_primers_report_header(primers, polymerase):
         header_string  = ''
         header_string += time_hr()
         header_string += wrap_text('For each degenerate primer provided, a set '
@@ -458,7 +447,7 @@ class DegenPrimerPipeline(object):
                                    'provided, it is treated as a set with a '
                                    'single element.\n\n')
         header_string += hr(' PCR conditions ')
-        header_string += format_PCR_conditions(primers, polymerase)+'\n'
+        header_string += TD_Functions.format_PCR_conditions(primers, polymerase)+'\n'
         header_string += hr(' primers and their melting temperatures ')
         for primer in primers:
             header_string += repr(primer) + '\n'

@@ -8,7 +8,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -33,6 +33,7 @@ def print_exception(e):
     print '\n%s: error code %s; %s\n' % (type(e).__name__,
                                          hasattr(e, 'errno') and str(e.errno) or 'N/A',  
                                          e.message or 'no message.')
+#end def
     
     
 def random_text(length):
@@ -92,17 +93,21 @@ def line_by_line(texts, widths, divider='|', filler=' ', j_down=False, j_center=
 #end if
 
 
-def print_dict(_dict, delimiter=':'):
+def print_dict(_dict, header=None, delimiter=':'):
     if not _dict: return ''
-    max_key_len   = max(len(key) for key in _dict.keys())
-    max_value_len = max(len(str(val)) for val in _dict.values())
+    keys   = _dict.keys() + [header[0],] if header else _dict.keys()
+    values = _dict.values() + [header[1],] if header else _dict.values()
+    max_key_len   = max(len(str(key)) for key in keys)
+    max_value_len = max(len(str(val)) for val in values)
+    dict_items    = _dict.items()
+    dict_items.sort(key=lambda x: x[0])
+    if header: dict_items.insert(0, header)
     dict_str = ''
-    for key in _dict:
-        val = _dict[key]
-        dict_str += '%s%s %s%s %s\n' % (key,
-                                        max_key_len-len(key), 
+    for key, val in dict_items:
+        dict_str += '%s%s %s%s %s\n' % (str(key),
+                                        ' '*(max_key_len-len(str(key))), 
                                         delimiter,
-                                        max_value_len-len(str(val)),
+                                        ' '*(max_value_len-len(str(val))),
                                         str(val))
     return dict_str
 #end def
@@ -132,11 +137,11 @@ def print_table(table, delimiter=':'):
 def format_quantity(quantity, unit='U'):
     '''Given quantity in units, return it's string representation using 
     prefixes m, u, n, p, etc.'''
-    if not quantity: return '0.0  %s' % unit
-    if quantity < 0: return 'N/A  %s' % unit
+    if quantity is None or quantity < 0: return 'N/A  %s' % unit
+    if quantity == 0: return '0.0  %s' % unit
     mag = -1*log(quantity, 10)
-    if 0  <  mag < 1:  return '%.1f  %s' % (quantity,      unit)
-    if 1  <= mag < 3:  return '%.1f m%s' % (quantity*1e3,  unit)
+    if       mag < 0:  return '%.1f  %s' % (quantity,      unit)
+    if 0  <= mag < 3:  return '%.1f m%s' % (quantity*1e3,  unit)
     if 3  <= mag < 6:  return '%.1f u%s' % (quantity*1e6,  unit)
     if 6  <= mag < 9:  return '%.1f n%s' % (quantity*1e9,  unit)
     if 9  <= mag < 12: return '%.1f p%s' % (quantity*1e12, unit)

@@ -7,7 +7,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -22,14 +22,17 @@ Created on Dec 15, 2012
 
 from ReporterInterface import ReporterInterface
 from PCR_Simulation import PCR_Simulation
+from StringTools import hr, time_hr
 
 
 class iPCR_Interface(ReporterInterface):
     '''Interface class to create facilities which use PCR_Simulation'''
 
-    def __init__(self, 
-                 fwd_primer, 
-                 rev_primer, 
+    _PCR_report_suffix = 'iPCR'
+
+    def __init__(self,
+                 job_id,  
+                 primers, 
                  min_amplicon, 
                  max_amplicon, 
                  polymerase, 
@@ -40,11 +43,15 @@ class iPCR_Interface(ReporterInterface):
                  include_side_annealings=False):
         ReporterInterface.__init__(self)
         #parameters
-        self._fwd_primer          = fwd_primer
-        self._rev_primer          = rev_primer
-        self._primers             = []
-        if fwd_primer: self._primers.append(fwd_primer)
-        if rev_primer: self._primers.append(rev_primer)
+        try:
+            if len(primers) == 0: 
+                raise ValueError('iPCR_Interface: no primers given.')
+        except TypeError:
+            raise TypeError(('iPCR_Interface: primers should be an iterable. '
+                            'Given %s instead') % str(primers))
+        
+        self._job_id              = job_id
+        self._primers             = primers
          
         self._min_amplicon        = min_amplicon
         self._max_amplicon        = max_amplicon
@@ -58,7 +65,9 @@ class iPCR_Interface(ReporterInterface):
         self._side_concentrations = side_concentrations
         self._include_side_annealings = include_side_annealings
         
-        self._PCR_report_filename = None
+        #report files
+        self._PCR_report_filename = '%s-%s-report.txt' % (self._job_id, 
+                                                          self._PCR_report_suffix)
         self._possible_products   = None
         self._have_results        = False
     #end def
@@ -85,6 +94,32 @@ class iPCR_Interface(ReporterInterface):
     def have_results(self): return self._have_results
     
     
-    #pure virtual
+    #virtual
     def simulate_PCR(self): pass
+    
+    def _format_header(self): return ''
+    
+    def _format_report_body(self): return ''
+    
+    
+    def write_report(self):
+        if not self._have_results: return
+        #open report file
+        report = self._open_report(self._PCR_report_suffix, self._PCR_report_filename)
+        if not report: return
+        #header
+        report.write(time_hr())
+        report.write(self._format_header())
+        #if no PCR products have been found
+        if not self._have_results:
+            report.write(hr(' No PCR products have been found ', symbol='!'))
+            report.close()
+            return
+        #report body
+        report.write(self._format_report_body())
+        report.close()
+        print '\n%s report was written to:\n   %s' % (self._PCR_report_suffix,
+                                                      self._PCR_report_filename)
+        self._add_report(self._PCR_report_suffix.replace('_', ' '), self._PCR_report_filename)
+    #end def
 #end class

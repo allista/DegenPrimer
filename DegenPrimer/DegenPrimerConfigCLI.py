@@ -7,7 +7,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -24,6 +24,19 @@ Created on Jul 1, 2012
 import argparse
 from DegenPrimerConfig import DegenPrimerConfig
 
+
+class BoolAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values is None: 
+            setattr(namespace, self.dest, True)
+            return
+        bool_values = []
+        for val in values:
+            bool_values.append(True if val == 'True' else False)
+        setattr(namespace, self.dest, bool_values)
+#end class
+
+                
 class DegenPrimerConfigCLI(DegenPrimerConfig):
     '''Command line configuration parser for dege_primer CLI'''
 
@@ -47,34 +60,31 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
                                 '(NOTE, that the "--do-blast" option '
                                 'always must be set explicitly on the command line.)')
         #all other options
-        arg_groups = dict()
-        for option in self._options:
-            if option['section'] not in arg_groups:
-                arg_groups[option['section']] = self._parser.add_argument_group(self._groups[option['section']])
-            if option['py_type'] == bool:
-                arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], 
-                                                           metavar='True/False', choices=('True', 'False'), help=option['help'])
-            else:
-                arg_groups[option['section']].add_argument(*option['args'], dest=option['option'], nargs=option['nargs'], 
-                                                           type=option['py_type'], metavar=option['metavar'], help=option['help'])
+        for group in self._option_groups:
+            if group.is_mutex:
+                arg_group = self._parser.add_mutually_exclusive_group()
+            else: arg_group = self._parser.add_argument_group(group.desc)
+            for option in group.options:
+                if option.is_compound:
+                    arg_group.add_argument(*option.args, dest=option.dest, nargs=option.nargs, action=option.action, 
+                                           metavar=option.metavar, help=option.desc, required=option.required)
+                elif option.py_type == bool:
+                    arg_group.add_argument(*option.args, dest=option.dest, nargs=option.nargs, action=BoolAction,
+                                           metavar=option.metavar, choices=('True', 'False'), help=option.desc, required=option.required)
+                else:
+                    arg_group.add_argument(*option.args, dest=option.dest, nargs=option.nargs,
+                                           type=option.py_type, metavar=option.metavar, help=option.desc, required=option.required)
     #end def
     
     
     def _override_option(self, option):
         value_override = None
-        if hasattr(self._args, option['option']):
-            value_override = getattr(self._args, option['option'])
+        if hasattr(self._args, option.dest):
+            value_override = getattr(self._args, option.dest)
             #single values should not be lists
-            if not self._multiple_args(option) \
+            if not option.is_multi and not option.is_poly \
             and type(value_override) == list:
                 value_override = value_override[0]
-            #bool values should be True or False
-            if value_override != None \
-            and option['py_type'] == bool:
-                if type(value_override) == str:
-                    value_override = value_override == 'True'
-                elif type(value_override) != bool:
-                    value_override = bool(value_override)
         return value_override
     #end def
     
@@ -103,5 +113,5 @@ if __name__ == '__main__':
     conf = DegenPrimerConfigCLI()
     conf.parse_configuration()
     print conf
-    print 'job_id:', conf.job_id
+    conf.job_id = 'test'
     conf.save_configuration()

@@ -1,5 +1,10 @@
-- Add some progress bar.
-- Add search capability to the GUI view tabs.
+FIX:
+- installed variant of the program complains about UnicodeDecode errors
+
+- Load results previous when loading config
+
+? Add some progress bar.
+? Add search capability to the GUI view tabs.
 ? Make Entrez query of PCR products.
   
 ? take into account primer-dimers synthesis.

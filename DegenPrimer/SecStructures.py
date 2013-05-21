@@ -5,7 +5,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -166,8 +166,7 @@ class Duplex(object):
         if not dimer: 
             self._dimer    = Dimer.from_sequences(fwd_seq, rev_seq)
         else: self._dimer  = dimer
-        self._dimer.dG     = dimer_dG_corrected(self._dimer, fwd_seq, rev_seq)
-        self._K            = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
+        self.recalculate()
     #end def
     
     def __nonzero__(self): return bool(self._dimer)
@@ -215,7 +214,8 @@ class Duplex(object):
                'seq2'   :str(self._rev_sequence)[::-1]}
         #dG
         if self._dimer.dG != None:
-            duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, self._dimer.dG)
+            duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_P.PCR_T, 
+                                                              self._dimer.dG)
         #conversion degree
         if self._dimer.conversion_degree != None:
             duplex_string += 'conversion degree = %.4f%%\n' % (self._dimer.conversion_degree*100)
@@ -223,6 +223,14 @@ class Duplex(object):
     #end def
     
     def __repr__(self): return str(self)
+    
+    def recalculate(self):
+        self._dimer.dG = dimer_dG_corrected(self._dimer, 
+                                            self._fwd_sequence,
+                                            self._rev_sequence)
+        self._K        = equilibrium_constant(self._dimer.dG, 
+                                              TD_Functions.PCR_P.PCR_T)
+    #end def
     
     @property
     def fwd_seq(self): return str(self._fwd_sequence)
@@ -290,8 +298,7 @@ class Duplex(object):
         rev_matches = self._dimer.rev_matches
         self._dimer = Dimer(fwd_matches[:-_3_matches],
                             rev_matches[:-_3_matches])
-        self._dimer.dG = dimer_dG_corrected(self._dimer, self._fwd_sequence, self._rev_sequence)
-        self._K        = equilibrium_constant(self._dimer.dG, TD_Functions.PCR_T)
+        self.recalculate()
         return True
     #end def
 #end class
@@ -358,14 +365,14 @@ class SecStructures(object):
             if self._seq1_dimers:
                 for d_hash in self._seq1_dimers:
                     D = self._seq1_dimers[d_hash]
-                    reactions[d_hash] = Equilibrium.compose_reaction(equilibrium_constant(D.dG, TD_Functions.PCR_T), 
+                    reactions[d_hash] = Equilibrium.compose_reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
                                                                      str(self._seq1), 
                                                                      None, 
                                                                      '2A')
             if self._seq1_hairpins:
                 for h_hash in self._seq1_hairpins:
                     H = self._seq1_hairpins[h_hash]
-                    reactions[h_hash] = Equilibrium.compose_reaction(equilibrium_constant(H.dG, TD_Functions.PCR_T), 
+                    reactions[h_hash] = Equilibrium.compose_reaction(equilibrium_constant(H.dG, TD_Functions.PCR_P.PCR_T), 
                                                                      str(self._seq1), 
                                                                      None, 
                                                                      'A')
@@ -373,7 +380,7 @@ class SecStructures(object):
             if self._cross_dimers:
                 for d_hash in self._cross_dimers:
                     D = self._cross_dimers[d_hash]
-                    reactions[d_hash] = Equilibrium.compose_reaction(equilibrium_constant(D.dG, TD_Functions.PCR_T), 
+                    reactions[d_hash] = Equilibrium.compose_reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
                                                                      str(self._seq1), 
                                                                      str(self._seq2), 
                                                                      'AB')
@@ -773,7 +780,7 @@ class SecStructures(object):
                'rev'    :str((seq[break_pos:])[::-1])}
         #dG
         if hairpin.dG != None:
-            hairpin_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_T, hairpin.dG)
+            hairpin_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_P.PCR_T, hairpin.dG)
         #conversion degree
         if hairpin.conversion_degree != None:
             hairpin_string += 'conversion degree = %.4f%%\n' % (hairpin.conversion_degree*100)
@@ -833,30 +840,27 @@ class AllSecStructures(object):
     Given two lists of non-degenerate primers calculate all possible secondary 
     structures (hairpins, dimers, cross-dimers) and equilibrium state between them.
     '''
-    def __init__(self, fwd_primer, rev_primer):
+    def __init__(self, primers):
         #initial check
-        if not fwd_primer and not rev_primer:
-            raise ValueError('AllSecStructures:__init__: at least one primer should be provided.')
-        self._fwd_primer = fwd_primer
-        self._rev_primer = rev_primer
+        try:
+            if len(primers) == 0: 
+                raise ValueError('AllSecStructures: no primers given.')
+        except TypeError:
+            raise TypeError(('AllSecStructures: primers should be an iterable. '
+                            'Given %s instead') % str(primers))
         #all primers list
-        self._all_primers = list()
-        if fwd_primer: self._all_primers += fwd_primer.seq_records
-        if rev_primer: self._all_primers += rev_primer.seq_records
+        self._primers     = primers
+        self._all_primers = []
+        for primer in self._primers:
+            self._all_primers.extend(primer.seq_records)
         #reactions
         self._reactions = dict()
         #secondary structures and reactions of their formation
-        self._fwd_self = []
-        self._rev_self = []
-        if self._fwd_primer:
+        self._self = []
+        for primer in self._primers:
             #self-dimers and hairpins
-            self._fwd_self = [SecStructures(p) for p in self._fwd_primer.seq_records]
-            for struct in self._fwd_self:
-                self._reactions.update(struct.compose_reactions())
-        if self._rev_primer:
-            #self-dimers and hairpins
-            self._rev_self = [SecStructures(p) for p in self._rev_primer.seq_records]
-            for struct in self._rev_self:
+            self._self.append([SecStructures(p) for p in primer.seq_records])
+            for struct in self._self[-1]:
                 self._reactions.update(struct.compose_reactions())
         #cross-dimers
         self._cross = []
@@ -868,12 +872,9 @@ class AllSecStructures(object):
             self._reactions.update(struct.compose_reactions())
         #concentrations
         self._concentrations = dict()
-        if self._fwd_primer:
-            self._concentrations.update(dict().fromkeys([p for p in self._fwd_primer.str_sequences], 
-                                                        self._fwd_primer.concentration))
-        if self._rev_primer:
-            self._concentrations.update(dict().fromkeys([p for p in self._rev_primer.str_sequences], 
-                                                        self._rev_primer.concentration))
+        for primer in self._primers:
+            self._concentrations.update(dict().fromkeys([p for p in primer.str_sequences], 
+                                                        primer.concentration))
         #equilibrium system
         self._equilibrium = None
         self._equilibrium_concentrations = None
@@ -898,7 +899,10 @@ class AllSecStructures(object):
             self._equilibrium_concentrations[primer] = self._concentrations[primer] - _C
         #set conversion degrees
         for r_hash in sol:
-            for struct in (self._fwd_self+self._rev_self+self._cross):
+            all_structs = []
+            for structs in self._self: all_structs.extend(structs)
+            all_structs.extend(self._cross)
+            for struct in all_structs:
                 if struct.set_conversion_degree(r_hash, sol[r_hash]): break
     #end def
     
@@ -916,16 +920,11 @@ class AllSecStructures(object):
     
     def print_structures(self, full=True):
         structures_string = ''
-        if self._fwd_self:
-            fwd_structs = self._print_structures(self._fwd_self, full)
-            if fwd_structs:
-                structures_string += hr(' secondary structures of forward primers ', '#')
-                structures_string += fwd_structs 
-        if self._rev_self:
-            rev_structs = self._print_structures(self._rev_self, full)
-            if rev_structs:
-                structures_string += hr(' secondary structures of reverse primers ', '#')
-                structures_string += rev_structs 
+        for i, primer in enumerate(self._primers):
+            structs = self._print_structures(self._self[i], full)
+            if structs:
+                structures_string += hr(' secondary structures of %s primers ' % primer.id, '#')
+                structures_string += structs 
         if self._cross:
             cross_structs = self._print_structures(self._cross, full)
             if cross_structs:
@@ -946,11 +945,11 @@ if __name__ == '__main__':
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
     from Primer import Primer
-    TD_Functions.PCR_T = 55
+    TD_Functions.PCR_P.PCR_T = 55
     
     fwd_primer  = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATCC').reverse_complement()), 0.9e-6)
     rev_primer  = Primer(SeqRecord(Seq('CAAGGGTTAGAAGCGGAAG').complement()), 0.9e-6)
-    all_structs = AllSecStructures(fwd_primer, rev_primer)
+    all_structs = AllSecStructures([fwd_primer, rev_primer])
 
     print all_structs.concentrations()
     print all_structs.reactions()

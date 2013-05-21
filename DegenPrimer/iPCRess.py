@@ -8,7 +8,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -321,10 +321,10 @@ if __name__ == '__main__':
                40000,
                False, 
                33)
-    TD_Functions.PCR_T = 58
-    TD_Functions.C_Mg  = 3e-3
-    TD_Functions.C_dNTP = 300e-6
-    TD_Functions.C_DNA = 1e-9
+    TD_Functions.PCR_P.PCR_T = 58
+    TD_Functions.PCR_P.Mg  = 3e-3
+    TD_Functions.PCR_P.dNTP = 300e-6
+    TD_Functions.PCR_P.DNA = 1e-9
     ipcr.write_program()
     ipcr.execute_program(('ThGa.fa',), 5)
     

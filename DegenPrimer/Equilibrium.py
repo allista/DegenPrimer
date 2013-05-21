@@ -8,7 +8,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -22,10 +22,9 @@ Created on Nov 25, 2012
 '''
 from scipy.optimize import fsolve
 from numpy.random import random_sample
-from MultiprocessingBase import MultiprocessingBase
 from time import time
 
-class Equilibrium(MultiprocessingBase):
+class Equilibrium(object):
     '''
     Calculate equilibrium parameters in a system of concurrent reactions.
     The system is defined as a dictionary of dicts: 
@@ -64,7 +63,6 @@ class Equilibrium(MultiprocessingBase):
     
 
     def __init__(self, reactions, concentrations, precision = 1e-10):
-        MultiprocessingBase.__init__(self)
         #system in parameters
         self._precision     = precision
         self.reactions      = reactions

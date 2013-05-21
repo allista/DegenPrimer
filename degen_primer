@@ -7,7 +7,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -29,17 +29,21 @@ from time import sleep
 from DegenPrimer.StringTools import hr, wrap_text
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
-from DegenPrimer.DegenPrimerPipeline import DegenPrimerPipeline
+from DegenPrimer.Pipeline import Pipeline
+from DegenPrimer.AnalysisTask import AnalysisTask
+from DegenPrimer.DBManagementTask import DBManagmentTask
+from DegenPrimer.OptimizationTask import OptimizationTask
 ###############################################################################
 
 #pipeline object
-degen_primer_pipeline = None
+pipeline = None
 
 _pid = -1
 def sig_handler(signal, frame):
     if _pid != os.getpid(): return
-    degen_primer_pipeline.terminate()
-    sleep(1)
+    if pipeline is not None:
+        pipeline.terminate()
+        sleep(1)
     sys.exit(1)
 #end def
 
@@ -48,7 +52,10 @@ if __name__ == '__main__':
     #set PID
     _pid = os.getpid()
     #initialize pipeline
-    degen_primer_pipeline = DegenPrimerPipeline()
+    pipeline = Pipeline()
+    pipeline.register_task(DBManagmentTask())
+    pipeline.register_task(OptimizationTask())
+    pipeline.register_task(AnalysisTask())
     #setup signal handler
     signal.signal(signal.SIGINT,  sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
@@ -67,14 +74,13 @@ if __name__ == '__main__':
         else: pass
     
     print ''
-    if not args.batch():
-        #single analysis mode
-        sys.exit(degen_primer_pipeline.run(args))
+    if not args.batch(): #single analysis mode
+        sys.exit(pipeline.run(args))
     else:
         #batch analysis mode
         print wrap_text('Batch mode enabled. All command-line arguments '
                         'except "--do-blast" are discarded.\n')
-        return_code = 0
+        exit_code = False
         for config_file in args.config_files:
             config = DegenPrimerConfig()
             try:
@@ -85,6 +91,6 @@ if __name__ == '__main__':
                 continue
             config.do_blast = args.do_blast
             print hr(' Repeating analysis for %s ' % config_file)
-            return_code |= degen_primer_pipeline.run(config)
+            exit_code |= pipeline.run(config)
             print hr('')
-        sys.exit(return_code)
+        sys.exit(not exit_code)

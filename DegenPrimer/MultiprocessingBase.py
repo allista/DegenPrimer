@@ -7,7 +7,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -85,6 +85,10 @@ class MultiprocessingBase(object):
     #end def
     
     
+    @classmethod
+    def _new_queue(cls): return mp.Queue()
+    
+    
     def _new_event(self):
         abort_event = mp.Event()
         self._abort_events.append(abort_event)
@@ -105,30 +109,20 @@ class MultiprocessingBase(object):
             if abort_event in self._abort_events:
                 self._abort_events.remove(abort_event)
     #end def
-    
-    
-    def _parallelize_functions(self, abort_e, timeout, func_list, *args):
-        @MultiprocessingBase._worker
-        def worker(abort_e, start, end, _func_list, args):
-            result = []
-            for fi in range(start,end):
-                if abort_e.is_set(): break
-                if args:
-                    result.append((fi, _func_list[fi](*args)))
-                else:
-                    result.append((fi, _func_list[fi]()))
-            return result
-        #end def
-        num_funcs  = len(func_list)
-        chunk_size = int(num_funcs/(self._cpu_count*2)+1)
-        results    = [0]*num_funcs
+
+
+    def _parallelize(self, abort_e, timeout, worker, work, *args):
+        #process work in chunks
+        work_len   = len(work)
+        chunk_size = int(work_len/(self._cpu_count*2)+1)
+        results    = [None]*work_len
         jobs       = []
         start      = 0
-        while start < num_funcs and not abort_e.is_set():
-            end   = min(start+chunk_size, num_funcs)
+        while start < work_len and not abort_e.is_set():
+            end   = min(start+chunk_size, work_len)
             queue = mp.Queue()
-            job   = mp.Process(target=worker, args=(queue, abort_e, start, end, 
-                                                    func_list, args))
+            job   = mp.Process(target=worker, args=(queue, abort_e, start, 
+                                                    work[start:end], args))
             job.start()
             jobs.append((job,queue))
             self._all_jobs.append(jobs[-1])
@@ -143,6 +137,38 @@ class MultiprocessingBase(object):
         #else, cleanup
         self._clean_jobs(jobs)
         return results
+    #end def
+    
+    
+    def _parallelize_functions(self, abort_e, timeout, func_list, *args):
+        @MultiprocessingBase._worker
+        def worker(abort_e, offset, _func_list, args):
+            result = []
+            for fi, func in enumerate(_func_list):
+                if abort_e.is_set(): break
+                if args:
+                    result.append((offset+fi, func(*args)))
+                else:
+                    result.append((offset+fi, func()))
+            return result
+        #end def
+        return self._parallelize(abort_e, timeout, worker, func_list, *args)
+    #end def
+    
+    
+    def _parallelize_work(self, abort_e, timeout, func, data, *args):
+        @MultiprocessingBase._worker
+        def worker(abort_e, offset, data, args):
+            result = []
+            for i, item in enumerate(data):
+                if abort_e.is_set(): break
+                if args:
+                    result.append((offset+i, func(item, *args)))
+                else:
+                    result.append((offset+i, func(item)))
+            return result
+        #process matches in chunks
+        return self._parallelize(abort_e, timeout, worker, data, *args)
     #end def
     
     

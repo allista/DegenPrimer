@@ -5,7 +5,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -42,10 +42,14 @@ class SeqDB(object):
   
     
     def __init__(self):
+        self._db_name  = None
         self._db       = None
         self._cursor   = None
         self._searcher = SearchEngine() 
     #end def
+    
+    @property
+    def name(self): return self._db_name
     
     def __nonzero__(self):
         return not self._cursor is None 
@@ -70,6 +74,7 @@ class SeqDB(object):
         #init tables
         self._cursor.execute(self._sequences_schema)
         self._db.commit()
+        self._db_name = filename
     #end def
     
     
@@ -83,6 +88,7 @@ class SeqDB(object):
             (sequence.description, sequence.format('fasta'), len(sequence)))
         self._db.commit()
         self._cursor.execute('PRAGMA cache_size=64000')
+        self._db.commit()
     #end def
     
     
@@ -93,38 +99,74 @@ class SeqDB(object):
     #end def
     
     
-    def create_db_from_files(self, db_filename, files):
-        if not files: return False
+    def _get_sequences(self, files):
+        if not files: return None
         sequences = []
         for filename in files:
             if os.path.isfile(filename):
                 sequences += SeqIO.parse(filename, 'fasta', IUPAC.unambiguous_dna)
-            else: print '\nSeqDB: no such file %s' % filename
+            else: print '\nSeqDB._get_sequences: no such file:\n%s' % filename
         if not sequences:
             print '\nNo sequences were found in given fasta files.' 
-            return False
-        self.create_db(db_filename, sequences)
-        return True
+            return None
+        return sequences
     #end def
     
     
+    def create_db_from_files(self, db_filename, files):
+        sequences = self._get_sequences(files)
+        if sequences:
+            self.create_db(db_filename, sequences)
+            return True
+        return False
+    #end def
+    
+    
+    def add_files_to_db(self, files):
+        if not files or not self._db: return False
+        sequences = self._get_sequences(files)
+        if sequences: 
+            self._populate_db(sequences)
+            return True
+        return False
+    #end def
+    
+    
+    def del_from_db(self, ids):
+        if self._db is None or not ids: return False
+        sql_string = '''
+        DELETE FROM sequences
+        WHERE id IN (%s)
+        ''' % ','.join(['?']*len(ids))
+        self._cursor.execute(sql_string, ids)
+        self._db.commit()
+        return True
+    #end def
+        
+    
     def connect(self, filename):
         '''Connect to an existent file database of sequences.'''
+        if self._db is not None:
+            print '\nSeqDB.connect: already connected to a database. Call close() first.'
+            return False
         if filename != ':memory:' and not os.path.isfile(filename):
-            print '\nNo such file: %s' % filename 
+            print '\nSeqDB.connect: no such file:\n%s' % filename 
             return False
         self._db = sqlite3.connect(filename, isolation_level='DEFERRED')
         self._cursor = self._db.cursor()
         self._configure_connection()
+        self._db_name = filename
         return True
     #end def
     
     
     def close(self):
-        if not self._db is None: return
+        if self._db is None: return
+        self._db.commit()
         self._db.close()
-        self._db = None
-        self._cursor = None
+        self._db      = None
+        self._cursor  = None
+        self._db_name = None
     #end def
     
     

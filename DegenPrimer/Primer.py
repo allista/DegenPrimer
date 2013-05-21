@@ -8,7 +8,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -54,26 +54,26 @@ class Primer(object):
 
     
     def __init__(self, seq_rec, concentration):
-        self._sequence      = seq_rec
+        self._seq_record    = seq_rec
         self._concentration = concentration
         self._unambiguous   = self.generate_unambiguous(seq_rec)
         #annealing temperatures
         self._Tm_max  = None
         self._Tm_mean = None
         self._Tm_min  = None
-        self._calculate_Tms()
+        self.calculate_Tms()
     #end def
 
-    def __len__(self): return len(self._sequence)
+    def __len__(self): return len(self._seq_record)
 
     def __contains__(self, seq):
         return str(seq) in self.str_sequences
 
     def __nonzero__(self):
-        return len(self._sequence.seq) != 0
+        return len(self._seq_record.seq) != 0
 
     def __str__(self):
-        return str(self._sequence.seq)
+        return str(self._seq_record.seq)
     
     def __repr__(self):
         rep  = '%(id)s:    %(len)db    5\'-%(seq)s-3\'\n'
@@ -87,8 +87,8 @@ class Primer(object):
             rep += '   Tm:       %(Tm_max).1f\n'
             rep += '   Concentration: %(cons)s'
         return rep % {'id':      self.id,
-                      'seq':     str(self._sequence.seq),
-                      'len':     len(self._sequence.seq),
+                      'seq':     str(self._seq_record.seq),
+                      'len':     len(self._seq_record.seq),
                       'unambs':  len(self._unambiguous),
                       'Tm_max':  self._Tm_max,
                       'Tm_mean': self._Tm_mean,
@@ -97,7 +97,7 @@ class Primer(object):
     #end def
 
 
-    def _calculate_Tms(self):
+    def calculate_Tms(self):
         if self.self_complement: return
         temperatures  = []
         concentration = self.concentration 
@@ -142,20 +142,32 @@ class Primer(object):
     #end def
     
     @property
-    def id(self): return self._sequence.id
+    def id(self): return self._seq_record.id
 
     @property
-    def master_sequence(self): return self._sequence
+    def master_sequence(self): return self._seq_record
 
     @property
     def total_concentration(self): return self._concentration
+    
+    @total_concentration.setter
+    def total_concentration(self, C): 
+        self._concentration = C
+        self.calculate_Tms()
+    #end def
 
+    @property
+    def all_seq_records(self):
+        if self._unambiguous:
+            return [self._seq_record,] + self._unambiguous
+        else: return [self._seq_record,]
+    #end def
 
     @property
     def seq_records(self):
         if self._unambiguous:
             return self._unambiguous
-        else: return [self._sequence,]
+        else: return [self._seq_record,]
     #end def
     
     @property
@@ -188,7 +200,7 @@ class Primer(object):
     @property
     def self_complement(self):
         '''return True if sequence is self-complement'''
-        return str(self._sequence.seq) == str(self._sequence.seq.reverse_complement())
+        return str(self._seq_record.seq) == str(self._seq_record.seq.reverse_complement())
     
 
     def has_subsequence(self, seq):
@@ -261,7 +273,7 @@ class Primer(object):
 #end class
 
 
-def load_sequence(seq_string, rec_id=None, desc=None):
+def load_sequence(seq_string, rec_id='', desc=''):
     '''generate a SeqRecord object with sequence from a raw string or a file'''
     #check seq_string to be a sequence
     _is_sequence  = True
@@ -293,13 +305,12 @@ def load_sequence(seq_string, rec_id=None, desc=None):
                               'and FASTA files have .fa, .faa or '
                               '.fasta extension.') % filename)
         #parse file
-        print '\nParsing', filename
         #only the first record is loaded
         try:
             record = SeqIO.parse(filename, filetype).next().upper()
         except Exception, e:
             print_exception(e)
-            raise ValueError('Primer.load_sequence: unable parse %s.' % filename)
+            raise ValueError('Primer.load_sequence: unable to parse %s.' % filename)
         #set record id, name and description
         if rec_id: 
             record.id = rec_id

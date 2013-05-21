@@ -8,7 +8,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -50,10 +50,10 @@ class BlastPrimers(iPCR_Interface):
     no_gaps  =  True   #no gaps in primers!
     spacer   = 'N'*20  #single query separator for concatenation
     
+    _PCR_report_suffix = 'BLAST-PCR'
     
-    def __init__(self, job_id, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         iPCR_Interface.__init__(self, *args, **kwargs) 
-        self._job_id           = job_id
         self._blast_results    = None
         self._bounds           = None
         self._query            = None
@@ -64,12 +64,17 @@ class BlastPrimers(iPCR_Interface):
         self._results_filename = self._job_id+'-blast.xml'
         self._query_filename   = self._job_id+'-blast.cfg'
         #reports
-        self._PCR_report_filename  = self._job_id + '-blast-PCR-report.txt'
         self._hits_report_filename = self._job_id + '-blast-hits-report.txt'
         #flags
         self._have_blast_results = False
     #end def
    
+   
+    def __del__(self):
+        for _PCR_Sim in self._PCR_Simulations.values():
+            _PCR_Sim.abort()
+    #end def
+    
     
     def _format_query(self):
         '''Construct a concatenated query: primer1NNNNNNNprimer2NNNNNNprimer3...
@@ -157,8 +162,8 @@ class BlastPrimers(iPCR_Interface):
             print_exception(e)
             return False
         self._have_blast_results = (len(self._blast_results) > 0 
-                              and max(len(record.alignments) 
-                                      for record in self._blast_results) > 0)
+                                    and max(len(record.alignments) 
+                                            for record in self._blast_results) > 0)
         if not self._have_blast_results:
             print '\nNCBI provided no results for the BLAST query.'
         return self._have_blast_results
@@ -248,58 +253,52 @@ class BlastPrimers(iPCR_Interface):
     #end def
     
     
-    def write_PCR_report(self):
-        if not self._have_results: return
-        blast_report = self._open_report('BLAST PCR', self._PCR_report_filename)
-        #header
-        blast_report.write(time_hr())
-        blast_report.write(wrap_text('For each hit all alignments are sorted '
-                                     'into "forward" and "reverse" groups. '
-                                     'Pairs of forward and reverse ' 
-                                     'alignments comprise possible PCR products.\n'
-                                     'If --no-exonuclease option was '
-                                     'provided, alignments with mismatches on ' 
-                                     "3'-end are ignored.\n"
-                                     'Quantities of products are estimated '
-                                     'using equilibrium equations and ' 
-                                     'current PCR parameters.\n'))
-        blast_report.write('\n')
+    def _format_header(self): 
+        header = wrap_text('For each hit all alignments are sorted '
+                           'into "forward" and "reverse" groups. '
+                           'Pairs of forward and reverse ' 
+                           'alignments comprise possible PCR products.\n'
+                           'If --no-exonuclease option was '
+                           'provided, alignments with mismatches on ' 
+                           "3'-end are ignored.\n"
+                           'Quantities of products are estimated '
+                           'using equilibrium equations and ' 
+                           'current PCR parameters.\n')
+        header += self._PCR_Simulations.values()[0].format_report_header()
+        return header
+    #end def
+    
+    
+    def _format_report_body(self):
+        body = ''
         for record_name in self._PCR_Simulations:
-            blast_report.write(hr(' query ID: %s ' % record_name, symbol='#'))
-            blast_report.write(self._PCR_Simulations[record_name].format_report_header())
-            blast_report.write(self._PCR_Simulations[record_name].format_quantity_explanation())
+            body += hr(' query ID: %s ' % record_name, symbol='#')
+            body += self._PCR_Simulations[record_name].format_report_header()
+            body += self._PCR_Simulations[record_name].format_quantity_explanation()
             if len(self._PCR_Simulations[record_name].hits()) == 1:
                 #all products histogram
                 hit = self._PCR_Simulations[record_name].hits()[0]
-                blast_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-                blast_report.write(self._PCR_Simulations[record_name].per_hit_header(hit))
-                blast_report.write(self._PCR_Simulations[record_name].per_hit_histogram(hit))
-                blast_report.write('\n')
-                blast_report.write(hr(' electrophorogram of all possible PCR products ', symbol='='))
-                blast_report.write(self._PCR_Simulations[record_name].per_hit_electrophoresis(hit))
+                body += hr(' histogram of all possible PCR products ', symbol='=')
+                body += self._PCR_Simulations[record_name].per_hit_header(hit)
+                body += self._PCR_Simulations[record_name].per_hit_histogram(hit)
+                body += '\n'
+                body += hr(' electrophorogram of all possible PCR products ', symbol='=')
+                body += self._PCR_Simulations[record_name].per_hit_electrophoresis(hit)
             else:
                 #all products histogram
-                blast_report.write(hr(' histogram of all possible PCR products ', symbol='='))
-                blast_report.write(self._PCR_Simulations[record_name].all_products_histogram())
-                blast_report.write('\n\n\n')
+                body += hr(' histogram of all possible PCR products ', symbol='=')
+                body += self._PCR_Simulations[record_name].all_products_histogram()
+                body += '\n\n\n'
                 #per hit histogram and phoresis
-                blast_report.write(hr(' histograms and electrophorograms of PCR products of each hit ', symbol='='))
-                blast_report.write(self._PCR_Simulations[record_name].all_graphs_grouped_by_hit())
-        blast_report.close()
-        print '\nPossible PCR products defined by hits from BLAST search were written to:\n   ' + \
-            self._PCR_report_filename
-        self._add_report('BLAST PCR', self._PCR_report_filename)
-    #end def
+                body += hr(' histograms and electrophorograms of PCR products of each hit ', symbol='=')
+                body += self._PCR_Simulations[record_name].all_graphs_grouped_by_hit()
+        return body
     
         
     def write_hits_report(self):
         if not self._have_blast_results: return
-        try:
-            blast_report = open(self._hits_report_filename, 'w')
-        except IOError, e:
-            print '\nFailed to open blast hits report file for writing:\n   %s' % self._hits_report_filename
-            print e.message
-            return
+        blast_report = self._open_report('blast hits report', self._hits_report_filename)
+        if not blast_report: return
         #header
         blast_report.write(time_hr())
         blast_report.write(wrap_text('All hits are filtered by dG of the annealing '
@@ -317,8 +316,7 @@ class BlastPrimers(iPCR_Interface):
         blast_report.write(hr(''))
         blast_report.write('\n\n')
         #print records
-        for r in range(len(self._blast_results)):
-            blast_record = self._blast_results[r]
+        for r, blast_record in enumerate(self._blast_results):
             num_hits = len(blast_record.alignments)
             blast_report.write(hr(' query ID: %s '  % blast_record.query, symbol='#'))
             #filter hits by alignments and format report text for each hit
@@ -336,9 +334,10 @@ class BlastPrimers(iPCR_Interface):
                     #check annealing enegry
                     if hsp_duplex.dG > SecStructures.max_dimer_dG: continue
                     #get primer concentration
-                    if self._fwd_primer.has_subsequence(hsp_duplex.fwd_seq): 
-                        hsp_primer_concentration = self._fwd_primer.concentration
-                    else: hsp_primer_concentration = self._rev_primer.concentration
+                    for primer in self._primers:
+                        if primer.has_subsequence(hsp_duplex.fwd_seq): 
+                            hsp_primer_concentration = primer.concentration
+                            break
                     #format hsps representation
                     hsp_text  = ('score: %d; bits: %d; E-value: %.2e;\n\n'
                                  % (hsp.score, hsp.bits, hsp.expect))

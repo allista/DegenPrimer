@@ -7,7 +7,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -37,24 +37,39 @@ from UnifiedNN import UnifiedNN
 import StringTools
 ###############################################################################
 
-#standard PCR conditions
-C_Mg   = 1.5e-3 #M
-C_Na   = 50e-3  #M
-C_dNTP = 0.1e-3 #M
-C_DNA  = 5e-9   #M; DNA template concentration
-C_DMSO = 0.0    #%; v/v-percent concentration of DMSO
-PCR_T  = 60.0   #C; temperature at which PCR is conducted
+
+class PCR_Parameters(object):
+    def __init__(self):
+        #standard PCR conditions
+        self.Mg    = 1.5e-3 #M
+        self.Na    = 50e-3  #M
+        self.dNTP  = 0.1e-3 #M
+        self.DNA   = 5e-9   #M; DNA template concentration
+        self.DMSO  = 0.0    #%; v/v-percent concentration of DMSO
+        self.PCR_T = 60.0   #C; temperature at which PCR is conducted
+    #end def
+    
+    def set(self, params):
+        for name in vars(self).keys():
+            if name in params:
+                setattr(self, name, params[name])
+#end class    
+
 
 #Unified Nearest Neighbour model initialization
 NN = UnifiedNN()
 if not NN:
     raise Exception('TD_Functions: Unable to initialize UnifiedNN.')
 
+#PCR conditions
+PCR_P = PCR_Parameters()
+
+
 #pseudo-concentration of Na equivalent to current concentration of Mg2+
 def C_Na_eq():
     ''''divalent cation correction:
     all concentrations should be in mM (Ahsen et al., 2001)'''
-    return (C_Na*1e3 + 120*sqrt((C_Mg - C_dNTP)*1e3))*1e-3
+    return (PCR_P.Na*1e3 + 120*sqrt((PCR_P.Mg - PCR_P.dNTP)*1e3))*1e-3
 #end def
 
 
@@ -73,7 +88,7 @@ def primer_template_Tr(sequence, concentration, conversion_degree):
     dH, dS = 0, 0
     #concentrations
     P   = concentration
-    D   = C_DNA
+    D   = PCR_P.DNA
     DUP = conversion_degree*min(P,D)
     #equilibrium constant 
     K   = DUP/((P-DUP)*(D-DUP))
@@ -96,7 +111,7 @@ def primer_template_Tr(sequence, concentration, conversion_degree):
     #salt concentration correction
     dS = dS + NN.dS_Na_coefficient * len(seq_str) * log(C_Na_eq()) #C_Na qM
     #final temperature calculation
-    return NN.K0 + dH * 1000/(dS - NN.R * log(K)) - NN.T_DMSP_coefficient * C_DMSO #DMSO correction from [2]
+    return NN.K0 + dH * 1000/(dS - NN.R * log(K)) - NN.T_DMSP_coefficient * PCR_P.DMSO #DMSO correction from [2]
 #end def
 
 def primer_template_Tm(sequence, concentration): 
@@ -108,16 +123,16 @@ def format_concentration(concentration):
     
     
 def format_PCR_conditions(primers, polymerase):
-    conditions = [['C(Na)',   ]+format_concentration(C_Na).split(),
-                  ['C(Mg)',   ]+format_concentration(C_Mg).split(),
-                  ['C(dNTP)', ]+format_concentration(C_dNTP).split(),
-                  ['C(DNA)',  ]+format_concentration(C_DNA).split(),
-                  ['C(DMSO)', '%.1f' % C_DMSO, '%'],
-                  ['C(Poly)', ]+StringTools.format_quantity(polymerase*1e-6, 'u/ul').split(),
-                  ['T', '%.1f' % PCR_T, 'C']]
+    conditions = [['C(Na)',   ]+format_concentration(PCR_P.Na).split(),
+                  ['C(Mg)',   ]+format_concentration(PCR_P.Mg).split(),
+                  ['C(dNTP)', ]+format_concentration(PCR_P.dNTP).split(),
+                  ['C(DNA)',  ]+format_concentration(PCR_P.DNA).split(),]
     if primers:
         for primer in primers:
-            conditions.insert(4, ['C(%s)' % primer.id,]+format_concentration(primer.total_concentration).split())
+            conditions.append(['C(%s)' % primer.id,]+format_concentration(primer.total_concentration).split())
+    conditions += [['C(DMSO)', '%.1f' % PCR_P.DMSO, '%'],
+                   ['C(Poly)', ]+StringTools.format_quantity(polymerase*1e-6, 'u/ul').split(),
+                   ['T', '%.1f' % PCR_P.PCR_T, 'C']]
     return StringTools.print_table(conditions, delimiter='')
 #end_def
 
@@ -278,7 +293,7 @@ def dimer_dG_corrected(dimer, seq1, seq2):
             dS += NN.loop_dS_37(loop_seq, 'internal')
     #dS salt correction
     dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
-    return dG + dH - NN.temp_K(PCR_T)*dS/1000.0
+    return dG + dH - NN.temp_K(PCR_P.PCR_T)*dS/1000.0
 #end def
 
 
@@ -405,7 +420,7 @@ def hairpin_dG_corrected(hairpin, seq):
     dS += NN.loop_dS_37(hp_str, 'hairpin')
     #dS salt correction
     dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
-    return dG + dH - NN.temp_K(PCR_T)*dS/1000.0
+    return dG + dH - NN.temp_K(PCR_P.PCR_T)*dS/1000.0
 #end def
 
 
@@ -420,7 +435,7 @@ def primer_DNA_conversion_degree(primer_concentration, K):
     '''calculate conversion degree of Primer/DNA dimerisation
     given primer_concentration and equilibrium constant'''
     P = primer_concentration
-    D = C_DNA
+    D = PCR_P.DNA
     #quadratic equation with respect to DUP = r*min(P,D), 
     #where 'r' is a conversion degree
     _b   = (K*P+K*D+1) #MINUS b; always positive
@@ -441,12 +456,16 @@ if __name__ == '__main__':
     dimer12 = Dimer.from_sequences(seq1, seq2)
     dimer34 = Dimer.from_sequences(seq3, seq4)
     
-    C_Na     = 50.0e-3
-    C_Mg     = 3.0e-3 
-    C_dNTP   = 0.1e-3
-    C_DNA    = 1.0e-9
-    C_Primer = 0.43e-6
-    PCR_T    = 55
+    PCR_P.Na     = 50.0e-3
+    PCR_P.Mg     = 3.0e-3 
+    PCR_P.dNTP   = 0.1e-3
+    PCR_P.DNA    = 1.0e-9
+    PCR_P.Primer = 0.43e-6
+    PCR_P.PCR_T    = 65
+    
+    print vars(PCR_P)
+    PCR_P.set({'PCR_T': 30})
+    print vars(PCR_P)
     
     print seq1, seq2
     print dimer_dG(dimer12, seq1, seq2)

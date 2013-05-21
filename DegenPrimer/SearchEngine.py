@@ -5,7 +5,7 @@
 # Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# degen_primer is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -116,51 +116,35 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
 
+    @classmethod
+    def _compile_duplexes_for_position(cls, position, 
+                                           template, primer, t_len, p_len, 
+                                           max_mismatches, reverse):
+        duplexes = []
+        for var in primer.seq_records:
+            dup = Duplex(var.seq, template[position:position+p_len].complement()[::-1])
+            if dup.mismatches <= max_mismatches:
+                duplexes.append((dup, var.id))
+        if not reverse:
+            return position+p_len, duplexes
+        else:
+            return t_len+1-(position+p_len), duplexes
+    #end def
+     
+
     def _compile_duplexes(self, template, primer, matches, t_len, p_len, 
                              max_mismatches, abort_e, reverse=False):
         '''Given a template strand, a primer and a list of locations where the 
         primer matches the template, return a list of Duplexes formed by 
         unambiguous components of the primer at each match location.'''
-        @MultiprocessingBase._worker
-        def worker(abort_e, template, primer, matches, 
-                    t_len, p_len, max_mismatches, reverse):
-            results = []
-            for i in matches:
-                if abort_e.is_set(): break
-                duplexes = []
-                for var in primer.seq_records:
-                    dup = Duplex(var.seq, template[i:i+p_len].complement()[::-1])
-                    if dup.mismatches <= max_mismatches:
-                        duplexes.append((dup, var.id))
-                if not reverse:
-                    results.append((i+p_len, duplexes))
-                else: 
-                    results.insert(0, (t_len+1-(i+p_len), duplexes))
-            return results
-        #process matches in chunks
-        results     = []
-        num_matches = len(matches)
-        chunk_size  = int(num_matches/(self._cpu_count*2)+1)
-        jobs        = []
-        start       = 0
-        while start < num_matches and not abort_e.is_set():
-            end   = min(start+chunk_size, num_matches)
-            queue = mp.Queue()
-            job   = mp.Process(target=worker, args=(queue, abort_e, template, primer, 
-                                                    matches[start:end], t_len, p_len, 
-                                                    max_mismatches, reverse))
-            job.start()
-            jobs.append((job,queue))
-            self._all_jobs.append(jobs[-1])
-            start += chunk_size
-        #join all jobs
-        def parse_out(out, results): results.extend(out)
-        self._join_jobs(abort_e, list(jobs), 5e-3, parse_out, results)
-        #if aborted, return None
-        if abort_e.is_set(): return None
-        #else, cleanup
-        self._clean_jobs(jobs)
+        results = self._parallelize_work(abort_e, 5e-3, 
+                                         self._compile_duplexes_for_position, 
+                                         matches, 
+                                         template, primer, t_len, p_len, 
+                                         max_mismatches, reverse)
         return results
+#        if not reverse: return results
+#        else: return results[::-1]
     #end def
     
     
@@ -561,7 +545,7 @@ if __name__ == '__main__':
                  (3,23835,template[:23835]),
                  (4,2432,template[:2432]),
                  (5,538827,template[:538827])]
-    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 5)
+    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 7)
     for rid in results:
         print '\n'
         print_out(results[rid], rid)
