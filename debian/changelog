@@ -1,3 +1,28 @@
+degen-primer (2.5-rc1-0ppa1) precise; urgency=low
+
+  Major Release:
+
+  * Introduced Task system in odrer to accomodate appearence of different run tasks, such as Analysis, DBManagment and Optimization.
+
+  * Added Task to optimize PCR conditions.
+  * Added Task to manage sequence DB through SeqDB class.
+
+  * Config system is completely rewritten using new Option class. It is now possible to define complex tree-like options and poly-options. In the GUI corresponding widget system is implemented.
+
+  * More than two primers are allowed in the system now.
+
+  * Introduced PCR_Simulation class hirarchy that includes BlastPrimers, iPCR, PCR_Optimizer. It implements common report formation mechanism.
+
+  * MultiprocessingBase: added separate _parallelize_work and _parallelize_functions based on common _parallelize mechanism.
+
+  * PCR_Simulation: Region and Product classes were separated from the module. Some steps of simulation are parallelized.
+
+  * SearchEngine: some more parallelization and optimization of speed.
+
+  * Added PCR_Parameters class to be able to optimize parameters without changing global state.
+
+ -- Allis Tauri <allista@gmail.com>  Tue, 21 May 2013 16:15:31 +0400
+
 degen-primer (2.1-rc1-0ppa1) precise; urgency=low
 
   * ipcress from exonerate package is no longer used. Search for primers' annealing sites is implemented inside degen_primer using fft-based algorithm which depends only on scipy. This algorithm is considerably faster and less memory demanding.
