@@ -39,7 +39,6 @@ from SeqDB import SeqDB
 from iPCR import iPCR
 try:
     from Bio import SeqIO
-#    from Bio.SeqUtils import GC
 except ImportError:
     print'The BioPython must be installed in your system.'
     raise
@@ -221,12 +220,6 @@ class AnalysisTask(PrimerTaskBase):
         #save primers 
         if not self._save_primers(args.primers): return False
         #----------------------------------------------------------------------#
-        
-#        #if only_tm flag is set, report Tm and exit#
-#        if args.only_tm:
-#            for primer in args.primers:
-#                print 'Tm, %f, GC, %f' % (primer.Tm_mean, GC(primer.master_sequence.seq)) 
-#            return True
     
         #following computations are CPU intensive, so they need parallelization#
         #check primers for hairpins, dimers and cross-dimers
@@ -241,7 +234,7 @@ class AnalysisTask(PrimerTaskBase):
         #----------------------------------------------------------------------#
         
         
-        #in silic PCR simulation. This is only available if sequence database is provided in some form 
+        #in silica PCR simulation. This is only available if sequence database is provided in some form 
         ipcr = None
         if args.fasta_files or args.sequence_db:
             with capture_to_queue() as out:
@@ -282,7 +275,7 @@ class AnalysisTask(PrimerTaskBase):
                                                         args.cycles,
                                                         side_reactions, 
                                                         side_concentrations,
-                                                        args.analyse_all_annealings)
+                                                        include_side_annealings=args.analyse_all_annealings)
         #if --do-blast flag was provided, make an actual query
         if args.do_blast:
             #construct Entrez query

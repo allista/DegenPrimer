@@ -103,7 +103,7 @@ def primer_template_Tr(sequence, concentration, conversion_degree):
         dH += NN.pair_dPar_37('ter', 'ter', 'dH')
         dS += NN.pair_dPar_37('ter', 'ter', 'dS')
     #stacking interactions
-    for n in range(len(seq_str)-1):
+    for n in xrange(len(seq_str)-1):
         pair    = seq_str[n:n+2]
         reverse = rev_str[n:n+2]
         dH += NN.pair_dPar_37(pair, reverse, 'dH')
@@ -184,7 +184,7 @@ def dimer_dG(dimer, seq1, seq2):
         if seq_str[-1] == 'A' or seq_str[-1] == 'T':
             dG += NN.pair_dG_37('ter', 'ter')
     #stacking and mismatches
-    for i in range(len(fwd_matches)-1):
+    for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
         f_next  = fwd_matches[i+1]
         r_match = rev_matches[i]
@@ -266,7 +266,7 @@ def dimer_dG_corrected(dimer, seq1, seq2):
             dH += NN.pair_dPar_37('ter', 'ter', 'dH')
             dS += NN.pair_dPar_37('ter', 'ter', 'dS')
     #stacking and mismatches
-    for i in range(len(fwd_matches)-1):
+    for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
         f_next  = fwd_matches[i+1]
         r_match = rev_matches[i]
@@ -326,7 +326,7 @@ def hairpin_dG(hairpin, seq):
         if seq_str[0] == 'A' or seq_str[0] == 'T':
             dG += NN.pair_dG_37('ter', 'ter')
     #stacking and mismatches
-    for i in range(len(fwd_matches)-1):
+    for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
         f_next  = fwd_matches[i+1]
         r_match = rev_matches[i]
@@ -389,7 +389,7 @@ def hairpin_dG_corrected(hairpin, seq):
             dH += NN.pair_dPar_37('ter', 'ter', 'dH')
             dS += NN.pair_dPar_37('ter', 'ter', 'dS')
     #stacking and mismatches
-    for i in range(len(fwd_matches)-1):
+    for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
         f_next  = fwd_matches[i+1]
         r_match = rev_matches[i]
@@ -425,7 +425,7 @@ def hairpin_dG_corrected(hairpin, seq):
 
 
 def equilibrium_constant(dG_T, T):
-    '''calculate equilibrium constant of at a given temperature, 
+    '''calculate equilibrium constant of annealing at a given temperature, 
     given standard dG at this temperature'''
     return exp(-1000*dG_T/(NN.R*NN.temp_K(T))) #annealing equilibrium constant
 #end def

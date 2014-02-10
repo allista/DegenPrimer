@@ -18,15 +18,24 @@ Created on Dec 21, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 import os
+import gc
 import shutil
 import sqlite3
-import errno
-import multiprocessing as mp
-from Queue import Empty
-from time import time, sleep
+from time import time
 from StringIO import StringIO
-from StringTools import print_exception
 from SearchEngine import SearchEngine
+from multiprocessing.managers import BaseManager
+
+
+#managers for subprocessed classes
+class SearchEngineManager(BaseManager):
+    def getpid(self):
+        if '_process' in self.__dict__:
+            return self._process.pid
+        else: return None
+#end class
+SearchEngineManager.register('SearchEngine', SearchEngine)
+SearchEngineManager.register('gc_collect', gc.collect)
 
 
 class SeqDB(object):
@@ -45,7 +54,15 @@ class SeqDB(object):
         self._db_name  = None
         self._db       = None
         self._cursor   = None
-        self._searcher = SearchEngine() 
+        self._search_manager = SearchEngineManager()
+        self._search_manager.start()
+        self._searcher = None #self._search_manager.SearchEngine()
+    #end def
+    
+    def __del__(self):
+        self.abort_search()            
+        if self._search_manager is not None:
+            self._search_manager.shutdown()
     #end def
     
     @property
@@ -209,65 +226,74 @@ class SeqDB(object):
         where *_matches are lists:
         [(3'-position, [(matching duplex, id), ...]), ...]
         If no DB is connected, return None.'''
+        #check DB and get sequences
         if self._db is None: return None
         seqs = self.get_seqs(seq_ids)
-        if not seqs: 
-            return None
-        elif len(seqs) == 1:
+        if not seqs: return None
+        #start searcher
+        results = None
+        self._searcher = self._search_manager.SearchEngine()
+        if len(seqs) == 1:
             results = self._searcher.find(seqs[0][2], primer, mismatches)
-            if results: return {seqs[0][0]: results}
-            else: return None
+            if results: results = {seqs[0][0]: results}
         else:
-            return self._searcher.batch_find(seqs, primer, mismatches)
+            results = self._searcher.batch_find(seqs, primer, mismatches)
+        #free memory allocated by manager
+        del self._searcher; self._searcher = None
+        self._search_manager.gc_collect()
+        return results
     #end def
     
     
-    def abort_search(self): self._searcher.abort()
+    def abort_search(self): 
+        if self._searcher is not None:
+            self._searcher.abort()
+    #end def
 #end class
 
 
 #tests
-import signal
-import cProfile
-import sys, csv, timeit
-from functools import partial
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-from Bio.Alphabet import IUPAC
-from Primer import Primer
-
-searcher = None
-ppid     = -1
-data1    = []
-data2    = []
-
-def sig_handler(signal, frame):
-    if ppid != os.getpid():
-        return
-    print 'Aborting main process %d' % os.getpid()
-    if searcher:
-        searcher.abort()
-    if data1:
-        print 'Write out gathered data1...'
-        out_file = open('gather_data1-%d.csv' % time(), 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data1)
-        out_file.close()
-        print 'Done.'
-    if data2:
-        print 'Write out gathered data2...'
-        out_file = open('gather_data2-%d.csv' % time(), 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data2)
-        out_file.close()
-        print 'Done.'
-    sys.exit(1)
-#end def
-
-
-#tests
 if __name__ == '__main__':
+    import signal
+    import cProfile
+    import sys, csv, timeit
+    from time import sleep
+    from functools import partial
+    from Bio import SeqIO
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
+    from Bio.Alphabet import IUPAC
+    from Primer import Primer
+    
+    searcher = None
+    ppid     = -1
+    data1    = []
+    data2    = []
+    
+    def sig_handler(signal, frame):
+        if ppid != os.getpid():
+            return
+        print 'Aborting main process %d' % os.getpid()
+        if searcher:
+            searcher.abort()
+        if data1:
+            print 'Write out gathered data1...'
+            out_file = open('gather_data1-%d.csv' % time(), 'wb')
+            csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+            csv_writer.writerows(data1)
+            out_file.close()
+            print 'Done.'
+        if data2:
+            print 'Write out gathered data2...'
+            out_file = open('gather_data2-%d.csv' % time(), 'wb')
+            csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+            csv_writer.writerows(data2)
+            out_file.close()
+            print 'Done.'
+        sys.exit(1)
+    #end def
+
+
     #setup signal handler
     signal.signal(signal.SIGINT,  sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
@@ -308,7 +334,13 @@ if __name__ == '__main__':
                 print '\n'
     #end def
     
-#    results = sdb.find_in_db(query, 3)
+    mismatches = 8
+    results = None
+    for _i in range(5): 
+        results = sdb.find_in_db(query, mismatches)
+        del results
+        gc.collect()
+        sleep(5)
 #    for rid in results:
 #        print '\n'
 #        print_out(results[rid], rid)
@@ -318,18 +350,18 @@ if __name__ == '__main__':
 
     #primer = Primer(SeqRecord(query, id='test'), 0.1e-6)
     #out0,out1,out2,out3 = [],[],[],[]
-    #cProfile.run("for i in range(10): searcher.find_mp(template, primer, 3);", 'find_mp2.profile')
+    #cProfile.run("for i in xrange(10): searcher.find_mp(template, primer, 3);", 'find_mp2.profile')
     #sleep(1)
-    #cProfile.run("for i in range(10): searcher.find(template, primer, 3)", 'find.profile')
+    #cProfile.run("for i in xrange(10): searcher.find(template, primer, 3)", 'find.profile')
 
     
 #    ppid = os.getpid()
 #    out  = None
-#    cProfile.run("for i in range(10):\
+#    cProfile.run("for i in xrange(10):\
 #        out = searcher.find_mp(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
 #        'find_mp.profile')
 #    print_out(out, 'find_mp')
-#    cProfile.run("for i in range(10):\
+#    cProfile.run("for i in xrange(10):\
 #        out = searcher.find(record, Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
 #        'find.profile')
 #    print_out(out, 'find')

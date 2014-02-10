@@ -24,12 +24,19 @@ import errno
 import multiprocessing as mp
 from Queue import Empty
 from time import sleep
-from StringTools import print_exception
 
 
 class MultiprocessingBase(object):
     '''Base class for classes that use job parallelization through multiprocessing'''
+
+    #aliases
+    _Process = mp.Process
     
+    #number of cpu cores
+    _cpu_count   = mp.cpu_count()
+    
+    
+    #decorators
     @staticmethod
     def _worker(func):
         def worker(queue, abort_e, *args):
@@ -44,21 +51,36 @@ class MultiprocessingBase(object):
         #end def
         return worker
     #end def
+    
+    @staticmethod
+    def _data_mapper(func):
+        @MultiprocessingBase._worker
+        def mapper(abort_e, start, end, data, args):
+            result = []
+            for i, item in enumerate(data[start:end]):
+                if abort_e.is_set(): break
+                if args:
+                    result.append((start+i, func(item, *args)))
+                else:
+                    result.append((start+i, func(item)))
+            return result
+        return mapper
+    #end def
 
 
-    #number of cpu cores
-    _cpu_count   = mp.cpu_count()
-
-
+    #class body
     def __init__(self):
         self._all_jobs     = []
         self._abort_lock   = mp.Lock()
         self._abort_events = []
     #end def
     
+    def __del__(self): self.abort()
+    
     
     @classmethod
     def _join_jobs(cls, abort_e, jobs, timeout, parser, *args):
+        jobs = list(jobs)
         while jobs and not abort_e.is_set():
             finished_job = None
             for i,job in enumerate(jobs):
@@ -78,7 +100,7 @@ class MultiprocessingBase(object):
                         raise
                 except Exception, e:
                     print 'Unhandled Exception:'
-                    print_exception(e)
+                    print str(e)
                     raise
             if finished_job is not None:
                 del jobs[finished_job]
@@ -111,64 +133,76 @@ class MultiprocessingBase(object):
     #end def
 
 
-    def _parallelize(self, abort_e, timeout, worker, work, *args):
+    def _prepare_jobs(self, abort_e, worker, work, num_jobs, *args):
         #process work in chunks
-        work_len   = len(work)
-        chunk_size = int(work_len/(self._cpu_count*2)+1)
-        results    = [None]*work_len
-        jobs       = []
-        start      = 0
+        work_len = len(work)
+        jobs     = []
+        start    = 0
+        if not num_jobs: num_jobs = self._cpu_count*2
+        chunk_size = int(work_len/(num_jobs)+1)
+        #prepare jobs
         while start < work_len and not abort_e.is_set():
             end   = min(start+chunk_size, work_len)
-            queue = mp.Queue()
-            job   = mp.Process(target=worker, args=(queue, abort_e, start, 
-                                                    work[start:end], args))
-            job.start()
+            queue = self._new_queue()
+            job   = self._Process(target=worker, args=(queue, abort_e, 
+                                                       start, end, 
+                                                       work, args))
             jobs.append((job,queue))
             self._all_jobs.append(jobs[-1])
             start += chunk_size
-        #join all jobs
-        def parse_out(out, results):
-            for result in out: 
-                results[result[0]] = result[1]
-        self._join_jobs(abort_e, list(jobs), timeout, parse_out, results)
         #if aborted, return None
         if abort_e.is_set(): return None
-        #else, cleanup
+        return jobs
+    #end def
+    
+    
+    @classmethod
+    def _ordered_results_assembler(cls, out, results):
+        for result in out: results[result[0]] = result[1]
+        
+    @classmethod
+    def _unordered_results_assembler(cls, out, results):
+        for result in out: results.append(result[1])
+    
+    @classmethod
+    def _start_jobs(cls, jobs):
+        for job, _queue in jobs: job.start()
+    
+
+    def _parallelize(self, abort_e, timeout, worker, work, *args):
+        #prepare and start jobs
+        jobs = self._prepare_jobs(abort_e, worker, work, None, *args)
+        self._start_jobs(jobs)
+        #allocate results container
+        results = [None]*len(work)
+        #assemble results
+        self._join_jobs(abort_e, jobs, timeout, 
+                        self._ordered_results_assembler, results)
+        #if aborted, return None
+        if abort_e.is_set(): return None
+        #else, cleanup and return results
         self._clean_jobs(jobs)
         return results
     #end def
-    
+
+    def _parallelize_work(self, abort_e, timeout, func, data, *args):
+        mapper = MultiprocessingBase._data_mapper(func)
+        return self._parallelize(abort_e, timeout, mapper, data, *args)
+    #end def    
     
     def _parallelize_functions(self, abort_e, timeout, func_list, *args):
         @MultiprocessingBase._worker
-        def worker(abort_e, offset, _func_list, args):
+        def worker(abort_e, start, end, _func_list, args):
             result = []
-            for fi, func in enumerate(_func_list):
+            for fi, func in enumerate(_func_list[start:end]):
                 if abort_e.is_set(): break
                 if args:
-                    result.append((offset+fi, func(*args)))
+                    result.append((start+fi, func(*args)))
                 else:
-                    result.append((offset+fi, func()))
+                    result.append((start+fi, func()))
             return result
         #end def
         return self._parallelize(abort_e, timeout, worker, func_list, *args)
-    #end def
-    
-    
-    def _parallelize_work(self, abort_e, timeout, func, data, *args):
-        @MultiprocessingBase._worker
-        def worker(abort_e, offset, data, args):
-            result = []
-            for i, item in enumerate(data):
-                if abort_e.is_set(): break
-                if args:
-                    result.append((offset+i, func(item, *args)))
-                else:
-                    result.append((offset+i, func(item)))
-            return result
-        #process matches in chunks
-        return self._parallelize(abort_e, timeout, worker, data, *args)
     #end def
     
     

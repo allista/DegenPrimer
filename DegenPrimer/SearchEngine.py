@@ -18,17 +18,13 @@ Created on Jan 1, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import errno
 import numpy as np
 import multiprocessing as mp
-from Queue import Empty
-from time import sleep
 from array import array
 from scipy.fftpack import fft, ifft
 from SecStructures import Duplex
 from StringTools import print_exception
 from MultiprocessingBase import MultiprocessingBase
-
 
 class SearchEngine(MultiprocessingBase):
     '''Fast search of a pattern sequence in a given set of template sequences 
@@ -116,37 +112,65 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
 
-    @classmethod
-    def _compile_duplexes_for_position(cls, position, 
-                                           template, primer, t_len, p_len, 
-                                           max_mismatches, reverse):
+    @staticmethod
+    @MultiprocessingBase._data_mapper
+    def _compile_duplexes_for_position(position, template, primer, 
+                                           t_len, p_len, reverse):
+        '''Given a template strand, a primer and a location where the 
+        primer matches the template, return a list of Duplexes formed by 
+        unambiguous components of the primer'''
         duplexes = []
         for var in primer.seq_records:
             dup = Duplex(var.seq, template[position:position+p_len].complement()[::-1])
-            if dup.mismatches <= max_mismatches:
-                duplexes.append((dup, var.id))
+            if not dup: continue
+            duplexes.append((dup, var.id))
         if not reverse:
             return position+p_len, duplexes
         else:
             return t_len+1-(position+p_len), duplexes
     #end def
-     
-
-    def _compile_duplexes(self, template, primer, matches, t_len, p_len, 
-                             max_mismatches, abort_e, reverse=False):
-        '''Given a template strand, a primer and a list of locations where the 
-        primer matches the template, return a list of Duplexes formed by 
-        unambiguous components of the primer at each match location.'''
-        results = self._parallelize_work(abort_e, 5e-3, 
-                                         self._compile_duplexes_for_position, 
-                                         matches, 
-                                         template, primer, t_len, p_len, 
-                                         max_mismatches, reverse)
-        return results
-#        if not reverse: return results
-#        else: return results[::-1]
+    
+    
+    @classmethod
+    def _duplexes_assembler(cls, out, results):
+        for result in out:
+            if result[1][1]: results.append(result[1])
     #end def
     
+    @profile
+    def _compile_duplexes(self, abort_e, 
+                            fwd_seq, rev_seq, primer, 
+                            t_len, p_len,
+                            fwd_matches, rev_matches):
+        '''Compile duplexes for both strands of a template in parallel'''
+        #prepare and start two sets of jobs
+        fwd_jobs = self._prepare_jobs(abort_e, self._compile_duplexes_for_position, 
+                                      fwd_matches, None, 
+                                      fwd_seq, primer, t_len, p_len, False)
+        rev_jobs = self._prepare_jobs(abort_e, self._compile_duplexes_for_position, 
+                                      rev_matches, None,
+                                      rev_seq, primer, t_len, p_len, True)
+        self._start_jobs(fwd_jobs+rev_jobs)
+        #allocate containers for results
+        fwd_results = []#[None]*len(fwd_matches)
+        rev_results = []#[None]*len(rev_matches)
+        #assemble results
+        self._join_jobs(abort_e, fwd_jobs, 1, 
+                        self._duplexes_assembler, fwd_results)
+        self._join_jobs(abort_e, rev_jobs, 1, 
+                        self._duplexes_assembler, rev_results)
+        #if aborted, return None
+        if abort_e.is_set(): return None
+        #else, cleanup
+        self._clean_jobs(fwd_jobs+rev_jobs)
+        #sort duplexes by position
+        fwd_results.sort(key=lambda x: x[0])
+        rev_results.sort(key=lambda x: x[0])
+#        fwd_results = [dup for dup in fwd_results if dup[1]]
+#        rev_results = [dup for dup in rev_results if dup[1]]
+        return fwd_results,rev_results
+    #end def
+        
     
     @classmethod
     def _find_in_chunk(cls, t_chunk, p_fft, correction, c_size, c_stride):
@@ -212,20 +236,20 @@ class SearchEngine(MultiprocessingBase):
     
     
     @classmethod
-    def _start_find_worker(cls, jobs, queue, abort_e, start, fwd_slice, rev_slice, 
-                           p_fft, correction, s_size, s_stride, c_size, c_stride):
+    def _start_find_worker(cls, jobs, queue, abort_e, start, fwd_seq, rev_seq, 
+                             p_fft, correction, end, s_stride, c_size, c_stride):
         @MultiprocessingBase._worker
-        def worker(abort_e, start, fwd_slice, rev_slice, p_fft, 
-                   correction, s_size, s_stride, c_size, c_stride):
+        def worker(abort_e, start, fwd_seq, rev_seq, p_fft, 
+                   correction, end, s_stride, c_size, c_stride):
             fwd_score = np.ndarray(0,dtype=float)
             rev_score = np.ndarray(0,dtype=float)
-            pos = 0
-            while pos < s_size and not abort_e.is_set():
-                front = min(s_size, pos+c_size)
-                score = cls._find_in_chunk(fwd_slice[pos:front], p_fft, correction,
+            pos = start
+            while pos < end and not abort_e.is_set():
+                front = min(end, pos+c_size)
+                score = cls._find_in_chunk(fwd_seq[pos:front], p_fft, correction,
                                            c_size, c_stride)
                 fwd_score = np.concatenate([fwd_score, score])
-                score = cls._find_in_chunk(rev_slice[pos:front], p_fft, correction,
+                score = cls._find_in_chunk(rev_seq[pos:front], p_fft, correction,
                                            c_size, c_stride)
                 rev_score = np.concatenate([rev_score, score])
                 pos += c_stride
@@ -234,13 +258,13 @@ class SearchEngine(MultiprocessingBase):
                     rev_score[:s_stride])
         #end def
         job = mp.Process(target=worker, 
-                         args=(queue, abort_e, start, fwd_slice, rev_slice, p_fft, 
-                               correction, s_size, s_stride, c_size, c_stride))
+                         args=(queue, abort_e, start, fwd_seq, rev_seq, p_fft, 
+                               correction, end, s_stride, c_size, c_stride))
         job.start()
         jobs.append((job,queue))
     #end def
     
-    
+
     def _find_mp(self, template, primer, t_len, p_len, mismatches, abort_event):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
@@ -261,15 +285,15 @@ class SearchEngine(MultiprocessingBase):
         while i < t_len and not abort_event.is_set():
             front = min(t_len, i+slice_size)
             self._start_find_worker(jobs, mp.Queue(), abort_event, i, 
-                                    fwd_seq[i:front], rev_seq[i:front], p_fft, 
-                                    correction, front-i, slice_stride, chunk_size, chunk_stride)
+                                    fwd_seq, rev_seq, p_fft, 
+                                    correction, front, slice_stride, chunk_size, chunk_stride)
             self._all_jobs.append(jobs[-1])
             i += slice_stride
         #join all jobs
         def parse_out(out, fwd_list, rev_list):
             fwd_list.append((out[0],out[1]))
             rev_list.append((out[0],out[2]))
-        self._join_jobs(abort_event, list(jobs), 1e-3, parse_out, fwd_score, rev_score)
+        self._join_jobs(abort_event, jobs, 1, parse_out, fwd_score, rev_score)
         #if search was aborted, return empty results
         if abort_event.is_set(): return None
         #else, cleanup
@@ -283,16 +307,11 @@ class SearchEngine(MultiprocessingBase):
         rev_score = np.concatenate(rev_score)[:t_len]
         #match indices
         matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]
-        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]
-        del fwd_score, rev_score
-        #construct duplexes
-        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches, 
-                                             t_len, p_len, mismatches, abort_event)
-        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches, 
-                                             t_len, p_len, mismatches, abort_event, 
-                                             reverse=True)
-        return fwd_results,rev_results
+        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]; del fwd_score
+        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]; del rev_score
+        #construct and return duplexes
+        return self._compile_duplexes(abort_event, fwd_seq, rev_seq, primer, 
+                                      t_len, p_len, fwd_matches, rev_matches)
     #end def
 
     
@@ -325,16 +344,11 @@ class SearchEngine(MultiprocessingBase):
         rev_score = np.concatenate(rev_score)
         #match indices
         matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]
-        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]
-        del fwd_score, rev_score
-        #construct duplexes
-        fwd_results = self._compile_duplexes(fwd_seq, primer, fwd_matches, 
-                                            t_len, p_len, mismatches, abort_event)
-        rev_results = self._compile_duplexes(rev_seq, primer, rev_matches, 
-                                            t_len, p_len, mismatches, abort_event, 
-                                            reverse=True)
-        return fwd_results,rev_results
+        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]; del fwd_score
+        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]; del rev_score
+        #construct and return duplexes
+        return self._compile_duplexes(abort_event, fwd_seq, rev_seq, primer, 
+                                      t_len, p_len, fwd_matches, rev_matches)
     #end def
     
     
@@ -411,53 +425,53 @@ class SearchEngine(MultiprocessingBase):
 
 
 
-#tests
-import signal
-import cProfile
-from time import time
-import sys, os, csv, timeit
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-from Bio.Alphabet import IUPAC
-from Primer import Primer
-
-searcher = None
-ppid     = -1
-data1    = []
-data2    = []
-
-def sig_handler(signal, frame):
-    if ppid != os.getpid():
-        return
-    print 'Aborting main process %d' % os.getpid()
-    if searcher:
-        searcher.abort()
-    if data1:
-        print 'Write out gathered data1...'
-        out_file = open('gather_data1-%d.csv' % time(), 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data1)
-        out_file.close()
-        print 'Done.'
-    if data2:
-        print 'Write out gathered data2...'
-        out_file = open('gather_data2-%d.csv' % time(), 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data2)
-        out_file.close()
-        print 'Done.'
-    sys.exit(1)
-#end def
-
-
 if __name__ == '__main__':
+    #tests
+    import signal
+    import cProfile
+    import gc
+    from time import time
+    import sys, os, csv, timeit
+    from Bio import SeqIO
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
+    from Bio.Alphabet import IUPAC
+    from Primer import Primer
+    
+    searcher = None
+    ppid     = -1
+    data1    = []
+    data2    = []
+    
+    def sig_handler(signal, frame):
+        if ppid != os.getpid():
+            return
+        print 'Aborting main process %d' % os.getpid()
+        if searcher:
+            searcher.abort()
+        if data1:
+            print 'Write out gathered data1...'
+            out_file = open('gather_data1-%d.csv' % time(), 'wb')
+            csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+            csv_writer.writerows(data1)
+            out_file.close()
+            print 'Done.'
+        if data2:
+            print 'Write out gathered data2...'
+            out_file = open('gather_data2-%d.csv' % time(), 'wb')
+            csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+            csv_writer.writerows(data2)
+            out_file.close()
+            print 'Done.'
+        sys.exit(1)
+    #end def
+
     #setup signal handler
     signal.signal(signal.SIGINT,  sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGQUIT, sig_handler)
 
-    os.chdir('../')
+#    os.chdir('../')
     try:
         record_file = open('Ch5_gnm.fa', 'r')
     except IOError, e:
@@ -471,9 +485,10 @@ if __name__ == '__main__':
     query = Seq('GACTAATGCTAACGGGGGATT', IUPAC.ambiguous_dna)
     query = Seq('AGGGTTAGAAGNACTCAAGGAAA', IUPAC.ambiguous_dna)
     
-    template = record+record+record+record
-    query    = query+query+query+query+query
+    template = record#+record+record+record
+    query    = query#+query+query+query+query
     searcher = SearchEngine()
+    primer   = Primer(SeqRecord(query, id='test'), 0.1e-6)
 
     def print_out(out, name):
         print name
@@ -486,7 +501,7 @@ if __name__ == '__main__':
                     for dup, _id in res[1]:
                         print _id
                         print dup
-                        print 'mismatches:', dup.mismatches
+                        #print 'mismatches:', dup.mismatches
                     print '\n'
                 print '\n'
     #end def
@@ -503,7 +518,7 @@ if __name__ == '__main__':
         else: data2 = [('t_len', 'p_len', '_find time', '_find_mp time')]
         find_times    = dict([(l,[]) for l in lens])
         find_mp_times = dict([(l,[]) for l in lens])
-        for i in range(20):
+        for i in xrange(20):
             print 'iteration', i
             for t_len in lens:
                 print 't_len:',t_len
@@ -534,23 +549,31 @@ if __name__ == '__main__':
 
     ppid = os.getpid()
     
-#    t0 = time()
-#    results = searcher.find(template[:23885], Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 6)
-#    print_out(results, 'test')
-#    print 'elapsed %f seconds\n' % (time()-t0)
+#    from multiprocessing.managers import BaseManager
+#    from time import sleep
+#    class MyManager(BaseManager): pass
+#    MyManager.register('SearchEngine', SearchEngine)
+#    mgr = MyManager(); mgr.start()
+#    del searcher
+#    searcher = mgr.SearchEngine()
     
     t0 = time()
-    templates = [(1,23885,template[:23885]),
-                 (2,23435,template[:23435]),
-                 (3,23835,template[:23835]),
-                 (4,2432,template[:2432]),
-                 (5,538827,template[:538827])]
-    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 7)
-    for rid in results:
-        print '\n'
-        print_out(results[rid], rid)
+    results = searcher.find(template, primer, 10)
+    print_out(results, 'test')
     print 'elapsed %f seconds\n' % (time()-t0)
-    #gather_statistics1(5000, 500000, 5000)
+
+#    t0 = time()
+#    templates = [(1,23885,template[:23885]),
+#                 (2,23435,template[:23435]),
+#                 (3,23835,template[:23835]),
+#                 (4,2432,template[:2432]),
+#                 (5,538827,template[:538827])]
+#    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 7)
+#    for rid in results:
+#        print '\n'
+#        print_out(results[rid], rid)
+#    print 'elapsed %f seconds\n' % (time()-t0)
+#    gather_statistics1(5000, 500000, 5000)
     
 #    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
 #        searcher.set_max_chunk(l)
@@ -565,39 +588,27 @@ if __name__ == '__main__':
 #        gather_statistics(2800000, 4000000, 400000)
         #gather_statistics(5000000, 10000000, 1000000)
         
-    #searcher._find(template[:215000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
-    #searcher._find(template[:220000], Primer(SeqRecord(query[:20], id='test'), 0.1e-6), 3)
-
-    #primer = Primer(SeqRecord(query, id='test'), 0.1e-6)
-    #out0,out1,out2,out3 = [],[],[],[]
-    #cProfile.run("for i in range(10): searcher._find_mp(template, primer, 3);", 'find_mp2.profile')
-    #sleep(1)
-    #cProfile.run("for i in range(10): searcher._find(template[:33000], Primer(SeqRecord(query[:15], id='test'), 0.1e-6), 3)", 'find_33.profile')
-    #cProfile.run("for i in range(10): searcher._find(template[:34000], Primer(SeqRecord(query[:15], id='test'), 0.1e-6), 3)", 'find_34.profile')
-
     
-#    out  = None
-#    cProfile.run("for i in range(10):\
-#        out = searcher._find(template[:215000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
-#        'find_215000.profile')
-#    print_out(out, '_find')
-#    cProfile.run("for i in range(10):\
-#        out = searcher._find(template[:220000], Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6), 3)",
-#        'find_220000.profile')
-#    print_out(out, '_find')
+#    cProfile.run('''
+#for i in xrange(10): 
+#    searcher.find(template, primer, 8)
+#    ''', 
+#    'find_mp.profile')
+
+
 #    ar1, ar2 = None,None
 #    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
 #        ar1 = np.random.random_sample(l).astype(complex)
 #        ar2 = np.random.random_sample(l).astype(complex)
 #        times = []
-#        for i in range(10):
+#        for i in xrange(10):
 #            et = timeit.timeit('ifft(fft(ar1)*fft(ar2))', 
 #                               setup='from __main__ import ar1, ar2\n'
 #                                     'from scipy.fftpack import fft, ifft', 
 #                               number=10)
 #            times.append(et)
 #        print '%d %f' % (l, min(times))
-#        cProfile.run("for i in range(10):\
+#        cProfile.run("for i in xrange(10):\
 #            ifft(fft(ar1)*fft(ar2))",
 #            'ifft_fft_%d.profile'%l)
     

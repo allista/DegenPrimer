@@ -93,9 +93,12 @@ class iPCR_Base(iPCR_Interface):
         #find primer annealing sites
         primer_annealings = []
         for primer in self._primers:
-            primer_annealings.append(self._seq_db.find_in_db(primer, 
-                                                             self._max_mismatches, 
-                                                             self._seq_names.keys()))
+            print '\n\nStarting search for annealing sites of %s\n' % str(primer)
+            results = self._seq_db.find_in_db(primer, 
+                                              self._max_mismatches, 
+                                              self._seq_names.keys())
+            print '\nResults obtained for %s\n' % str(primer)
+            primer_annealings.append(results)
         self._seq_db.close()
         self._seq_annealings = dict()
         for seq_id in self._seq_names:

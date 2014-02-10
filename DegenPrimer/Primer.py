@@ -123,11 +123,11 @@ class Primer(object):
             if seq_rec.seq.alphabet != IUPAC.unambiguous_dna:
                 return None
         #compose degenerate sequence
-        master_sequence = [set() for i in range(seq_len)]
+        master_sequence = [set() for i in xrange(seq_len)]
         for seq_rec in seq_records:
-            for i in range(seq_len):
+            for i in xrange(seq_len):
                 master_sequence[i].add(seq_rec.seq[i])
-        for i in range(seq_len):
+        for i in xrange(seq_len):
             if len(master_sequence[i]) == 1:
                 master_sequence[i] = master_sequence[i].pop()
                 continue
@@ -249,14 +249,14 @@ class Primer(object):
         for letter in seq_rec.seq:
             n_sequences = len(unambiguous_strings)
             if letter in ['A', 'T', 'G', 'C']:
-                for s in range(n_sequences):
+                for s in xrange(n_sequences):
                     unambiguous_strings[s] += letter
             elif letter in cls.IUPAC_ambiguous:
                 replacements = cls.IUPAC_ambiguous[letter]
                 n_replacements = len(replacements) 
                 unambiguous_strings *= n_replacements
-                for r in range(n_replacements):
-                    for s in range(n_sequences):
+                for r in xrange(n_replacements):
+                    for s in xrange(n_sequences):
                         unambiguous_strings[s+n_sequences*r] += replacements[r]
             else: raise ValueError('Unknown letter %s in sequence:\n%s' % (letter, str(seq_rec)))
         #make a list of SeqRecords
@@ -264,7 +264,7 @@ class Primer(object):
         num_unambiguous = len(unambiguous_strings)
         id_template = '%s_%0' + '%d' % int(log(num_unambiguous, 10)+1) + 'd'
         if num_unambiguous < 2: return unambiguous_seq_list
-        for s in range(num_unambiguous):
+        for s in xrange(num_unambiguous):
             un_seq = Seq(unambiguous_strings[s], IUPAC.unambiguous_dna)
             unambiguous_seq_list.append(SeqRecord(un_seq, description=seq_rec.description, 
                                                   id=(id_template % (seq_rec.id, s+1))))

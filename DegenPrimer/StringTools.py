@@ -37,7 +37,7 @@ def print_exception(e):
     
     
 def random_text(length):
-    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _unused in range(length))
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _unused in xrange(length))
 #end def
 
 
@@ -71,7 +71,7 @@ def line_by_line(texts, widths, divider='|', filler=' ', j_down=False, j_center=
     _texts = [wrap_text(t, widths[w]-1)[:-1].splitlines() for w,t in enumerate(texts)]
     _lines = max(len(t) for t in _texts)
     output_text = ''
-    for l in range(_lines):
+    for l in xrange(_lines):
         for w,t in enumerate(_texts):
             if not j_down:
                 if l < len(t):
@@ -117,10 +117,10 @@ def print_table(table, delimiter=':'):
     if not table: return ''
     if len(set(len(row) for row in table)) > 1: 
         raise ValueError('StringTools.print_table: all rows in a table should be of equal size.')
-    max_col_len = [max(len(str(table[r][c])) for r in range(len(table))) for c in range(len(table[0]))]
+    max_col_len = [max(len(str(table[r][c])) for r in xrange(len(table))) for c in xrange(len(table[0]))]
     table_str = ''
     for row in table:
-        for c in range(len(row)):
+        for c in xrange(len(row)):
             if c == 0: #first column left-aligned
                 table_str += str(row[c]) #data
                 if len(row) > 1:

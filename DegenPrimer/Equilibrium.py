@@ -22,7 +22,6 @@ Created on Nov 25, 2012
 '''
 from scipy.optimize import fsolve
 from numpy.random import random_sample
-from time import time
 
 class Equilibrium(object):
     '''
@@ -139,7 +138,7 @@ class Equilibrium(object):
         C_A      = self.concentrations[reaction['Ai']]
         r        = self.solution[r_hash]
         if   r_type == 'AB':
-            C_B = self.concentrations[reaction['Bi']]
+            C_B  = self.concentrations[reaction['Bi']]
             C_AB = C_A if C_A < C_B else C_B
             return C_AB*r
         elif r_type == '2A': return C_A/2.0*r
@@ -228,14 +227,14 @@ class Equilibrium(object):
             return func
     #end def
     
-    
+
     def calculate(self):
         #all left-side functions
         l_funcs  = [self._function_factory(ri) 
-                    for ri in range(len(self.reactions))]
+                    for ri in xrange(len(self.reactions))]
         #reactant consumption functions
         rc_funcs = [self._reactants_consumption_factory(Ai) 
-                     for Ai in range(len(self._iconcentrations))]
+                     for Ai in xrange(len(self._iconcentrations))]
         #initial evaluation point
         r0 = [1e-6,]*len(self.reactions)
         #system function for fsolve and objective function for fmin_
@@ -260,7 +259,7 @@ class Equilibrium(object):
         self._consumptions = [func(r0) for func in rc_funcs]
         self._solution     = r0
         self.solution      = dict()
-        for ri in range(len(r0)):
+        for ri in xrange(len(r0)):
             self.solution[self._rev_r_dict[ri]] = r0[ri]
         self.solution_objective_value = objective_function(r0)
         return self.solution, self.solution_objective_value
@@ -306,12 +305,12 @@ if __name__ == '__main__':
     solutions = []
 #    pow = lambda x: x**2
 #    cProfile.run('''
-#for i in range(1000):
+#for i in xrange(1000):
 #    abs(-123.464)
 #    x = pow(-123.464)''',
 #'abs-power.profile')
     cProfile.run('''
-for i in range(size):
+for i in xrange(size):
     eq_system = Equilibrium(reactions, C_dict, 1e-10)
     solutions.append(eq_system.calculate())
 ''',

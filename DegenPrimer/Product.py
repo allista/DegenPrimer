@@ -28,6 +28,8 @@ from StringTools import hr
 
 class Region(object):
     '''Region of a sequence.'''
+    __slots__ = ['name', 'start', 'end', 'forward']
+    
     def __init__(self, name, start, end, forward):
         if start < 1 or end < 1:
             raise ValueError('Region: start and end of a sequence region should be grater than 1.')
@@ -86,12 +88,19 @@ class Product(Region):
     '''Representation of a PCR product. A product is defined as a sequence 
     region bounded by start and end positions which correspond to 3' ends of 
     primers (forward and reverse) which produce this product.'''
+    __slots__ = ['quantity', 'cycles',
+                 '_fwd_ids', '_rev_ids', 
+                 'fwd_primers', 'rev_primers', 
+                 '_fwd_margin', '_rev_margin',
+                 'fwd_template', 'rev_template',
+                 ]
+    
     def __init__(self, template_name, start, end, 
                  fwd_primers=None, rev_primers=None):
         Region.__init__(self, template_name, start, end, forward=True)
         #quantity and number of cycles
-        self._quantity    = 0
-        self._cycles      = 0
+        self.quantity     = 0
+        self.cycles       = 0
         #primers and templates
         self._fwd_ids     = set()
         self._rev_ids     = set()
@@ -109,10 +118,10 @@ class Product(Region):
     #end def
     
     
-    def pretty_print(self, with_name=True):
+    def pretty_print(self, with_name=True, include_fwd_3_mismatch=True):
         rep  = Region.pretty_print(self, with_name=with_name)
         rep += '\n'
-        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self._quantity)
+        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self.quantity)
         rep += 'number of cycles: %d\n' % self.cycles
         rep += '\n'
         rep += hr(' forward annealing site ')
@@ -125,20 +134,20 @@ class Product(Region):
         fwd_primers = list(self.fwd_primers)
         fwd_primers.sort(key=lambda x: x[1])
         for primer, _id in fwd_primers:
-            rep += _id + ':\n' + repr(primer) + '\n'
+            rep += _id + ':\n' + primer.print_most_stable(include_fwd_3_mismatch) + '\n'
         rep += '\n'
         rep += hr(' reverse primers ')
         rev_primers = list(self.rev_primers)
         rev_primers.sort(key=lambda x: x[1])
         for primer, _id in rev_primers:
-            rep += _id + ':\n' + repr(primer) + '\n'
+            rep += _id + ':\n' + primer.print_most_stable(include_fwd_3_mismatch) + '\n'
         return rep
     #end def
     
     
     def __str__(self):
         rep  = Region.pretty_print(self)
-        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self._quantity)
+        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self.quantity)
         rep += 'number of cycles: %d\n' % self.cycles
         rep += '\nforward annealing site:\n'
         rep += str(self.fwd_template)
@@ -180,12 +189,6 @@ class Product(Region):
         return self
     #end def
     
-    
-    @property
-    def quantity(self): return self._quantity
-    
-    @quantity.setter
-    def quantity(self, q): self._quantity = q
     
     @property
     def fwd_ids(self):

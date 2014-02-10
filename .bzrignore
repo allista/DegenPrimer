@@ -35,3 +35,10 @@ RE:(?i).*\.back
 RE:(?i).*\.ipcress
 RE:(?i).*\.gz
 RE:(?i).*\.out
+*.cfg_
+*.log
+*.lprof
+*.mprof
+*.new
+*.orig
+*.xml_

@@ -33,8 +33,8 @@ except ImportError:
 from iPCR_Interface import iPCR_Interface
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
-from SecStructures import SecStructures, Dimer, Duplex
-import TD_Functions
+from SecStructures import Dimer, Duplex
+import TD_Functions, SecStructures
 
 
 class BlastPrimers(iPCR_Interface):
@@ -83,7 +83,7 @@ class BlastPrimers(iPCR_Interface):
         for primer in self._primers: all_primers.extend(primer.sequences)
         self._bounds = [[[1,1],]]
         query = ''
-        for p in range(len(all_primers)):
+        for p in xrange(len(all_primers)):
             #construct query
             query += str(all_primers[p])
             #calculate boundaries
@@ -125,7 +125,7 @@ class BlastPrimers(iPCR_Interface):
             or query_end   > bounds[1]:
                 continue
             dimer = Dimer()
-            for i in range(len(hsp.match)):
+            for i in xrange(len(hsp.match)):
                 if hsp.match[i] == '|':
                     dimer.add(query_start-bounds[0]+i,i)
             template = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement()
@@ -214,8 +214,9 @@ class BlastPrimers(iPCR_Interface):
                 rev_annealings = []
                 #check and sort all hsps
                 for hsp in alignment.hsps:
-                    #construct annealing duplex
+                    #construct annealing duplex and check if it's stable
                     hsp_duplex = self._duplex_from_hsp(hsp)
+                    if not hsp_duplex: continue
                     #find id of the primer
                     hsp_id = ''
                     for primer in self._primers:
@@ -321,18 +322,18 @@ class BlastPrimers(iPCR_Interface):
             blast_report.write(hr(' query ID: %s '  % blast_record.query, symbol='#'))
             #filter hits by alignments and format report text for each hit
             hits = []
-            for h in range(num_hits):
+            for h in xrange(num_hits):
                 hit  = blast_record.alignments[h]
                 desc = blast_record.descriptions[h] 
                 #check and format hsps
                 hsps = []
                 for hsp in hit.hsps:
                     hsp_duplex = self._duplex_from_hsp(hsp)
+                    #check if any stable dimers are formed by this duplex
+                    if not hsp_duplex: continue
                     #check 3' mismatch
                     if not self._with_exonuclease \
-                    and hsp_duplex.fwd_3_mismatch: continue
-                    #check annealing enegry
-                    if hsp_duplex.dG > SecStructures.max_dimer_dG: continue
+                    and not hsp_duplex.have_3_matches: continue
                     #get primer concentration
                     for primer in self._primers:
                         if primer.has_subsequence(hsp_duplex.fwd_seq): 
@@ -341,7 +342,7 @@ class BlastPrimers(iPCR_Interface):
                     #format hsps representation
                     hsp_text  = ('score: %d; bits: %d; E-value: %.2e;\n\n'
                                  % (hsp.score, hsp.bits, hsp.expect))
-                    hsp_text += str(hsp_duplex)
+                    hsp_text += hsp_duplex.print_most_stable(include_fwd_3_mismatch=self._with_exonuclease)
                     hsp_text += 'Conversion degree = %.2f%%\n\n' \
                     % (TD_Functions.primer_DNA_conversion_degree(hsp_primer_concentration, hsp_duplex.K)*100)
                     hsp_text += 'Template strand: '

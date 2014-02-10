@@ -59,7 +59,7 @@ def _load_csv(filenames):
     table_dict = dict()
     #dictionary of column names
     row_dict   = dict()
-    for ci in range(1,len(csv_reader[0])):
+    for ci in xrange(1,len(csv_reader[0])):
         row_dict[ci] = csv_reader[0][ci]
     #read row by row
     for row in csv_reader[1:]: #skip the first row

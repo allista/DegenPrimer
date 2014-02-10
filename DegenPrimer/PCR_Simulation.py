@@ -51,8 +51,6 @@ class PCR_Simulation(MultiprocessingBase):
     _min_K               = 100
     #products with quantity less than maximum quantity multiplied by this factor will not be included in the report
     _min_quantity_factor = 0.001
-    #maximum 3' matches to remove in alternative primer annealing
-    _max_3_matches       = 3
 
 
     def __init__(self, 
@@ -133,17 +131,6 @@ class PCR_Simulation(MultiprocessingBase):
     def _register_added_duplexes(self, hit, _pos, _duplexes, _template):
         self._annealings[hit].append((_pos, _duplexes, _template))
         self._add_template(hit, _template)
-        alt_annealings  = (_pos, [], _template)
-        for _duplex, _id in _duplexes:
-            self._used_primer_ids.add(_id)
-            #if no exonuclease, try to add alternative annealing without 3' matches to side_annealings
-            if not self._with_exonuclease and not _duplex.fwd_3_mismatch:
-                #try to add alternative annealing without 3' matches to side annealings
-                new_duplex = deepcopy(_duplex)
-                if new_duplex.strip_3_matches(self._max_3_matches) \
-                and new_duplex.K >= self._min_K:
-                    alt_annealings[1].append((new_duplex, _id))
-        if alt_annealings[1]: self._annealings[hit].append(alt_annealings)
     #end def
     
     
@@ -158,7 +145,7 @@ class PCR_Simulation(MultiprocessingBase):
                 self._add_template(hit, _template)
     #end def
             
-    
+
     def _sort_annealings(self, hit, strand, annealings, good, bad):
         for _pos, _duplexes in annealings:
             if strand:
@@ -170,6 +157,7 @@ class PCR_Simulation(MultiprocessingBase):
             for _duplex, _id in _duplexes:
                 #check equilibrium constant
                 if _duplex.K < self._min_K: continue
+                _duplex.filter_dimers_by_K(self._min_K)
                 #check if there are such primers in the system at all
                 duplex_with_primer = False
                 for primer in self._primers:
@@ -180,7 +168,7 @@ class PCR_Simulation(MultiprocessingBase):
                 #check 3' mismatches
                 if self._with_exonuclease: #if poly has 3'-5'-exonuclease, add to the good annealings
                     good_annealings[1].append((_duplex, _id))
-                elif not _duplex.fwd_3_mismatch: #if not, check 3' annealing
+                elif _duplex.have_3_matches: #if not, check 3' annealing
                     good_annealings[1].append((_duplex, _id))
                 else:
                     bad_annealings[1].append((_duplex, _id))
@@ -189,7 +177,7 @@ class PCR_Simulation(MultiprocessingBase):
             if bad_annealings[1]:  bad.append(bad_annealings)
     #end def
     
-    
+
     def add_annealings(self, hit, fwd_annealings, rev_annealings):
         '''Add primer annealing sites to the simulation. Within them find 
         PCR products, add other annealings as side reactions.
@@ -203,7 +191,7 @@ class PCR_Simulation(MultiprocessingBase):
         if not fwd_annealings or not rev_annealings: return False
         self._annealings[hit] = []
         good_annealings       = ([], []) #0 is reverse strand, 1 is forward
-        bad_annealings        = []
+        bad_annealings        = []          
         #sort annealings into good (ones that are suitable for product generation) 
         #and bad (ones that are not) 
         self._sort_annealings(hit, 1, fwd_annealings, good_annealings, bad_annealings)
@@ -227,8 +215,10 @@ class PCR_Simulation(MultiprocessingBase):
                 self._add_product(hit, start, end, fwd_dups, rev_dups)
                 if fwd_pos not in added_positons[1]:
                     self._register_added_duplexes(hit, fwd_pos, fwd_dups, fwd_templ)
+                    added_positons[1].add(fwd_pos)
                 if rev_pos not in added_positons[0]:
                     self._register_added_duplexes(hit, rev_pos, rev_dups, rev_templ)
+                    added_positons[0].add(rev_pos)
                 if not products_added: products_added = True
         if not products_added: #delete all annealings if no products have been added
             del self._annealings[hit]
@@ -302,10 +292,11 @@ class PCR_Simulation(MultiprocessingBase):
             template = self._find_template(hit_id, _template)
             template_hash = hash(template)
             for _duplex, _id in _duplexes:
-                r_hash = hash((_duplex.fwd_seq, template))
-                reactions[r_hash] = Equilibrium.compose_reaction(_duplex.K, 
-                                                                 _duplex.fwd_seq, 
-                                                                 template_hash, 'AB')
+                for _dimer in _duplex.dimers:
+                    r_hash = hash((_duplex.fwd_seq, _dimer, template))
+                    reactions[r_hash] = Equilibrium.compose_reaction(_dimer.K, 
+                                                                     _duplex.fwd_seq, 
+                                                                     template_hash, 'AB')
         return reactions
     #end def
     
@@ -329,9 +320,12 @@ class PCR_Simulation(MultiprocessingBase):
         
             
     def _calculate_equilibrium(self, abort_e):
-        results = self._parallelize_work(abort_e, 5e-3, 
-                                         self._calculate_equilibrium_for_hit, 
-                                         self._products.keys())
+        if len(self._products) > 1:
+            results = self._parallelize_work(abort_e, 5e-3, 
+                                             self._calculate_equilibrium_for_hit, 
+                                             self._products.keys())
+        else:
+            results = self._calculate_equilibrium_for_hit(self._products.keys()[0])
         for hit_id, equilibrium in results:
             self._solutions[hit_id]   = equilibrium
             self._max_objective_value = max(self._max_objective_value, 
@@ -354,22 +348,32 @@ class PCR_Simulation(MultiprocessingBase):
             fwd_strands_1 = dict()
             fwd_template  = self._find_template(hit_id, product.fwd_template)
             for fwd_primer, _id in product.fwd_primers:
-                r_hash = hash((fwd_primer.fwd_seq, fwd_template))
-                if r_hash in solution:
-                    fwd_strands_1[fwd_primer.fwd_seq] = [solution[r_hash],
-                                                         equilibrium.get_product_concentration(r_hash)]
+                fwd_strands_1[fwd_primer.fwd_seq] = [0, 0]
+                for dimer in fwd_primer.dimers:
+                    if dimer.fwd_mismatch and not self._with_exonuclease: continue 
+                    r_hash = hash((fwd_primer.fwd_seq, dimer, fwd_template))
+                    if r_hash in solution:
+                        fwd_strands_1[fwd_primer.fwd_seq][0] += solution[r_hash]
+                        fwd_strands_1[fwd_primer.fwd_seq][1] += equilibrium.get_product_concentration(r_hash)
+                if fwd_strands_1[fwd_primer.fwd_seq][1] != 0:
                     cur_primers[fwd_primer.fwd_seq] -= fwd_strands_1[fwd_primer.fwd_seq][1] 
                     cur_state[0] -= fwd_strands_1[fwd_primer.fwd_seq][1]*len(product)
+                else: del fwd_strands_1[fwd_primer.fwd_seq]
             #reverse primer annealing, first cycle
             rev_strands_1 = dict()
             rev_template  = self._find_template(hit_id, product.rev_template)
             for rev_primer, _id in product.rev_primers:
-                r_hash = hash((rev_primer.fwd_seq, rev_template))
-                if r_hash in solution:
-                    rev_strands_1[rev_primer.fwd_seq] = [solution[r_hash],
-                                                         equilibrium.get_product_concentration(r_hash)]
+                rev_strands_1[rev_primer.fwd_seq] = [0, 0]
+                for dimer in rev_primer.dimers:
+                    if dimer.fwd_mismatch and not self._with_exonuclease: continue
+                    r_hash = hash((rev_primer.fwd_seq, dimer, rev_template))
+                    if r_hash in solution:
+                        rev_strands_1[rev_primer.fwd_seq][0] += solution[r_hash]
+                        rev_strands_1[rev_primer.fwd_seq][1] += equilibrium.get_product_concentration(r_hash)
+                if rev_strands_1[rev_primer.fwd_seq][1] != 0:
                     cur_primers[rev_primer.fwd_seq] -= rev_strands_1[rev_primer.fwd_seq][1]
                     cur_state[0] -= rev_strands_1[rev_primer.fwd_seq][1]*len(product)
+                else: del rev_strands_1[rev_primer.fwd_seq]
             #second and third cycles
             for f_id in fwd_strands_1:
                 for r_id in rev_strands_1:
@@ -398,7 +402,7 @@ class PCR_Simulation(MultiprocessingBase):
             return hit_id, None, None 
         #all consequent PCR cycles
         cur_variants.sort(key=lambda(x): x[2])
-        for cycle in range(4, self._num_cycles+1):
+        for cycle in xrange(4, self._num_cycles+1):
             idle = True
             #save current state
             prev_state = deepcopy(cur_state)
@@ -442,9 +446,12 @@ class PCR_Simulation(MultiprocessingBase):
     
     
     def _calculate_product_quantities(self, abort_e):
-        results = self._parallelize_work(abort_e, 1e-3, 
-                                         self._calculate_quantities_for_hit, 
-                                         self._products.keys())
+        if len(self._products) > 1:
+            results = self._parallelize_work(abort_e, 1e-3, 
+                                             self._calculate_quantities_for_hit, 
+                                             self._products.keys())
+        else:
+            results = self._calculate_quantities_for_hit(self._products.keys()[0])
         for hit_id, products, reaction_end in results:
             self._products[hit_id]      = products
             self._reaction_ends[hit_id] = reaction_end
@@ -536,7 +543,6 @@ class PCR_Simulation(MultiprocessingBase):
         self._calculate_product_quantities(abort_event)
         if abort_event.is_set(): return
         self._clean_abort_even(abort_event)
-
         #filter out hits without products
         self._products = dict([hit for hit in self._products.items() 
                                if hit[1] is not None])
@@ -623,7 +629,7 @@ class PCR_Simulation(MultiprocessingBase):
         min_len_log  = int(log(min(len(p) for p in products))*self._precision)
         window_log   = int((log(max_len)-log(nearest_srip))*self._precision)
         #construct phoresis
-        phoresis    = [[l,0,int(exp(l/self._precision))] for l in range(min_len_log, max_len_log+window_log, window_log)]
+        phoresis    = [[l,0,int(exp(l/self._precision))] for l in xrange(min_len_log, max_len_log+window_log, window_log)]
         for product in products:
             l = int(log(len(product))*self._precision)
             p = (l - min_len_log)/window_log
@@ -645,7 +651,7 @@ class PCR_Simulation(MultiprocessingBase):
         phoresis_text = ''
         phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
         phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-        for l in range(len(phoresis)):
+        for l in xrange(len(phoresis)):
             line = phoresis[l]
             prev_mark   = phoresis[l-1][2] if l > 0 else line[2]+window
             mark_spacer = max_mark - len(str(line[2])) - len(str(prev_mark))
@@ -805,7 +811,7 @@ class PCR_Simulation(MultiprocessingBase):
             products.sort(key=lambda x: x.start)
             for pi, product in enumerate(products):
                 prod_string += hr(' product %d ' % (pi+1), '=')
-                prod_string += product.pretty_print(with_name=False)
+                prod_string += product.pretty_print(with_name=False, include_fwd_3_mismatch=self._with_exonuclease)
                 prod_string += hr('', '=')
             prod_string += hr('', '*')
         prod_string += '\n'
@@ -816,7 +822,6 @@ class PCR_Simulation(MultiprocessingBase):
 
 #test
 if __name__ == '__main__':
-    import StringTools
     from SecStructures import Duplex
     from Primer import Primer
     import os

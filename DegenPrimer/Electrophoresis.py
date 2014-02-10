@@ -37,7 +37,7 @@ def _format_electrophoresis(phoresis, window):
     phoresis_text = ''
     phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
     phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-    for l in range(len(phoresis)):
+    for l in xrange(len(phoresis)):
         line = phoresis[l]
         next_mark   = str(phoresis[l+1][2]) if l < len(phoresis)-1 else str(line[2]+window) 
         mark_spacer = max_mark - len(str(line[2])) - len(next_mark)
@@ -63,7 +63,7 @@ def print_electrophoresis(products):
     min_len_log  = int(log(min(p['len'] for p in products))*precision)
     window_log   = int((log(max_len)-log(nearest_srip))*precision)
     #construct phoresis
-    phoresis    = [[l,0,int(exp(l/precision))] for l in range(min_len_log, max_len_log+window_log, window_log)]
+    phoresis    = [[l,0,int(exp(l/precision))] for l in xrange(min_len_log, max_len_log+window_log, window_log)]
     for product in products:
         l = int(log(product['len'])*precision)
         p = (l - min_len_log)/window_log
