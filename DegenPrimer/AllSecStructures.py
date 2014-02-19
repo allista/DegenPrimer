@@ -237,9 +237,6 @@ if __name__ == '__main__':
     from multiprocessing import Event
     abort_event = Event()
 #    import cProfile
-#    from multiprocessing.managers import BaseManager
-#    class MyManager(BaseManager): pass
-#    MyManager.register('AllSecStructures', AllSecStructures)
     
     TD_Functions.PCR_P.PCR_T = 53
     fwd_primer  = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATCC').reverse_complement(),id='primer1'), 0.9e-6)
@@ -248,7 +245,12 @@ if __name__ == '__main__':
     rev_primer.generate_components(); rev_primer.calculate_Tms()
     print repr(fwd_primer)
     print repr(rev_primer)
-#    mgr = MyManager(); mgr.start()
+    
+    ss = SecStructures(fwd_primer.seq_records[0])
+    sc = SecStructures(fwd_primer.seq_records[0], rev_primer.seq_records[0])
+    
+    print ss.formatShort()
+
     all_structs = AllSecStructures(abort_event, 'test', [fwd_primer, rev_primer])
     all_structs.find_structures()
 
@@ -260,6 +262,7 @@ if __name__ == '__main__':
 #    all_structs.calculate_equilibrium()
 #''',
 #'all_structs.profile')
+
     all_structs.calculate_equilibrium()
     
     print all_structs.equilibrium_concentrations()

@@ -551,13 +551,16 @@ if __name__ == '__main__':
 #    del searcher
 #    searcher = mgr.SearchEngine()
     
-    t0 = time()
     import TD_Functions
     TD_Functions.PCR_P.PCR_T = 48
-    results = searcher.find(template, primer, 9)
-    t1 = (time()-t0)
-    print_out(results, 'test')
-    print 'elapsed %f seconds\n' % t1 
+    
+#    from tests.asizeof import mem_used
+#    t0 = time()
+#    results = searcher.find(template, primer, 9)
+#    mem_used(results)
+#    t1 = (time()-t0)
+#    print_out(results, 'test')
+#    print 'elapsed %f seconds\n' % t1 
 
 #    t0 = time()
 #    templates = [(1,23885,template[:23885]),
@@ -588,9 +591,22 @@ if __name__ == '__main__':
     
 #    cProfile.run('''
 #for i in xrange(10): 
-#    searcher.find(template, primer, 8)
+#    searcher.find(template, primer, 9)
 #    ''', 
-#    'find_mp.profile')
+#    'Dimer_new-find.profile')
+
+    t_len = len(template)
+    p_len = len(primer)
+    cProfile.run('''
+for i in xrange(10): 
+    searcher._find(template, primer, t_len, p_len, 6)
+    ''', 
+    'Dimer_new-find.profile')
+    
+#    from scipy.stats import sem
+#    find_times = [timeit.timeit('searcher.find(template, primer, 9)', 'from __main__ import template, primer, searcher', number=1) for _i in xrange(10)]
+#    print 'mean time: %.02f\nsem: %.02f' % (np.mean(find_times), sem(find_times))
+    
 
 
 #    ar1, ar2 = None,None
