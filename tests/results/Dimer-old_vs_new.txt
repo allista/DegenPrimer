@@ -1,0 +1,24 @@
+SearchEngine.find test parameters:
+	template   = 'ThGa.fa'
+	query      = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+	mismatches = 9
+	TD_Functions.PCR_P.PCR_T = 48
+
+Memory:
+	New Dimer: results use 30.74Mb
+	Old Dimer: results use 43.73Mb
+	difference: -29.71%
+
+Speed:
+	New Dimer: 15.45 s
+	Old Dimer: 15.54 s
+	difference: +0.58%
+
+====== After memory improvements in Dimer and Duplex =======
+Memory:
+	results use 12.26Mb
+	difference: -71.96% (naive programming sucks T_T)
+	
+Speed:
+	10.16 s
+	difference: +34.24%

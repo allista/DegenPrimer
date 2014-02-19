@@ -114,7 +114,7 @@ class SearchEngine(MultiprocessingBase):
         unambiguous components of the primer'''
         duplexes = []
         for var in primer.seq_records:
-            dup = Duplex(var.seq, template[position:position+p_len].complement()[::-1])
+            dup = Duplex(str(var.seq), str(template[position:position+p_len].complement())[::-1])
             if not dup: continue
             duplexes.append((dup, var.id))
         if not reverse:
@@ -468,21 +468,24 @@ if __name__ == '__main__':
         print 'Unable to open %s' % seq_file
         print_exception(e)
         sys.exit(1)
-    record = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
+    template = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
     record_file.close()
     
-    query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
-    query = Seq('GACTAATGCTAACGGGGGATT', IUPAC.ambiguous_dna)
-    query = Seq('AGGGTTAGAAGNACTCAAGGAAA', IUPAC.ambiguous_dna)
+#    query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+#    query = Seq('GACTAATGCTAACGGGGGATT', IUPAC.ambiguous_dna)
+#    query = Seq('AGGGTTAGAAGNACTCAAGGAAA', IUPAC.ambiguous_dna)
+#    
+#    ftgam = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+    rtgam = Seq('GAASGCRAAKATYGGGAAC', IUPAC.ambiguous_dna)
     
-    ftgam_f = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
-    
-    template = record#+record+record+record
+#    template = template+record+record+record
 #    query    = query+query+query+query+query
 
-    searcher = SearchEngine(abort_event)
-    primer   = Primer(SeqRecord(ftgam_f, id='ftgam_f'), 0.43e-6)
+#    
+#    primer   = Primer(SeqRecord(ftgam, id='ftgam'), 0.43e-6)
+    primer   = Primer(SeqRecord(rtgam, id='rtgam'), 0.43e-6) #48C, 9mism, results: 564.85Mb, 410.37Mb, 240.07Mb
     primer.generate_components()
+    searcher = SearchEngine(abort_event)
 
     def print_out(out, name):
         print name
@@ -502,45 +505,45 @@ if __name__ == '__main__':
     #end def
     
     
-    def gather_statistics1(start_len, end_len, delta, title=None):
-        global ppid, data1, data2, T,P,mult
-        ppid  = os.getpid()
-        p_len = 20
-        lens  = range(start_len, end_len+1, delta)
-        if title:
-            data2 = [('t_len', 'p_len', '_find time %s'%title, 
-                      '_find_mp time %s'%title)]
-        else: data2 = [('t_len', 'p_len', '_find time', '_find_mp time')]
-        find_times    = dict([(l,[]) for l in lens])
-        find_mp_times = dict([(l,[]) for l in lens])
-        for i in xrange(20):
-            print 'iteration', i
-            for t_len in lens:
-                print 't_len:',t_len
-                T = template[:t_len]
-                P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
-                et = timeit.timeit('searcher._find(T, P, 3)', 
-                                   setup='from __main__ import T,P,searcher', 
-                                   number=1)
-                find_times[t_len].append(et)
-                et = timeit.timeit('searcher._find_mp(T, P, 3)', 
-                                   setup='from __main__ import T,P,searcher', 
-                                   number=1)
-                find_mp_times[t_len].append(et)
-                print ''
-        for t_len in lens:
-            data2.append((t_len, p_len, 
-                          min(find_times[t_len]), min(find_mp_times[t_len])))
-        if title:
-            filename = 'find_mp_vs_find-%s-%d.csv' % (title, time())
-        else: filename = 'find_mp_vs_find-%d.csv' % time()
-        out_file = open(filename, 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data2)
-        out_file.close()
-        data2 = []
-        print 'Gather statistics 1: data was written to %s' % filename 
-    #end def
+#    def gather_statistics1(start_len, end_len, delta, title=None):
+#        global ppid, data1, data2, T,P,mult
+#        ppid  = os.getpid()
+#        p_len = 20
+#        lens  = range(start_len, end_len+1, delta)
+#        if title:
+#            data2 = [('t_len', 'p_len', '_find time %s'%title, 
+#                      '_find_mp time %s'%title)]
+#        else: data2 = [('t_len', 'p_len', '_find time', '_find_mp time')]
+#        find_times    = dict([(l,[]) for l in lens])
+#        find_mp_times = dict([(l,[]) for l in lens])
+#        for i in xrange(20):
+#            print 'iteration', i
+#            for t_len in lens:
+#                print 't_len:',t_len
+#                T = template[:t_len]
+#                P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
+#                et = timeit.timeit('searcher._find(T, P, 3)', 
+#                                   setup='from __main__ import T,P,searcher', 
+#                                   number=1)
+#                find_times[t_len].append(et)
+#                et = timeit.timeit('searcher._find_mp(T, P, 3)', 
+#                                   setup='from __main__ import T,P,searcher', 
+#                                   number=1)
+#                find_mp_times[t_len].append(et)
+#                print ''
+#        for t_len in lens:
+#            data2.append((t_len, p_len, 
+#                          min(find_times[t_len]), min(find_mp_times[t_len])))
+#        if title:
+#            filename = 'find_mp_vs_find-%s-%d.csv' % (title, time())
+#        else: filename = 'find_mp_vs_find-%d.csv' % time()
+#        out_file = open(filename, 'wb')
+#        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+#        csv_writer.writerows(data2)
+#        out_file.close()
+#        data2 = []
+#        print 'Gather statistics 1: data was written to %s' % filename 
+#    #end def
 
     ppid = os.getpid()
     
@@ -554,13 +557,18 @@ if __name__ == '__main__':
     import TD_Functions
     TD_Functions.PCR_P.PCR_T = 48
     
-#    from tests.asizeof import mem_used
-#    t0 = time()
-#    results = searcher.find(template, primer, 9)
-#    mem_used(results)
-#    t1 = (time()-t0)
+    from tests.asizeof import mem_used#, heappy
+    t0 = time()
+    profile = 'tests/results/SearchEngine_results.hpy'
+#    heappy.setref()
+    results = searcher.find(template, primer, 9)
+    mem_used(results)
+#    heappy.heap().stat.dump(profile)
+#    print heappy.heap()
+    t1 = (time()-t0)
+#    heappy.pb(profile)
 #    print_out(results, 'test')
-#    print 'elapsed %f seconds\n' % t1 
+    print 'elapsed %f seconds\n' % t1 
 
 #    t0 = time()
 #    templates = [(1,23885,template[:23885]),
@@ -595,13 +603,13 @@ if __name__ == '__main__':
 #    ''', 
 #    'Dimer_new-find.profile')
 
-    t_len = len(template)
-    p_len = len(primer)
-    cProfile.run('''
-for i in xrange(10): 
-    searcher._find(template, primer, t_len, p_len, 6)
-    ''', 
-    'Dimer_new-find.profile')
+#    t_len = len(template)
+#    p_len = len(primer)
+#    cProfile.run('''
+#for i in xrange(10): 
+#    searcher._find(template, primer, t_len, p_len, 6)
+#    ''', 
+#    'Dimer_new-find.profile')
     
 #    from scipy.stats import sem
 #    find_times = [timeit.timeit('searcher.find(template, primer, 9)', 'from __main__ import template, primer, searcher', number=1) for _i in xrange(10)]

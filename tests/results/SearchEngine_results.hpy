@@ -1,0 +1,246 @@
+.loader: _load_stat
+.format: SetFormat
+.timemade: 1392827884.801193
+.count: 66
+.size: 3640
+.kindname: 
+.kindheader: Kind (class / dict of class)
+.numrows: 9
+.r: 45 1800 __builtin__.weakref
+.r: 4 544 dict of guppy.etc.Glue.Interface
+.r: 3 408 dict (no owner)
+.r: 1 356 types.FrameType
+.r: 4 144 str
+.r: 1 136 dict of guppy.etc.Glue.Owner
+.r: 4 112 guppy.etc.Glue.Interface
+.r: 3 108 types.MethodType
+.r: 1 32 guppy.etc.Glue.Owner
+.end: .loader: _load_stat
+.loader: _load_stat
+.format: SetFormat
+.timemade: 1392828005.551225
+.count: 695938
+.size: 37708400
+.kindname: 
+.kindheader: Kind (class / dict of class)
+.numrows: 33
+.r: 77643 8696016 __builtin__.set
+.r: 61350 8343600 dict of Bio.Seq.Seq
+.r: 95396 5379264 list
+.r: 77643 4348008 SecStructures.Dimer
+.r: 92176 3444484 str
+.r: 155286 2484576 float
+.r: 61350 1717800 Bio.Seq.Seq
+.r: 30675 1595100 SecStructures.Duplex
+.r: 34148 1093496 tuple
+.r: 3367 457912 dict of Bio.Alphabet.IUPAC.IUPACUnambiguousDNA
+.r: 3367 94276 Bio.Alphabet.IUPAC.IUPACUnambiguousDNA
+.r: 3367 40404 numpy.int32
+.r: 31 2232 types.CodeType
+.r: 50 2000 __builtin__.weakref
+.r: 1 1672 dict of module
+.r: 29 1624 function
+.r: 3 1560 dict of type
+.r: 3 1344 type
+.r: 5 680 dict (no owner)
+.r: 4 544 dict of guppy.etc.Glue.Interface
+.r: 10 480 pympler.asizeof._Typedef
+.r: 1 440 types.FrameType
+.r: 5 140 pympler.asizeof._Claskey
+.r: 1 136 dict of guppy.etc.Glue.Owner
+.r: 4 128 types.GetSetDescriptorType
+.r: 4 112 guppy.etc.Glue.Interface
+.r: 9 108 int
+.r: 3 108 types.MethodType
+.r: 3 72 __builtin__.staticmethod
+.r: 1 32 guppy.etc.Glue.Owner
+.r: 1 24 module
+.r: 1 20 long
+.r: 1 8 object
+.end: .loader: _load_stat
+.loader: _load_stat
+.format: SetFormat
+.timemade: 1392831527.313754
+.count: 566494
+.size: 27094516
+.kindname: 
+.kindheader: Kind (class / dict of class)
+.numrows: 29
+.r: 77643 8696016 __builtin__.set
+.r: 95396 5379264 list
+.r: 77643 4348008 SecStructures.Dimer
+.r: 92176 3444484 str
+.r: 155286 2484576 float
+.r: 30675 1595100 SecStructures.Duplex
+.r: 34148 1093496 tuple
+.r: 3367 40404 numpy.int32
+.r: 31 2232 types.CodeType
+.r: 50 2000 __builtin__.weakref
+.r: 1 1672 dict of module
+.r: 29 1624 function
+.r: 3 1560 dict of type
+.r: 3 1344 type
+.r: 5 680 dict (no owner)
+.r: 4 544 dict of guppy.etc.Glue.Interface
+.r: 1 440 types.FrameType
+.r: 6 288 pympler.asizeof._Typedef
+.r: 1 136 dict of guppy.etc.Glue.Owner
+.r: 4 128 types.GetSetDescriptorType
+.r: 4 112 guppy.etc.Glue.Interface
+.r: 3 108 types.MethodType
+.r: 3 84 pympler.asizeof._Claskey
+.r: 3 72 __builtin__.staticmethod
+.r: 5 60 int
+.r: 1 32 guppy.etc.Glue.Owner
+.r: 1 24 module
+.r: 1 20 long
+.r: 1 8 object
+.end: .loader: _load_stat
+.loader: _load_stat
+.format: SetFormat
+.timemade: 1392833375.561893
+.count: 566494
+.size: 22810124
+.kindname: 
+.kindheader: Kind (class / dict of class)
+.numrows: 28
+.r: 111791 5505120 tuple
+.r: 95396 5379264 list
+.r: 77643 4348008 SecStructures.Dimer
+.r: 92176 3444484 str
+.r: 155286 2484576 float
+.r: 30675 1595100 SecStructures.Duplex
+.r: 3367 40404 numpy.int32
+.r: 31 2232 types.CodeType
+.r: 50 2000 __builtin__.weakref
+.r: 1 1672 dict of module
+.r: 29 1624 function
+.r: 3 1560 dict of type
+.r: 3 1344 type
+.r: 5 680 dict (no owner)
+.r: 4 544 dict of guppy.etc.Glue.Interface
+.r: 1 440 types.FrameType
+.r: 6 288 pympler.asizeof._Typedef
+.r: 1 136 dict of guppy.etc.Glue.Owner
+.r: 4 128 types.GetSetDescriptorType
+.r: 4 112 guppy.etc.Glue.Interface
+.r: 3 108 types.MethodType
+.r: 3 84 pympler.asizeof._Claskey
+.r: 3 72 __builtin__.staticmethod
+.r: 5 60 int
+.r: 1 32 guppy.etc.Glue.Owner
+.r: 1 24 module
+.r: 1 20 long
+.r: 1 8 object
+.end: .loader: _load_stat
+.loader: _load_stat
+.format: SetFormat
+.timemade: 1392834044.693871
+.count: 566494
+.size: 21880384
+.kindname: 
+.kindheader: Kind (class / dict of class)
+.numrows: 28
+.r: 142466 6551892 tuple
+.r: 77643 4348008 SecStructures.Dimer
+.r: 92176 3444484 str
+.r: 64721 3402752 list
+.r: 155286 2484576 float
+.r: 30675 1595100 SecStructures.Duplex
+.r: 3367 40404 numpy.int32
+.r: 31 2232 types.CodeType
+.r: 50 2000 __builtin__.weakref
+.r: 1 1672 dict of module
+.r: 29 1624 function
+.r: 3 1560 dict of type
+.r: 3 1344 type
+.r: 5 680 dict (no owner)
+.r: 4 544 dict of guppy.etc.Glue.Interface
+.r: 1 440 types.FrameType
+.r: 6 288 pympler.asizeof._Typedef
+.r: 1 136 dict of guppy.etc.Glue.Owner
+.r: 4 128 types.GetSetDescriptorType
+.r: 4 112 guppy.etc.Glue.Interface
+.r: 3 108 types.MethodType
+.r: 3 84 pympler.asizeof._Claskey
+.r: 3 72 __builtin__.staticmethod
+.r: 5 60 int
+.r: 1 32 guppy.etc.Glue.Owner
+.r: 1 24 module
+.r: 1 20 long
+.r: 1 8 object
+.end: .loader: _load_stat
+.loader: _load_stat
+.format: SetFormat
+.timemade: 1392835488.787070
+.count: 566494
+.size: 21569812
+.kindname: 
+.kindheader: Kind (class / dict of class)
+.numrows: 28
+.r: 142466 6551892 tuple
+.r: 77643 4037436 SecStructures.Dimer
+.r: 92176 3444484 str
+.r: 64721 3402752 list
+.r: 155286 2484576 float
+.r: 30675 1595100 SecStructures.Duplex
+.r: 3367 40404 numpy.int32
+.r: 31 2232 types.CodeType
+.r: 50 2000 __builtin__.weakref
+.r: 1 1672 dict of module
+.r: 29 1624 function
+.r: 3 1560 dict of type
+.r: 3 1344 type
+.r: 5 680 dict (no owner)
+.r: 4 544 dict of guppy.etc.Glue.Interface
+.r: 1 440 types.FrameType
+.r: 6 288 pympler.asizeof._Typedef
+.r: 1 136 dict of guppy.etc.Glue.Owner
+.r: 4 128 types.GetSetDescriptorType
+.r: 4 112 guppy.etc.Glue.Interface
+.r: 3 108 types.MethodType
+.r: 3 84 pympler.asizeof._Claskey
+.r: 3 72 __builtin__.staticmethod
+.r: 5 60 int
+.r: 1 32 guppy.etc.Glue.Owner
+.r: 1 24 module
+.r: 1 20 long
+.r: 1 8 object
+.end: .loader: _load_stat
+.loader: _load_stat
+.format: SetFormat
+.timemade: 1392836387.040605
+.count: 566494
+.size: 21381940
+.kindname: 
+.kindheader: Kind (class / dict of class)
+.numrows: 28
+.r: 142466 6551892 tuple
+.r: 77643 3726864 SecStructures.Dimer
+.r: 92176 3444484 str
+.r: 64721 3402752 list
+.r: 155286 2484576 float
+.r: 30675 1717800 SecStructures.Duplex
+.r: 3367 40404 numpy.int32
+.r: 31 2232 types.CodeType
+.r: 50 2000 __builtin__.weakref
+.r: 1 1672 dict of module
+.r: 29 1624 function
+.r: 3 1560 dict of type
+.r: 3 1344 type
+.r: 5 680 dict (no owner)
+.r: 4 544 dict of guppy.etc.Glue.Interface
+.r: 1 440 types.FrameType
+.r: 6 288 pympler.asizeof._Typedef
+.r: 1 136 dict of guppy.etc.Glue.Owner
+.r: 4 128 types.GetSetDescriptorType
+.r: 4 112 guppy.etc.Glue.Interface
+.r: 3 108 types.MethodType
+.r: 3 84 pympler.asizeof._Claskey
+.r: 3 72 __builtin__.staticmethod
+.r: 5 60 int
+.r: 1 32 guppy.etc.Glue.Owner
+.r: 1 24 module
+.r: 1 20 long
+.r: 1 8 object
+.end: .loader: _load_stat

@@ -1,0 +1,109 @@
+SearchEngine heappy.
+TD_Functions.PCR_P.PCR_T = 48
+results = searcher.find(template, primer, 6)
+primer <- Seq('GAASGCRAAKATYGGGAAC', IUPAC.ambiguous_dna)
+template <- seq_file = 'ThGa.fa'
+
+
+Base line (without results): 0.004Mb
+Partition of a set of 72 objects. Total size = 4284 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     45  62     1800  42      1800  42 __builtin__.weakref
+     1      6   8      816  19      2616  61 dict (no owner)
+     2      4   6      544  13      3160  74 dict of guppy.etc.Glue.Interface
+     3      1   1      380   9      3540  83 types.FrameType
+     4      2   3      272   6      3812  89 dict of guppy.etc.Glue.Owner
+     5      5   7      188   4      4000  93 str
+     6      4   6      112   3      4112  96 guppy.etc.Glue.Interface
+     7      3   4      108   3      4220  99 types.MethodType
+     8      2   3       64   1      4284 100 guppy.etc.Glue.Owner
+
+
+Baseline (asizeof(results)=51.40Mb): 35.96Mb
+Partition of a set of 695944 objects. Total size = 37708960 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0  77643  11  8696016  23   8696016  23 __builtin__.set
+     1  61350   9  8343600  22  17039616  45 dict of Bio.Seq.Seq
+     2  95396  14  5379264  14  22418880  59 list
+     3  77643  11  4348008  12  26766888  71 SecStructures.Dimer
+     4  92177  13  3444528   9  30211416  80 str
+     5 155286  22  2484576   7  32695992  87 float
+     6  61350   9  1717800   5  34413792  91 Bio.Seq.Seq
+     7  30675   4  1595100   4  36008892  95 SecStructures.Duplex
+     8  34148   5  1093496   3  37102388  98 tuple
+     9   3367   0   457912   1  37560300 100 dict of Bio.Alphabet.IUPAC.IUPACUnambiguousDNA
+     
+     
+Duplex uses str instead of Bio.Seq (asizeof(results)=41.04Mb): 25.84Mb
+Partition of a set of 566500 objects. Total size = 27095076 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0  77643  14  8696016  32   8696016  32 __builtin__.set
+     1  95396  17  5379264  20  14075280  52 list
+     2  77643  14  4348008  16  18423288  68 SecStructures.Dimer
+     3  92177  16  3444528  13  21867816  81 str
+     4 155286  27  2484576   9  24352392  90 float
+     5  30675   5  1595100   6  25947492  96 SecStructures.Duplex
+     6  34148   6  1093496   4  27040988 100 tuple
+     7   3367   1    40404   0  27081392 100 numpy.int32
+     8     31   0     2232   0  27083624 100 types.CodeType
+     9     50   0     2000   0  27085624 100 __builtin__.weakref
+
+
+Dimer uses tuples instead of sets (asizeof(results)=21.43Mb): 21.75Mb
+Partition of a set of 566500 objects. Total size = 22810684 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0 111791  20  5505120  24   5505120  24 tuple
+     1  95396  17  5379264  24  10884384  48 list
+     2  77643  14  4348008  19  15232392  67 SecStructures.Dimer
+     3  92177  16  3444528  15  18676920  82 str
+     4 155286  27  2484576  11  21161496  93 float
+     5  30675   5  1595100   7  22756596 100 SecStructures.Duplex
+     6   3367   1    40404   0  22797000 100 numpy.int32
+     7     31   0     2232   0  22799232 100 types.CodeType
+     8     50   0     2000   0  22801232 100 __builtin__.weakref
+     9      1   0     1672   0  22802904 100 dict of module
+     
+
+Duplex uses tuple of dimers instead of list (asizeof(results)=20.86Mb): 20.87Mb
+Partition of a set of 566500 objects. Total size = 21880944 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0 142466  25  6551892  30   6551892  30 tuple
+     1  77643  14  4348008  20  10899900  50 SecStructures.Dimer
+     2  92177  16  3444528  16  14344428  66 str
+     3  64721  11  3402752  16  17747180  81 list
+     4 155286  27  2484576  11  20231756  92 float
+     5  30675   5  1595100   7  21826856 100 SecStructures.Duplex
+     6   3367   1    40404   0  21867260 100 numpy.int32
+     7     31   0     2232   0  21869492 100 types.CodeType
+     8     50   0     2000   0  21871492 100 __builtin__.weakref
+     9      1   0     1672   0  21873164 100 dict of module
+     
+     
+Removed mismatches attr from Dimer (asizeof(results)=20.86Mb): 20.57Mb
+Partition of a set of 566500 objects. Total size = 21570372 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0 142466  25  6551892  30   6551892  30 tuple
+     1  77643  14  4037436  19  10589328  49 SecStructures.Dimer
+     2  92177  16  3444528  16  14033856  65 str
+     3  64721  11  3402752  16  17436608  81 list
+     4 155286  27  2484576  12  19921184  92 float
+     5  30675   5  1595100   7  21516284 100 SecStructures.Duplex
+     6   3367   1    40404   0  21556688 100 numpy.int32
+     7     31   0     2232   0  21558920 100 types.CodeType
+     8     50   0     2000   0  21560920 100 __builtin__.weakref
+     9      1   0     1672   0  21562592 100 dict of module
+     
+     
+Moved fwd_3_overhang attr from Dimer to Duplex (asizeof(results)=20.27Mb): 20.39Mb
+Partition of a set of 566500 objects. Total size = 21382500 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0 142466  25  6551892  31   6551892  31 tuple
+     1  77643  14  3726864  17  10278756  48 SecStructures.Dimer
+     2  92177  16  3444528  16  13723284  64 str
+     3  64721  11  3402752  16  17126036  80 list
+     4 155286  27  2484576  12  19610612  92 float
+     5  30675   5  1717800   8  21328412 100 SecStructures.Duplex
+     6   3367   1    40404   0  21368816 100 numpy.int32
+     7     31   0     2232   0  21371048 100 types.CodeType
+     8     50   0     2000   0  21373048 100 __builtin__.weakref
+     9      1   0     1672   0  21374720 100 dict of module

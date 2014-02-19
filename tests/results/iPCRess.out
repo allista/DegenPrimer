@@ -1,0 +1,1141 @@
+Thermococcus gammatolerans EJ3
+
+product: -1859579520
+
+name:   Thermococcus gammatolerans EJ3
+start:  1244268
+end:    1245165
+length: 898
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1244248
+end:    1244267
+length: 20
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1245166
+end:    1245184
+length: 19
+
+------
+forward primers:
+5' ATATTCTACGACGGCTATCC 3'
+     | ||| |||| |||||||
+3' CTTGAGAAGCTGGCGATAGG 5'
+dG(58.0C) = -4.21 kcal/mol
+
+reverse primers:
+5' GAACGCGAAGATTGGGAAC 3'
+   |  || |||||| |||| |
+3' CGAGCTCTTCTACCCCTAG 5'
+dG(58.0C) = -0.09 kcal/mol
+
+5' GAACGCGAAGATCGGGAAC 3'
+   |  || |||||| |||| |
+3' CGAGCTCTTCTACCCCTAG 5'
+dG(58.0C) = 0.00 kcal/mol
+
+
+
+product: -1644114390
+
+name:   Thermococcus gammatolerans EJ3
+start:  127784
+end:    128859
+length: 1076
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  127765
+end:    127783
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  128860
+end:    128878
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATTGGGAAC 3'
+   || |||||  |||||  ||
+3' CTACCGCTGGTAACCGATG 5'
+dG(58.0C) = -4.27 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATTGGGAAC 3'
+   |||| ||| || || || |
+3' CTTCTGCTACTGACACTCG 5'
+dG(58.0C) = 0.24 kcal/mol
+
+
+
+product: -1606528841
+
+name:   Thermococcus gammatolerans EJ3
+start:  1426383
+end:    1427361
+length: 979
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1426364
+end:    1426382
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1427362
+end:    1427380
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAATATTGGGAAC 3'
+   ||  || |  |||||||||
+3' CTGGCGATACTAACCCTTG 5'
+dG(58.0C) = -1.81 kcal/mol
+
+reverse primers:
+5' GAAGGCGAATATTGGGAAC 3'
+     ||| ||||| || ||||
+3' AGTCCTCTTATCACACTTG 5'
+dG(58.0C) = -1.49 kcal/mol
+
+
+
+product: -1425694922
+
+name:   Thermococcus gammatolerans EJ3
+start:  667177
+end:    667656
+length: 480
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  667158
+end:    667176
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  667657
+end:    667675
+length: 19
+
+------
+forward primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   |  || |||||||| | ||
+3' CACCCCTTTCTAGCTCGTG 5'
+dG(58.0C) = -0.46 kcal/mol
+
+reverse primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   | | | ||||| |||||||
+3' CCTTCTTTTCTTGCCCTTG 5'
+dG(58.0C) = 0.27 kcal/mol
+
+
+
+product: -1336156734
+
+name:   Thermococcus gammatolerans EJ3
+start:  1263127
+end:    1263834
+length: 708
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1263108
+end:    1263126
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1263835
+end:    1263853
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   ||||||  |||||   |||
+3' CTTCCGGCTCTAGTTTTTG 5'
+dG(58.0C) = -1.78 kcal/mol
+
+5' GAAGGCAAAGATCGGGAAC 3'
+   ||||||  |||||   |||
+3' CTTCCGGCTCTAGTTTTTG 5'
+dG(58.0C) = -1.88 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   | || |  |||||| ||||
+3' CCTCGGACTCTAGCACTTG 5'
+dG(58.0C) = -1.99 kcal/mol
+
+5' GAAGGCAAAGATCGGGAAC 3'
+   | || |  |||||| ||||
+3' CCTCGGACTCTAGCACTTG 5'
+dG(58.0C) = -1.87 kcal/mol
+
+
+
+product: -1321874530
+
+name:   Thermococcus gammatolerans EJ3
+start:  258731
+end:    259554
+length: 824
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  258712
+end:    258730
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  259555
+end:    259573
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   | | | || |||| |||||
+3' CCTGCTCTACTAGTCCTTG 5'
+dG(58.0C) = 1.78 kcal/mol
+
+5' GAACGCGAAGATCGGGAAC 3'
+   | ||| || |||| |||||
+3' CCTGCTCTACTAGTCCTTG 5'
+dG(58.0C) = -1.01 kcal/mol
+
+5' GAACGCGAATATCGGGAAC 3'
+   | ||| ||  ||| |||||
+3' CCTGCTCTACTAGTCCTTG 5'
+dG(58.0C) = 0.32 kcal/mol
+
+reverse primers:
+5' GAACGCGAAGATCGGGAAC 3'
+   ||| |||   |||| ||||
+3' CTTCCGCGATTAGCTCTTG 5'
+dG(58.0C) = -0.89 kcal/mol
+
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||||||   |||| ||||
+3' CTTCCGCGATTAGCTCTTG 5'
+dG(58.0C) = -5.49 kcal/mol
+
+5' GAACGCGAATATCGGGAAC 3'
+   ||| |||   |||| ||||
+3' CTTCCGCGATTAGCTCTTG 5'
+dG(58.0C) = -0.89 kcal/mol
+
+
+
+product: -1002788844
+
+name:   Thermococcus gammatolerans EJ3
+start:  266058
+end:    266427
+length: 370
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  266039
+end:    266057
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  266428
+end:    266446
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+    ||||||||| | | ||||
+3' GTTCCGCTTCGAACTCTTG 5'
+dG(58.0C) = -5.39 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+      ||||||| |||| |||
+3' TCGCCGCTTCCAGCCGTTG 5'
+dG(58.0C) = -7.82 kcal/mol
+
+
+
+product: -879512788
+
+name:   Thermococcus gammatolerans EJ3
+start:  124304
+end:    125565
+length: 1262
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  124285
+end:    124303
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  125566
+end:    125584
+length: 19
+
+------
+forward primers:
+5' GAACGCGAAGATTGGGAAC 3'
+   ||  |||||  || |||||
+3' CTCTCGCTTGGAAACCTTG 5'
+dG(58.0C) = -2.72 kcal/mol
+
+reverse primers:
+5' GAACGCGAAGATTGGGAAC 3'
+    ||||| ||| ||| || |
+3' TTTGCGGTTCCAACACTCG 5'
+dG(58.0C) = -1.97 kcal/mol
+
+
+
+product: -708181653
+
+name:   Thermococcus gammatolerans EJ3
+start:  1181566
+end:    1182430
+length: 865
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1181547
+end:    1181565
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1182431
+end:    1182449
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   ||||| |||||||  |  |
+3' CTTCCTCTTCTAGTTCCGG 5'
+dG(58.0C) = -2.29 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||  ||| |||| |||||
+3' CTTTGGCTCCTAGGCCTTG 5'
+dG(58.0C) = -2.77 kcal/mol
+
+
+
+product: -574169312
+
+name:   Thermococcus gammatolerans EJ3
+start:  47920
+end:    49321
+length: 1402
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  47901
+end:    47919
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  49322
+end:    49341
+length: 20
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   ||||||||| |||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -10.76 kcal/mol
+
+5' GAACGCGAAGATCGGGAAC 3'
+   ||| ||||| |||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -6.16 kcal/mol
+
+5' GAAGGCGAAGATTGGGAAC 3'
+   ||||||||| || ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -8.09 kcal/mol
+
+5' GAACGCGAATATTGGGAAC 3'
+   ||| |||||||| ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -4.61 kcal/mol
+
+5' GAACGCGAAGATTGGGAAC 3'
+   ||| ||||| || ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -3.49 kcal/mol
+
+5' GAACGCAAAGATCGGGAAC 3'
+   ||| || || |||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -2.13 kcal/mol
+
+5' GAACGCAAATATCGGGAAC 3'
+   ||| || ||||||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -3.26 kcal/mol
+
+5' GAACGCAAAGATTGGGAAC 3'
+   ||| || || || ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = 0.54 kcal/mol
+
+5' GAAGGCAAATATTGGGAAC 3'
+   |||||| ||||| ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -5.18 kcal/mol
+
+5' GAAGGCGAATATTGGGAAC 3'
+   |||||||||||| ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -9.21 kcal/mol
+
+5' GAAGGCAAATATCGGGAAC 3'
+   |||||| ||||||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -7.85 kcal/mol
+
+5' GAAGGCAAAGATCGGGAAC 3'
+   |||||| || |||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -6.73 kcal/mol
+
+5' GAACGCGAATATCGGGAAC 3'
+   ||| |||||||||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -7.28 kcal/mol
+
+5' GAAGGCGAATATCGGGAAC 3'
+   |||||||||||||||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -11.88 kcal/mol
+
+5' GAACGCAAATATTGGGAAC 3'
+   ||| || ||||| ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -0.58 kcal/mol
+
+5' GAAGGCAAAGATTGGGAAC 3'
+   |||||| || || ||||||
+3' CTTCCGCTTATAGCCCTTG 5'
+dG(58.0C) = -4.06 kcal/mol
+
+reverse primers:
+5' ATATTCTACAACGGCTATCC 3'
+   ||||||||||||||||||||
+3' TATAAGATGTTGCCGATAGG 5'
+dG(58.0C) = -10.10 kcal/mol
+
+5' ATATTCTACGACGGCTATCC 3'
+   ||||||||| ||||||||||
+3' TATAAGATGTTGCCGATAGG 5'
+dG(58.0C) = -8.34 kcal/mol
+
+
+
+product: -95124526
+
+name:   Thermococcus gammatolerans EJ3
+start:  1180349
+end:    1181312
+length: 964
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1180330
+end:    1180348
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1181313
+end:    1181331
+length: 19
+
+------
+forward primers:
+5' GAAGGCAAATATCGGGAAC 3'
+   | ||||||   ||| ||||
+3' CCTCCGTTCCGAGCACTTG 5'
+dG(58.0C) = -2.38 kcal/mol
+
+5' GAAGGCGAAGATCGGGAAC 3'
+   | |||| | | ||| ||||
+3' CCTCCGTTCCGAGCACTTG 5'
+dG(58.0C) = -1.13 kcal/mol
+
+5' GAAGGCAAAGATCGGGAAC 3'
+   | |||||| | ||| ||||
+3' CCTCCGTTCCGAGCACTTG 5'
+dG(58.0C) = -2.89 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||||| |  |||  ||||
+3' CTTCCGATATTAGGACTTG 5'
+dG(58.0C) = -1.73 kcal/mol
+
+5' GAAGGCAAATATCGGGAAC 3'
+   |||||| |  |||  ||||
+3' CTTCCGATATTAGGACTTG 5'
+dG(58.0C) = -1.41 kcal/mol
+
+5' GAAGGCAAAGATCGGGAAC 3'
+   |||||| |  |||  ||||
+3' CTTCCGATATTAGGACTTG 5'
+dG(58.0C) = -1.65 kcal/mol
+
+
+
+product: -49482335
+
+name:   Thermococcus gammatolerans EJ3
+start:  600051
+end:    601495
+length: 1445
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  600032
+end:    600050
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  601496
+end:    601514
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||||  | ||||||  ||
+3' CTTCCAATCCTAGCCGGTG 5'
+dG(58.0C) = -2.24 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||| || |||  ||| ||
+3' CTTCGGCGTCTTCCCCGTG 5'
+dG(58.0C) = -3.39 kcal/mol
+
+
+
+product: 217639043
+
+name:   Thermococcus gammatolerans EJ3
+start:  1263298
+end:    1263834
+length: 537
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1263279
+end:    1263297
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1263835
+end:    1263853
+length: 19
+
+------
+forward primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   | |||||| | |||| | |
+3' CCTCCGTTCCGAGCCGTAG 5'
+dG(58.0C) = -0.80 kcal/mol
+
+reverse primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   | || |  |||||| ||||
+3' CCTCGGACTCTAGCACTTG 5'
+dG(58.0C) = -1.87 kcal/mol
+
+
+
+product: 449454004
+
+name:   Thermococcus gammatolerans EJ3
+start:  568496
+end:    568933
+length: 438
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  568477
+end:    568495
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  568934
+end:    568952
+length: 19
+
+------
+forward primers:
+5' GAACGCGAATATCGGGAAC 3'
+   ||||||  | || || |||
+3' CTTGCGGGTCTACCCTTTG 5'
+dG(58.0C) = 0.48 kcal/mol
+
+reverse primers:
+5' GAACGCGAATATCGGGAAC 3'
+    |||  | ||||| |||||
+3' GTTGGTCATATAGGCCTTG 5'
+dG(58.0C) = -1.14 kcal/mol
+
+
+
+product: 860683783
+
+name:   Thermococcus gammatolerans EJ3
+start:  1826408
+end:    1826576
+length: 169
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1826389
+end:    1826407
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1826577
+end:    1826595
+length: 19
+
+------
+forward primers:
+5' GAACGCGAATATCGGGAAC 3'
+   ||||  |||  ||| ||||
+3' CTTGGCCTTGCAGCTCTTG 5'
+dG(58.0C) = -1.97 kcal/mol
+
+reverse primers:
+5' GAACGCGAATATCGGGAAC 3'
+   ||||   ||| | ||||||
+3' CTTGGTATTAAAACCCTTG 5'
+dG(58.0C) = 1.12 kcal/mol
+
+
+
+product: 954522001
+
+name:   Thermococcus gammatolerans EJ3
+start:  1329728
+end:    1330322
+length: 595
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1329709
+end:    1329727
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1330323
+end:    1330341
+length: 19
+
+------
+forward primers:
+5' GAACGCGAAGATCGGGAAC 3'
+   |||||||| ||   || ||
+3' CTTGCGCTGCTCCTCCATG 5'
+dG(58.0C) = -3.03 kcal/mol
+
+reverse primers:
+5' GAACGCGAAGATCGGGAAC 3'
+    |||| ||| |||||  ||
+3' ATTGCACTTGTAGCCGCTG 5'
+dG(58.0C) = -3.70 kcal/mol
+
+
+
+product: 1036554307
+
+name:   Thermococcus gammatolerans EJ3
+start:  600045
+end:    601495
+length: 1451
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  600026
+end:    600050
+length: 25
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  601496
+end:    601514
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATTGGGAAC 3'
+    | ||||||| || ||| |
+3' ATACCGCTTCCAATCCTAG 5'
+dG(58.0C) = -2.12 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATTGGGAAC 3'
+   |||| || |||  ||| ||
+3' CTTCGGCGTCTTCCCCGTG 5'
+dG(58.0C) = -3.58 kcal/mol
+
+
+
+product: 1393024027
+
+name:   Thermococcus gammatolerans EJ3
+start:  872635
+end:    873641
+length: 1007
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  872616
+end:    872634
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  873642
+end:    873660
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   || ||||||| ||  | ||
+3' CTGCCGCTTCGAGTTCATG 5'
+dG(58.0C) = -3.77 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||| | | ||||| ||||
+3' CTTCGGTTGCTAGCTCTTG 5'
+dG(58.0C) = -4.27 kcal/mol
+
+
+
+product: 1414968074
+
+name:   Thermococcus gammatolerans EJ3
+start:  253121
+end:    254260
+length: 1140
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  253102
+end:    253120
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  254261
+end:    254279
+length: 19
+
+------
+forward primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   ||||||   ||||| | ||
+3' CTTCCGAACCTAGCTCGTG 5'
+dG(58.0C) = -3.07 kcal/mol
+
+reverse primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   ||||||| |||| ||   |
+3' CTTCCGTCTCTATCCAGGG 5'
+dG(58.0C) = 0.31 kcal/mol
+
+
+
+product: 1437633218
+
+name:   Thermococcus gammatolerans EJ3
+start:  1006361
+end:    1006612
+length: 252
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1006341
+end:    1006360
+length: 20
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1006613
+end:    1006631
+length: 19
+
+------
+forward primers:
+5' ATATTCTACAACGGCTATCC 3'
+   ||| || ||||  |||| ||
+3' TATTAGCTGTTCGCGATGGG 5'
+dG(58.0C) = 2.13 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   || || ||| |||| | ||
+3' CTCCCTCTTGTAGCTCATG 5'
+dG(58.0C) = 1.17 kcal/mol
+
+5' GAAGGCGAATATCGGGAAC 3'
+   || || ||| |||| | ||
+3' CTCCCTCTTGTAGCTCATG 5'
+dG(58.0C) = 1.43 kcal/mol
+
+
+
+product: 1605993099
+
+name:   Thermococcus gammatolerans EJ3
+start:  675641
+end:    676059
+length: 419
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  675621
+end:    675640
+length: 20
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  676060
+end:    676078
+length: 19
+
+------
+forward primers:
+5' ATATTCTACAACGGCTATCC 3'
+   ||| ||| ||| ||| | ||
+3' TATTAGAAGTTCCCGTTGGG 5'
+dG(58.0C) = 2.78 kcal/mol
+
+reverse primers:
+5' GAACGCAAATATCGGGAAC 3'
+   |||||    | ||||||||
+3' CTTGCAGCGAGAGCCCTTG 5'
+dG(58.0C) = -3.62 kcal/mol
+
+5' GAACGCGAATATCGGGAAC 3'
+   |||||    | ||||||||
+3' CTTGCAGCGAGAGCCCTTG 5'
+dG(58.0C) = -3.62 kcal/mol
+
+
+
+product: 1681191585
+
+name:   Thermococcus gammatolerans EJ3
+start:  1244169
+end:    1245165
+length: 997
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1244149
+end:    1244168
+length: 20
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1245166
+end:    1245184
+length: 19
+
+------
+forward primers:
+5' ATATTCTACGACGGCTATCC 3'
+   ||| || ||||   ||||||
+3' TATGAGCTGCTCAAGATAGG 5'
+dG(58.0C) = 1.00 kcal/mol
+
+reverse primers:
+5' GAACGCGAAGATTGGGAAC 3'
+   |  || |||||| |||| |
+3' CGAGCTCTTCTACCCCTAG 5'
+dG(58.0C) = -0.09 kcal/mol
+
+5' GAACGCGAAGATCGGGAAC 3'
+   |  || |||||| |||| |
+3' CGAGCTCTTCTACCCCTAG 5'
+dG(58.0C) = 0.00 kcal/mol
+
+
+
+product: 1825515918
+
+name:   Thermococcus gammatolerans EJ3
+start:  62961
+end:    64360
+length: 1400
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  62942
+end:    62960
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  64361
+end:    64379
+length: 19
+
+------
+forward primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   || ||||||||  |||  |
+3' CTGCCGTTTCTCCCCCAAG 5'
+dG(58.0C) = -2.45 kcal/mol
+
+reverse primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   ||  || ||| ||||| ||
+3' CTCGCGGTTCGAGCCCGTG 5'
+dG(58.0C) = -3.42 kcal/mol
+
+
+
+product: 1826425066
+
+name:   Thermococcus gammatolerans EJ3
+start:  873438
+end:    873641
+length: 204
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  873419
+end:    873437
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  873642
+end:    873660
+length: 19
+
+------
+forward primers:
+5' GAACGCAAAGATTGGGAAC 3'
+    || ||| || || |||||
+3' TTTTCGTGTCCAAGCCTTG 5'
+dG(58.0C) = -0.76 kcal/mol
+
+5' GAAGGCAAAGATTGGGAAC 3'
+    || ||| || || |||||
+3' TTTTCGTGTCCAAGCCTTG 5'
+dG(58.0C) = -1.37 kcal/mol
+
+reverse primers:
+5' GAACGCAAAGATTGGGAAC 3'
+   |||  ||| ||| | ||||
+3' CTTCGGTTGCTAGCTCTTG 5'
+dG(58.0C) = -0.28 kcal/mol
+
+5' GAAGGCAAAGATTGGGAAC 3'
+   |||| ||| ||| | ||||
+3' CTTCGGTTGCTAGCTCTTG 5'
+dG(58.0C) = -3.36 kcal/mol
+
+
+
+product: 2009247415
+
+name:   Thermococcus gammatolerans EJ3
+start:  1787718
+end:    1788554
+length: 837
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1787699
+end:    1787717
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1788555
+end:    1788574
+length: 20
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+    | | || || ||||||||
+3' TTGCGGCGTCGAGCCCTTG 5'
+dG(58.0C) = -6.74 kcal/mol
+
+reverse primers:
+5' ATATTCTACAACGGCTATCC 3'
+      |||  ||||||||||||
+3' GGGAAGTAGTTGCCGATAGG 5'
+dG(58.0C) = -7.65 kcal/mol
+
+
+
+product: 2054162993
+
+name:   Thermococcus gammatolerans EJ3
+start:  106190
+end:    106488
+length: 299
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  106171
+end:    106189
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  106489
+end:    106507
+length: 19
+
+------
+forward primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   ||||||| || |||  | |
+3' CTTCCGTATCGAGCAGTCG 5'
+dG(58.0C) = -2.45 kcal/mol
+
+reverse primers:
+5' GAAGGCAAAGATCGGGAAC 3'
+   ||||| || |  |||| ||
+3' CTTCCCTTACATGCCCGTG 5'
+dG(58.0C) = -0.78 kcal/mol
+
+
+
+product: 2061909299
+
+name:   Thermococcus gammatolerans EJ3
+start:  854321
+end:    855611
+length: 1291
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  854302
+end:    854320
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  855612
+end:    855630
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+    | ||||||||| ||  ||
+3' ATACCGCTTCTATCCGATG 5'
+dG(58.0C) = -4.11 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||| | |  ||| |||||
+3' CTTCGGATGATAGTCCTTG 5'
+dG(58.0C) = -2.61 kcal/mol
+
+
+
+product: 2075660110
+
+name:   Thermococcus gammatolerans EJ3
+start:  1310627
+end:    1310778
+length: 152
+quantity: 0.0  M
+------
+forward template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1310608
+end:    1310626
+length: 19
+
+reverse template: 
+name:   Thermococcus gammatolerans EJ3
+start:  1310779
+end:    1310797
+length: 19
+
+------
+forward primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   | |||||| |||| ||  |
+3' CATCCGCTCCTAGTCCCGG 5'
+dG(58.0C) = -2.90 kcal/mol
+
+reverse primers:
+5' GAAGGCGAAGATCGGGAAC 3'
+   |||| |||  ||||||| |
+3' CTTCGGCTCGTAGCCCTCG 5'
+dG(58.0C) = -5.10 kcal/mol
+
+

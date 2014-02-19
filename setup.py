@@ -46,8 +46,8 @@ setup(name='degen-primer',
         'Programming Language :: Python'],
       packages=['DegenPrimer'],
       scripts=['degen_primer'],
-      data_files=[('share/degen_primer', [UnifiedNN.internal_NN_filename,
-                                          UnifiedNN.dangling_ends_filename,
-                                          UnifiedNN.loops_filename,
-                                          UnifiedNN.tri_tetra_hairpin_loops_filename])]
+      data_files=[('share/degen_primer', ['data/'+UnifiedNN.internal_NN_filename,
+                                          'data/'+UnifiedNN.dangling_ends_filename,
+                                          'data/'+UnifiedNN.loops_filename,
+                                          'data/'+UnifiedNN.tri_tetra_hairpin_loops_filename])]
       )

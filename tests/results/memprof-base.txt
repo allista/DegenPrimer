@@ -1,0 +1,1324 @@
+=== base run for PCR_Simulation.add_annealings ===
+Partition of a set of 11728 objects. Total size = 620096 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0   4584  39   307072  50    307072  50 list
+     1   4643  40   151308  24    458380  74 tuple
+     2    689   6    93704  15    552084  89 dict of DegenPrimer.Product.Region
+     3    689   6    19292   3    571376  92 DegenPrimer.Product.Region
+     4     33   0    17160   3    588536  95 dict of DegenPrimer.Product.Product
+     5    134   1    15008   2    603544  97 __builtin__.set
+     6    821   7     9852   2    613396  99 numpy.int32
+     7      4   0     2080   0    615476  99 dict (no owner)
+     8     47   0     1880   0    617356 100 __builtin__.weakref
+     9     33   0      924   0    618280 100 DegenPrimer.Product.Product
+<8 more rows. Type e.g. '_.more' to view.>
+
+=== Region and Product use __slots__ ===
+tuple "good_annealings" uses 7.72Mb
+
+list "bad_annealings" uses 6.54Mb
+
+dict "products" uses 1.48Mb
+
+dict "templates" uses 0.00Mb
+
+dict "annealings" uses 1.46Mb
+
+PCR_Simulation "PSR_Simulation" uses 1.52Mb
+
+=== Dimer uses __slots__ ===
+tuple "good_annealings" uses 5.58Mb
+
+list "bad_annealings" uses 4.68Mb
+
+dict "products" uses 1.09Mb
+
+dict "templates" uses 0.00Mb
+
+dict "annealings" uses 1.06Mb
+
+PCR_Simulation "unknown" uses 1.13Mb
+
+=== Duplex uses __slots__ ===
+tuple "good_annealings" uses 4.54Mb
+
+list "bad_annealings" uses 3.86Mb
+
+dict "products" uses 0.90Mb
+
+dict "templates" uses 0.00Mb
+
+dict "annealings" uses 0.88Mb
+
+PCR_Simulation "unknown" uses 0.95Mb
+
+
+=== mismatches=6 ===
+SearchEngine._find_mp.start:
+Partition of a set of 116 objects. Total size = 2052184 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      5   4  2045604 100   2045604 100 str
+     1     48  41     1920   0   2047524 100 __builtin__.weakref
+     2      7   6      952   0   2048476 100 dict (no owner)
+     3      4   3      544   0   2049020 100 dict of guppy.etc.Glue.Interface
+     4      1   1      520   0   2049540 100 dict of threading.Thread
+     5      1   1      344   0   2049884 100 types.FrameType
+     6      7   6      288   0   2050172 100 list
+     7      2   2      272   0   2050444 100 dict of multiprocessing.util.Finalize
+     8      2   2      272   0   2050716 100 dict of threading._Condition
+     9      5   4      200   0   2050916 100 numpy.ndarray
+<15 more rows. Type e.g. '_.more' to view.>
+
+SearchEngine "unknown" uses 0.00Mb
+Partition of a set of 1 object. Total size = 28 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1 100       28 100        28 100 DegenPrimer.SearchEngine.SearchEngine
+     
+     
+SearchEngine._find_mp.before_duplexes:
+Partition of a set of 2821 objects. Total size = 12512972 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     37   1  8185668  65   8185668  65 unicode
+     1     81   3  4093924  33  12279592  98 str
+     2     74   3    77256   1  12356848  99 _multiprocessing.Connection
+     3     37   1    19240   0  12376088  99 dict of multiprocessing.process.Process
+     4     37   1    19240   0  12395328  99 dict of multiprocessing.queues.Queue
+     5    413  15    13216   0  12408544  99 types.BuiltinFunctionType
+     6    340  12    12516   0  12421060  99 tuple
+     7    186   7    10416   0  12431476  99 function
+     8     75   3    10200   0  12441676  99 dict of Bio.Seq.Seq
+     9     74   3    10064   0  12451740 100 dict of multiprocessing.synchronize.Lock
+<38 more rows. Type e.g. '_.more' to view.>
+
+SearchEngine "unknown" uses 0.00Mb
+Partition of a set of 1 object. Total size = 28 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1 100       28 100        28 100 DegenPrimer.SearchEngine.SearchEngine
+SearchEngine._find_mp.with_duplexes:
+
+Partition of a set of 45720 objects. Total size = 15195572 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     69   0  8189124  54   8189124  54 unicode
+     1    617   1  4117508  27  12306632  81 str
+     2  15166  33  1698592  11  14005224  92 __builtin__.set
+     3   7583  17   424648   3  14429872  95 DegenPrimer.SecStructures.Dimer
+     4  15167  33   242672   2  14672544  97 float
+     5   1808   4   144672   1  14817216  98 list
+     6    611   1    83096   1  14900312  98 dict of Bio.Seq.Seq
+     7     74   0    77256   1  14977568  99 _multiprocessing.Connection
+     8   1096   2    36708   0  15014276  99 tuple
+     9    504   1    26208   0  15040484  99 DegenPrimer.SecStructures.Duplex
+<46 more rows. Type e.g. '_.more' to view.>
+
+SearchEngine "unknown" uses 0.00Mb
+Partition of a set of 1 object. Total size = 28 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1 100       28 100        28 100 DegenPrimer.SearchEngine.SearchEngine
+     
+list "SearchEngine.fwd_results" uses 2.07Mb
+
+list "SearchEngine.rev_results" uses 2.45Mb
+
+
+
+SearchEngine._find_mp.start:
+Partition of a set of 17 objects. Total size = 2046460 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1   6  2045460 100   2045460 100 str
+     1      1   6      440   0   2045900 100 types.FrameType
+     2      5  29      200   0   2046100 100 numpy.ndarray
+     3      1   6      136   0   2046236 100 dict of Bio.Seq.Seq
+     4      3  18       96   0   2046332 100 list
+     5      2  12       64   0   2046396 100 tuple
+     6      3  18       36   0   2046432 100 int
+     7      1   6       28   0   2046460 100 Bio.Seq.Seq
+     
+SearchEngine "unknown" uses 0.00Mb
+Partition of a set of 1 object. Total size = 28 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1 100       28 100        28 100 DegenPrimer.SearchEngine.SearchEngine
+     
+SearchEngine._find_mp.before_duplexes:
+Partition of a set of 2804 objects. Total size = 12505328 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     37   1  8185524  65   8185524  65 unicode
+     1     76   3  4093772  33  12279296  98 str
+     2     74   3    77256   1  12356552  99 _multiprocessing.Connection
+     3     37   1    19240   0  12375792  99 dict of multiprocessing.process.Process
+     4     37   1    19240   0  12395032  99 dict of multiprocessing.queues.Queue
+     5    407  15    13024   0  12408056  99 types.BuiltinFunctionType
+     6    337  12    12408   0  12420464  99 tuple
+     7    186   7    10416   0  12430880  99 function
+     8     75   3    10200   0  12441080  99 dict of Bio.Seq.Seq
+     9     74   3    10064   0  12451144 100 dict of multiprocessing.synchronize.Lock
+<25 more rows. Type e.g. '_.more' to view.>
+
+SearchEngine "unknown" uses 0.00Mb
+Partition of a set of 1 object. Total size = 28 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1 100       28 100        28 100 DegenPrimer.SearchEngine.SearchEngine
+SearchEngine._find_mp.with_duplexes:
+
+Partition of a set of 5909331 objects. Total size = 384123496 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0 2146864  36 240448768  63 240448768  63 __builtin__.set
+     1 1073432  18 60112192  16 300560960  78 DegenPrimer.SecStructures.Dimer
+     2 2146865  36 34349840   9 334910800  87 float
+     3 201381   3 17507552   5 352418352  92 list
+     4  66075   1  8986200   2 361404552  94 dict of Bio.Seq.Seq
+     5    293   0  8214196   2 369618748  96 unicode
+     6  66076   1  6733772   2 376352520  98 str
+     7  65744   1  3418688   1 379771208  99 DegenPrimer.SecStructures.Duplex
+     8  70190   1  2247704   1 382018912  99 tuple
+     9  66075   1  1850100   0 383869012 100 Bio.Seq.Seq
+<33 more rows. Type e.g. '_.more' to view.>
+
+SearchEngine "unknown" uses 0.00Mb
+Partition of a set of 1 object. Total size = 28 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1 100       28 100        28 100 DegenPrimer.SearchEngine.SearchEngine
+     
+list "SearchEngine.fwd_results" uses 283.41Mb
+
+list "SearchEngine.rev_results" uses 288.04Mb
+
+
+
+tuple "good_annealings" uses 12.20Mb
+
+list "bad_annealings" uses 13.31Mb
+
+dict "products" uses 4.79Mb
+
+dict "templates" uses 0.03Mb
+
+dict "annealings" uses 4.60Mb
+
+PCR_Simulation "unknown" uses 4.90Mb
+
+list "unknown" uses 2.05Mb
+
+
+=== explicitly deleting all temp data ===
+Position 55283
+Partition of a set of 182 objects. Total size = 290384 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1   1   221240  76    221240  76 unicode
+     1      8   4    55580  19    276820  95 str
+     2      2   1     2088   1    278908  96 _multiprocessing.Connection
+     3     48  26     1920   1    280828  97 __builtin__.weakref
+     4      5   3     1832   1    282660  97 types.FrameType
+     5      7   4      952   0    283612  98 dict (no owner)
+     6      4   2      544   0    284156  98 dict of guppy.etc.Glue.Interface
+     7     17   9      544   0    284700  98 types.BuiltinFunctionType
+     8      1   1      520   0    285220  98 dict of multiprocessing.process.Process
+     9      1   1      520   0    285740  98 dict of multiprocessing.queues.Queue
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 110566
+Partition of a set of 262 objects. Total size = 574592 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      2   1   442480  77    442480  77 unicode
+     1     12   5   111864  19    554344  96 str
+     2      4   2     4176   1    558520  97 _multiprocessing.Connection
+     3     50  19     2000   0    560520  98 __builtin__.weakref
+     4      5   2     1844   0    562364  98 types.FrameType
+     5     11   4     1496   0    563860  98 dict (no owner)
+     6      2   1     1040   0    564900  98 dict of multiprocessing.process.Process
+     7      2   1     1040   0    565940  98 dict of multiprocessing.queues.Queue
+     8     28  11      896   0    566836  99 types.BuiltinFunctionType
+     9     22   8      800   0    567636  99 tuple
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 165849
+Partition of a set of 332 objects. Total size = 856340 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      3   1   663720  78    663720  78 unicode
+     1     13   4   166340  19    830060  97 str
+     2      6   2     6264   1    836324  98 _multiprocessing.Connection
+     3     50  15     2000   0    838324  98 __builtin__.weakref
+     4      5   2     1860   0    840184  98 types.FrameType
+     5     12   4     1632   0    841816  98 dict (no owner)
+     6      3   1     1560   0    843376  98 dict of multiprocessing.process.Process
+     7      3   1     1560   0    844936  99 dict of multiprocessing.queues.Queue
+     8     39  12     1248   0    846184  99 types.BuiltinFunctionType
+     9     31   9     1132   0    847316  99 tuple
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 221132
+Partition of a set of 403 objects. Total size = 1138924 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      4   1   884960  78    884960  78 unicode
+     1     15   4   221696  19   1106656  97 str
+     2      8   2     8352   1   1115008  98 _multiprocessing.Connection
+     3      4   1     2080   0   1117088  98 dict of multiprocessing.process.Process
+     4      4   1     2080   0   1119168  98 dict of multiprocessing.queues.Queue
+     5     50  12     2000   0   1121168  98 __builtin__.weakref
+     6      5   1     1832   0   1123000  99 types.FrameType
+     7     13   3     1768   0   1124768  99 dict (no owner)
+     8     50  12     1600   0   1126368  99 types.BuiltinFunctionType
+     9     40  10     1464   0   1127832  99 tuple
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 276415
+Partition of a set of 476 objects. Total size = 1422440 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      5   1  1106200  78   1106200  78 unicode
+     1     19   4   277944  20   1384144  97 str
+     2     10   2    10440   1   1394584  98 _multiprocessing.Connection
+     3      5   1     2600   0   1397184  98 dict of multiprocessing.process.Process
+     4      5   1     2600   0   1399784  98 dict of multiprocessing.queues.Queue
+     5     50  11     2000   0   1401784  99 __builtin__.weakref
+     6     61  13     1952   0   1403736  99 types.BuiltinFunctionType
+     7     14   3     1904   0   1405640  99 dict (no owner)
+     8      5   1     1844   0   1407484  99 types.FrameType
+     9     49  10     1796   0   1409280  99 tuple
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 331698
+Partition of a set of 548 objects. Total size = 1705912 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      6   1  1327440  78   1327440  78 unicode
+     1     22   4   334152  20   1661592  97 str
+     2     12   2    12528   1   1674120  98 _multiprocessing.Connection
+     3      6   1     3120   0   1677240  98 dict of multiprocessing.process.Process
+     4      6   1     3120   0   1680360  99 dict of multiprocessing.queues.Queue
+     5     72  13     2304   0   1682664  99 types.BuiltinFunctionType
+     6     58  11     2128   0   1684792  99 tuple
+     7     15   3     2040   0   1686832  99 dict (no owner)
+     8     50   9     2000   0   1688832  99 __builtin__.weakref
+     9      5   1     1860   0   1690692  99 types.FrameType
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 386981
+Partition of a set of 616 objects. Total size = 1986752 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      7   1  1548680  78   1548680  78 unicode
+     1     21   3   387764  20   1936444  97 str
+     2     14   2    14616   1   1951060  98 _multiprocessing.Connection
+     3      7   1     3640   0   1954700  98 dict of multiprocessing.process.Process
+     4      7   1     3640   0   1958340  99 dict of multiprocessing.queues.Queue
+     5     83  13     2656   0   1960996  99 types.BuiltinFunctionType
+     6     67  11     2460   0   1963456  99 tuple
+     7     16   3     2176   0   1965632  99 dict (no owner)
+     8     50   8     2000   0   1967632  99 __builtin__.weakref
+     9     35   6     1960   0   1969592  99 function
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 442264
+Partition of a set of 688 objects. Total size = 2270224 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      8   1  1769920  78   1769920  78 unicode
+     1     24   3   443968  20   2213888  98 str
+     2     16   2    16704   1   2230592  98 _multiprocessing.Connection
+     3      8   1     4160   0   2234752  98 dict of multiprocessing.process.Process
+     4      8   1     4160   0   2238912  99 dict of multiprocessing.queues.Queue
+     5     94  14     3008   0   2241920  99 types.BuiltinFunctionType
+     6     76  11     2792   0   2244712  99 tuple
+     7     17   2     2312   0   2247024  99 dict (no owner)
+     8     40   6     2240   0   2249264  99 function
+     9     16   2     2176   0   2251440  99 dict of Bio.Seq.Seq
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 497547
+Partition of a set of 760 objects. Total size = 2552892 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      9   1  1991160  78   1991160  78 unicode
+     1     27   4   499364  20   2490524  98 str
+     2     18   2    18792   1   2509316  98 _multiprocessing.Connection
+     3      9   1     4680   0   2513996  98 dict of multiprocessing.process.Process
+     4      9   1     4680   0   2518676  99 dict of multiprocessing.queues.Queue
+     5    105  14     3360   0   2522036  99 types.BuiltinFunctionType
+     6     85  11     3124   0   2525160  99 tuple
+     7     45   6     2520   0   2527680  99 function
+     8     18   2     2448   0   2530128  99 dict (no owner)
+     9     18   2     2448   0   2532576  99 dict of Bio.Seq.Seq
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 552830
+Partition of a set of 832 objects. Total size = 2836328 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     10   1  2212400  78   2212400  78 unicode
+     1     30   4   555572  20   2767972  98 str
+     2     20   2    20880   1   2788852  98 _multiprocessing.Connection
+     3     10   1     5200   0   2794052  99 dict of multiprocessing.process.Process
+     4     10   1     5200   0   2799252  99 dict of multiprocessing.queues.Queue
+     5    116  14     3712   0   2802964  99 types.BuiltinFunctionType
+     6     94  11     3456   0   2806420  99 tuple
+     7     50   6     2800   0   2809220  99 function
+     8     20   2     2720   0   2811940  99 dict of Bio.Seq.Seq
+     9     20   2     2720   0   2814660  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 608113
+Partition of a set of 900 objects. Total size = 3117220 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     11   1  2433640  78   2433640  78 unicode
+     1     29   3   609196  20   3042836  98 str
+     2     22   2    22968   1   3065804  98 _multiprocessing.Connection
+     3     11   1     5720   0   3071524  99 dict of multiprocessing.process.Process
+     4     11   1     5720   0   3077244  99 dict of multiprocessing.queues.Queue
+     5    127  14     4064   0   3081308  99 types.BuiltinFunctionType
+     6    103  11     3788   0   3085096  99 tuple
+     7     55   6     3080   0   3088176  99 function
+     8     22   2     2992   0   3091168  99 dict of Bio.Seq.Seq
+     9     22   2     2992   0   3094160  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 663396
+Partition of a set of 972 objects. Total size = 3400724 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     12   1  2654880  78   2654880  78 unicode
+     1     32   3   665428  20   3320308  98 str
+     2     24   2    25056   1   3345364  98 _multiprocessing.Connection
+     3     12   1     6240   0   3351604  99 dict of multiprocessing.process.Process
+     4     12   1     6240   0   3357844  99 dict of multiprocessing.queues.Queue
+     5    138  14     4416   0   3362260  99 types.BuiltinFunctionType
+     6    112  12     4120   0   3366380  99 tuple
+     7     60   6     3360   0   3369740  99 function
+     8     24   2     3264   0   3373004  99 dict of Bio.Seq.Seq
+     9     24   2     3264   0   3376268  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 718679
+Partition of a set of 1044 objects. Total size = 3683352 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     13   1  2876120  78   2876120  78 unicode
+     1     35   3   720828  20   3596948  98 str
+     2     26   2    27144   1   3624092  98 _multiprocessing.Connection
+     3     13   1     6760   0   3630852  99 dict of multiprocessing.process.Process
+     4     13   1     6760   0   3637612  99 dict of multiprocessing.queues.Queue
+     5    149  14     4768   0   3642380  99 types.BuiltinFunctionType
+     6    121  12     4452   0   3646832  99 tuple
+     7     65   6     3640   0   3650472  99 function
+     8     26   2     3536   0   3654008  99 dict of Bio.Seq.Seq
+     9     26   2     3536   0   3657544  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 773962
+Partition of a set of 1116 objects. Total size = 3966852 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     14   1  3097360  78   3097360  78 unicode
+     1     38   3   777060  20   3874420  98 str
+     2     28   3    29232   1   3903652  98 _multiprocessing.Connection
+     3     14   1     7280   0   3910932  99 dict of multiprocessing.process.Process
+     4     14   1     7280   0   3918212  99 dict of multiprocessing.queues.Queue
+     5    160  14     5120   0   3923332  99 types.BuiltinFunctionType
+     6    130  12     4784   0   3928116  99 tuple
+     7     70   6     3920   0   3932036  99 function
+     8     28   3     3808   0   3935844  99 dict of Bio.Seq.Seq
+     9     28   3     3808   0   3939652  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 829245
+Partition of a set of 1184 objects. Total size = 4247676 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     15   1  3318600  78   3318600  78 unicode
+     1     36   3   830596  20   4149196  98 str
+     2     30   3    31320   1   4180516  98 _multiprocessing.Connection
+     3     15   1     7800   0   4188316  99 dict of multiprocessing.process.Process
+     4     15   1     7800   0   4196116  99 dict of multiprocessing.queues.Queue
+     5    171  14     5472   0   4201588  99 types.BuiltinFunctionType
+     6    139  12     5116   0   4206704  99 tuple
+     7     75   6     4200   0   4210904  99 function
+     8     30   3     4080   0   4214984  99 dict of Bio.Seq.Seq
+     9     30   3     4080   0   4219064  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 884528
+Partition of a set of 1255 objects. Total size = 4530288 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     16   1  3539840  78   3539840  78 unicode
+     1     39   3   885996  20   4425836  98 str
+     2     32   3    33408   1   4459244  98 _multiprocessing.Connection
+     3     16   1     8320   0   4467564  99 dict of multiprocessing.process.Process
+     4     16   1     8320   0   4475884  99 dict of multiprocessing.queues.Queue
+     5    182  15     5824   0   4481708  99 types.BuiltinFunctionType
+     6    148  12     5448   0   4487156  99 tuple
+     7     80   6     4480   0   4491636  99 function
+     8     32   3     4352   0   4495988  99 dict of Bio.Seq.Seq
+     9     32   3     4352   0   4500340  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 939811
+Partition of a set of 1326 objects. Total size = 4812892 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     17   1  3761080  78   3761080  78 unicode
+     1     40   3   941316  20   4702396  98 str
+     2     34   3    35496   1   4737892  98 _multiprocessing.Connection
+     3     17   1     8840   0   4746732  99 dict of multiprocessing.process.Process
+     4     17   1     8840   0   4755572  99 dict of multiprocessing.queues.Queue
+     5    193  15     6176   0   4761748  99 types.BuiltinFunctionType
+     6    157  12     5780   0   4767528  99 tuple
+     7     85   6     4760   0   4772288  99 function
+     8     34   3     4624   0   4776912  99 dict of Bio.Seq.Seq
+     9     34   3     4624   0   4781536  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 995094
+Partition of a set of 1397 objects. Total size = 5095548 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     18   1  3982320  78   3982320  78 unicode
+     1     43   3   996716  20   4979036  98 str
+     2     36   3    37584   1   5016620  98 _multiprocessing.Connection
+     3     18   1     9360   0   5025980  99 dict of multiprocessing.process.Process
+     4     18   1     9360   0   5035340  99 dict of multiprocessing.queues.Queue
+     5    204  15     6528   0   5041868  99 types.BuiltinFunctionType
+     6    166  12     6112   0   5047980  99 tuple
+     7     90   6     5040   0   5053020  99 function
+     8     36   3     4896   0   5057916  99 dict of Bio.Seq.Seq
+     9     36   3     4896   0   5062812  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1050377
+Partition of a set of 1469 objects. Total size = 5379008 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     19   1  4203560  78   4203560  78 unicode
+     1     46   3  1052948  20   5256508  98 str
+     2     38   3    39672   1   5296180  98 _multiprocessing.Connection
+     3     19   1     9880   0   5306060  99 dict of multiprocessing.process.Process
+     4     19   1     9880   0   5315940  99 dict of multiprocessing.queues.Queue
+     5    215  15     6880   0   5322820  99 types.BuiltinFunctionType
+     6    175  12     6444   0   5329264  99 tuple
+     7     95   6     5320   0   5334584  99 function
+     8     38   3     5168   0   5339752  99 dict of Bio.Seq.Seq
+     9     38   3     5168   0   5344920  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1105660
+Partition of a set of 1539 objects. Total size = 5660764 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     20   1  4424800  78   4424800  78 unicode
+     1     47   3  1107436  20   5532236  98 str
+     2     40   3    41760   1   5573996  98 _multiprocessing.Connection
+     3     20   1    10400   0   5584396  99 dict of multiprocessing.process.Process
+     4     20   1    10400   0   5594796  99 dict of multiprocessing.queues.Queue
+     5    226  15     7232   0   5602028  99 types.BuiltinFunctionType
+     6    184  12     6776   0   5608804  99 tuple
+     7    100   6     5600   0   5614404  99 function
+     8     40   3     5440   0   5619844  99 dict of Bio.Seq.Seq
+     9     40   3     5440   0   5625284  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1160943
+Partition of a set of 1611 objects. Total size = 5944268 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     21   1  4646040  78   4646040  78 unicode
+     1     50   3  1163668  20   5809708  98 str
+     2     42   3    43848   1   5853556  98 _multiprocessing.Connection
+     3     21   1    10920   0   5864476  99 dict of multiprocessing.process.Process
+     4     21   1    10920   0   5875396  99 dict of multiprocessing.queues.Queue
+     5    237  15     7584   0   5882980  99 types.BuiltinFunctionType
+     6    193  12     7108   0   5890088  99 tuple
+     7    105   7     5880   0   5895968  99 function
+     8     42   3     5712   0   5901680  99 dict of Bio.Seq.Seq
+     9     42   3     5712   0   5907392  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1216226
+Partition of a set of 1681 objects. Total size = 6225984 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     22   1  4867280  78   4867280  78 unicode
+     1     51   3  1218156  20   6085436  98 str
+     2     44   3    45936   1   6131372  98 _multiprocessing.Connection
+     3     22   1    11440   0   6142812  99 dict of multiprocessing.process.Process
+     4     22   1    11440   0   6154252  99 dict of multiprocessing.queues.Queue
+     5    248  15     7936   0   6162188  99 types.BuiltinFunctionType
+     6    202  12     7440   0   6169628  99 tuple
+     7    110   7     6160   0   6175788  99 function
+     8     44   3     5984   0   6181772  99 dict of Bio.Seq.Seq
+     9     44   3     5984   0   6187756  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1271509
+Partition of a set of 1752 objects. Total size = 6508612 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     23   1  5088520  78   5088520  78 unicode
+     1     53   3  1273516  20   6362036  98 str
+     2     46   3    48024   1   6410060  98 _multiprocessing.Connection
+     3     23   1    11960   0   6422020  99 dict of multiprocessing.process.Process
+     4     23   1    11960   0   6433980  99 dict of multiprocessing.queues.Queue
+     5    259  15     8288   0   6442268  99 types.BuiltinFunctionType
+     6    211  12     7772   0   6450040  99 tuple
+     7    115   7     6440   0   6456480  99 function
+     8     46   3     6256   0   6462736  99 dict of Bio.Seq.Seq
+     9     46   3     6256   0   6468992  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1326792
+Partition of a set of 1823 objects. Total size = 6791244 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     24   1  5309760  78   5309760  78 unicode
+     1     55   3  1328876  20   6638636  98 str
+     2     48   3    50112   1   6688748  98 _multiprocessing.Connection
+     3     24   1    12480   0   6701228  99 dict of multiprocessing.process.Process
+     4     24   1    12480   0   6713708  99 dict of multiprocessing.queues.Queue
+     5    270  15     8640   0   6722348  99 types.BuiltinFunctionType
+     6    220  12     8104   0   6730452  99 tuple
+     7    120   7     6720   0   6737172  99 function
+     8     48   3     6528   0   6743700  99 dict of Bio.Seq.Seq
+     9     48   3     6528   0   6750228  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1382075
+Partition of a set of 1894 objects. Total size = 7073832 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     25   1  5531000  78   5531000  78 unicode
+     1     57   3  1384236  20   6915236  98 str
+     2     50   3    52200   1   6967436  98 _multiprocessing.Connection
+     3     25   1    13000   0   6980436  99 dict of multiprocessing.process.Process
+     4     25   1    13000   0   6993436  99 dict of multiprocessing.queues.Queue
+     5    281  15     8992   0   7002428  99 types.BuiltinFunctionType
+     6    229  12     8436   0   7010864  99 tuple
+     7    125   7     7000   0   7017864  99 function
+     8     50   3     6800   0   7024664  99 dict of Bio.Seq.Seq
+     9     50   3     6800   0   7031464  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1437358
+Partition of a set of 1965 objects. Total size = 7356460 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     26   1  5752240  78   5752240  78 unicode
+     1     59   3  1439596  20   7191836  98 str
+     2     52   3    54288   1   7246124  99 _multiprocessing.Connection
+     3     26   1    13520   0   7259644  99 dict of multiprocessing.process.Process
+     4     26   1    13520   0   7273164  99 dict of multiprocessing.queues.Queue
+     5    292  15     9344   0   7282508  99 types.BuiltinFunctionType
+     6    238  12     8768   0   7291276  99 tuple
+     7    130   7     7280   0   7298556  99 function
+     8     52   3     7072   0   7305628  99 dict of Bio.Seq.Seq
+     9     52   3     7072   0   7312700  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1492641
+Partition of a set of 2036 objects. Total size = 7639092 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     27   1  5973480  78   5973480  78 unicode
+     1     61   3  1494956  20   7468436  98 str
+     2     54   3    56376   1   7524812  99 _multiprocessing.Connection
+     3     27   1    14040   0   7538852  99 dict of multiprocessing.process.Process
+     4     27   1    14040   0   7552892  99 dict of multiprocessing.queues.Queue
+     5    303  15     9696   0   7562588  99 types.BuiltinFunctionType
+     6    247  12     9100   0   7571688  99 tuple
+     7    135   7     7560   0   7579248  99 function
+     8     54   3     7344   0   7586592  99 dict of Bio.Seq.Seq
+     9     54   3     7344   0   7593936  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1547924
+Partition of a set of 2107 objects. Total size = 7921680 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     28   1  6194720  78   6194720  78 unicode
+     1     63   3  1550316  20   7745036  98 str
+     2     56   3    58464   1   7803500  99 _multiprocessing.Connection
+     3     28   1    14560   0   7818060  99 dict of multiprocessing.process.Process
+     4     28   1    14560   0   7832620  99 dict of multiprocessing.queues.Queue
+     5    314  15    10048   0   7842668  99 types.BuiltinFunctionType
+     6    256  12     9432   0   7852100  99 tuple
+     7    140   7     7840   0   7859940  99 function
+     8     56   3     7616   0   7867556  99 dict of Bio.Seq.Seq
+     9     56   3     7616   0   7875172  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1603207
+Partition of a set of 2178 objects. Total size = 8204308 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     29   1  6415960  78   6415960  78 unicode
+     1     65   3  1605676  20   8021636  98 str
+     2     58   3    60552   1   8082188  99 _multiprocessing.Connection
+     3     29   1    15080   0   8097268  99 dict of multiprocessing.process.Process
+     4     29   1    15080   0   8112348  99 dict of multiprocessing.queues.Queue
+     5    325  15    10400   0   8122748  99 types.BuiltinFunctionType
+     6    265  12     9764   0   8132512  99 tuple
+     7    145   7     8120   0   8140632  99 function
+     8     58   3     7888   0   8148520  99 dict of Bio.Seq.Seq
+     9     58   3     7888   0   8156408  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1658490
+Partition of a set of 2251 objects. Total size = 8486964 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     30   1  6637200  78   6637200  78 unicode
+     1     67   3  1661036  20   8298236  98 str
+     2     60   3    62640   1   8360876  99 _multiprocessing.Connection
+     3     30   1    15600   0   8376476  99 dict of multiprocessing.process.Process
+     4     30   1    15600   0   8392076  99 dict of multiprocessing.queues.Queue
+     5    336  15    10752   0   8402828  99 types.BuiltinFunctionType
+     6    274  12    10096   0   8412924  99 tuple
+     7    150   7     8400   0   8421324  99 function
+     8     60   3     8160   0   8429484  99 dict of Bio.Seq.Seq
+     9     60   3     8160   0   8437644  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1713773
+Partition of a set of 2323 objects. Total size = 8769564 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     31   1  6858440  78   6858440  78 unicode
+     1     69   3  1716396  20   8574836  98 str
+     2     62   3    64728   1   8639564  99 _multiprocessing.Connection
+     3     31   1    16120   0   8655684  99 dict of multiprocessing.process.Process
+     4     31   1    16120   0   8671804  99 dict of multiprocessing.queues.Queue
+     5    347  15    11104   0   8682908  99 types.BuiltinFunctionType
+     6    283  12    10428   0   8693336  99 tuple
+     7    155   7     8680   0   8702016  99 function
+     8     62   3     8432   0   8710448  99 dict of Bio.Seq.Seq
+     9     62   3     8432   0   8718880  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1769056
+Partition of a set of 2395 objects. Total size = 9052204 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     32   1  7079680  78   7079680  78 unicode
+     1     71   3  1771756  20   8851436  98 str
+     2     64   3    66816   1   8918252  99 _multiprocessing.Connection
+     3     32   1    16640   0   8934892  99 dict of multiprocessing.process.Process
+     4     32   1    16640   0   8951532  99 dict of multiprocessing.queues.Queue
+     5    358  15    11456   0   8962988  99 types.BuiltinFunctionType
+     6    292  12    10760   0   8973748  99 tuple
+     7    160   7     8960   0   8982708  99 function
+     8     64   3     8704   0   8991412  99 dict of Bio.Seq.Seq
+     9     64   3     8704   0   9000116  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1824339
+Partition of a set of 2469 objects. Total size = 9334872 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     33   1  7300920  78   7300920  78 unicode
+     1     73   3  1827116  20   9128036  98 str
+     2     66   3    68904   1   9196940  99 _multiprocessing.Connection
+     3     33   1    17160   0   9214100  99 dict of multiprocessing.process.Process
+     4     33   1    17160   0   9231260  99 dict of multiprocessing.queues.Queue
+     5    369  15    11808   0   9243068  99 types.BuiltinFunctionType
+     6    301  12    11092   0   9254160  99 tuple
+     7    165   7     9240   0   9263400  99 function
+     8     66   3     8976   0   9272376  99 dict of Bio.Seq.Seq
+     9     66   3     8976   0   9281352  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1879622
+Partition of a set of 2544 objects. Total size = 9617508 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     34   1  7522160  78   7522160  78 unicode
+     1     75   3  1882476  20   9404636  98 str
+     2     68   3    70992   1   9475628  99 _multiprocessing.Connection
+     3     34   1    17680   0   9493308  99 dict of multiprocessing.process.Process
+     4     34   1    17680   0   9510988  99 dict of multiprocessing.queues.Queue
+     5    380  15    12160   0   9523148  99 types.BuiltinFunctionType
+     6    310  12    11424   0   9534572  99 tuple
+     7    170   7     9520   0   9544092  99 function
+     8     68   3     9248   0   9553340  99 dict of Bio.Seq.Seq
+     9     68   3     9248   0   9562588  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1934905
+Partition of a set of 2619 objects. Total size = 9900184 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     35   1  7743400  78   7743400  78 unicode
+     1     77   3  1937836  20   9681236  98 str
+     2     70   3    73080   1   9754316  99 _multiprocessing.Connection
+     3     35   1    18200   0   9772516  99 dict of multiprocessing.process.Process
+     4     35   1    18200   0   9790716  99 dict of multiprocessing.queues.Queue
+     5    391  15    12512   0   9803228  99 types.BuiltinFunctionType
+     6    319  12    11756   0   9814984  99 tuple
+     7    175   7     9800   0   9824784  99 function
+     8     70   3     9520   0   9834304  99 dict of Bio.Seq.Seq
+     9     70   3     9520   0   9843824  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 1990188
+Partition of a set of 2696 objects. Total size = 10183776 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     36   1  7964640  78   7964640  78 unicode
+     1     81   3  1994108  20   9958748  98 str
+     2     72   3    75168   1  10033916  99 _multiprocessing.Connection
+     3     36   1    18720   0  10052636  99 dict of multiprocessing.process.Process
+     4     36   1    18720   0  10071356  99 dict of multiprocessing.queues.Queue
+     5    402  15    12864   0  10084220  99 types.BuiltinFunctionType
+     6    328  12    12088   0  10096308  99 tuple
+     7    180   7    10080   0  10106388  99 function
+     8     72   3     9792   0  10116180  99 dict of Bio.Seq.Seq
+     9     72   3     9792   0  10125972  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 2045471
+Partition of a set of 2767 objects. Total size = 10465212 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     37   1  8185668  78   8185668  78 unicode
+     1     81   3  2048504  20  10234172  98 str
+     2     74   3    77256   1  10311428  99 _multiprocessing.Connection
+     3     37   1    19240   0  10330668  99 dict of multiprocessing.process.Process
+     4     37   1    19240   0  10349908  99 dict of multiprocessing.queues.Queue
+     5    413  15    13216   0  10363124  99 types.BuiltinFunctionType
+     6    337  12    12420   0  10375544  99 tuple
+     7    185   7    10360   0  10385904  99 function
+     8     74   3    10064   0  10395968  99 dict of Bio.Seq.Seq
+     9     74   3    10064   0  10406032  99 dict of multiprocessing.synchronize.Lock
+<34 more rows. Type e.g. '_.more' to view.>
+
+Position 55283
+Partition of a set of 78 objects. Total size = 283064 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      1   1   221236  78    221236  78 unicode
+     1      3   4    55396  20    276632  98 str
+     2      2   3     2088   1    278720  98 _multiprocessing.Connection
+     3      1   1      520   0    279240  99 dict of multiprocessing.process.Process
+     4      1   1      520   0    279760  99 dict of multiprocessing.queues.Queue
+     5      1   1      356   0    280116  99 types.FrameType
+     6     11  14      352   0    280468  99 types.BuiltinFunctionType
+     7      9  12      332   0    280800  99 tuple
+     8      5   6      280   0    281080  99 function
+     9      2   3      272   0    281352  99 dict of Bio.Seq.Seq
+<21 more rows. Type e.g. '_.more' to view.>
+
+Position 110566
+Partition of a set of 157 objects. Total size = 565832 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      2   1   442472  78    442472  78 unicode
+     1      5   3   110764  20    553236  98 str
+     2      4   3     4176   1    557412  99 _multiprocessing.Connection
+     3      2   1     1040   0    558452  99 dict of multiprocessing.process.Process
+     4      2   1     1040   0    559492  99 dict of multiprocessing.queues.Queue
+     5     22  14      704   0    560196  99 types.BuiltinFunctionType
+     6     19  12      692   0    560888  99 tuple
+     7     10   6      560   0    561448  99 function
+     8      4   3      544   0    561992  99 dict of Bio.Seq.Seq
+     9      4   3      544   0    562536  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 165849
+Partition of a set of 233 objects. Total size = 849408 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      3   1   663708  78    663708  78 unicode
+     1      9   4   167036  20    830744  98 str
+     2      6   3     6264   1    837008  99 _multiprocessing.Connection
+     3      3   1     1560   0    838568  99 dict of multiprocessing.process.Process
+     4      3   1     1560   0    840128  99 dict of multiprocessing.queues.Queue
+     5     33  14     1056   0    841184  99 types.BuiltinFunctionType
+     6     28  12     1024   0    842208  99 tuple
+     7     15   6      840   0    843048  99 function
+     8      6   3      816   0    843864  99 dict of Bio.Seq.Seq
+     9      6   3      816   0    844680  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 221132
+Partition of a set of 309 objects. Total size = 1132100 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      4   1   884944  78    884944  78 unicode
+     1     12   4   222436  20   1107380  98 str
+     2      8   3     8352   1   1115732  99 _multiprocessing.Connection
+     3      4   1     2080   0   1117812  99 dict of multiprocessing.process.Process
+     4      4   1     2080   0   1119892  99 dict of multiprocessing.queues.Queue
+     5     44  14     1408   0   1121300  99 types.BuiltinFunctionType
+     6     37  12     1356   0   1122656  99 tuple
+     7     20   6     1120   0   1123776  99 function
+     8      8   3     1088   0   1124864  99 dict of Bio.Seq.Seq
+     9      8   3     1088   0   1125952  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 276415
+Partition of a set of 380 objects. Total size = 1413812 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      5   1  1106180  78   1106180  78 unicode
+     1     12   3   276884  20   1383064  98 str
+     2     10   3    10440   1   1393504  99 _multiprocessing.Connection
+     3      5   1     2600   0   1396104  99 dict of multiprocessing.process.Process
+     4      5   1     2600   0   1398704  99 dict of multiprocessing.queues.Queue
+     5     55  14     1760   0   1400464  99 types.BuiltinFunctionType
+     6     46  12     1688   0   1402152  99 tuple
+     7     25   7     1400   0   1403552  99 function
+     8     10   3     1360   0   1404912  99 dict of Bio.Seq.Seq
+     9     10   3     1360   0   1406272  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 331698
+Partition of a set of 457 objects. Total size = 1697404 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      6   1  1327416  78   1327416  78 unicode
+     1     16   4   333156  20   1660572  98 str
+     2     12   3    12528   1   1673100  99 _multiprocessing.Connection
+     3      6   1     3120   0   1676220  99 dict of multiprocessing.process.Process
+     4      6   1     3120   0   1679340  99 dict of multiprocessing.queues.Queue
+     5     66  14     2112   0   1681452  99 types.BuiltinFunctionType
+     6     55  12     2020   0   1683472  99 tuple
+     7     30   7     1680   0   1685152  99 function
+     8     12   3     1632   0   1686784  99 dict of Bio.Seq.Seq
+     9     12   3     1632   0   1688416  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 386981
+Partition of a set of 530 objects. Total size = 1979144 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      7   1  1548652  78   1548652  78 unicode
+     1     16   3   387604  20   1936256  98 str
+     2     14   3    14616   1   1950872  99 _multiprocessing.Connection
+     3      7   1     3640   0   1954512  99 dict of multiprocessing.process.Process
+     4      7   1     3640   0   1958152  99 dict of multiprocessing.queues.Queue
+     5     77  15     2464   0   1960616  99 types.BuiltinFunctionType
+     6     64  12     2352   0   1962968  99 tuple
+     7     35   7     1960   0   1964928  99 function
+     8     14   3     1904   0   1966832  99 dict of Bio.Seq.Seq
+     9     14   3     1904   0   1968736  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 442264
+Partition of a set of 605 objects. Total size = 2261792 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      8   1  1769888  78   1769888  78 unicode
+     1     18   3   442964  20   2212852  98 str
+     2     16   3    16704   1   2229556  99 _multiprocessing.Connection
+     3      8   1     4160   0   2233716  99 dict of multiprocessing.process.Process
+     4      8   1     4160   0   2237876  99 dict of multiprocessing.queues.Queue
+     5     88  15     2816   0   2240692  99 types.BuiltinFunctionType
+     6     73  12     2684   0   2243376  99 tuple
+     7     40   7     2240   0   2245616  99 function
+     8     16   3     2176   0   2247792  99 dict of Bio.Seq.Seq
+     9     16   3     2176   0   2249968  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 497547
+Partition of a set of 680 objects. Total size = 2544472 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0      9   1  1991124  78   1991124  78 unicode
+     1     20   3   498324  20   2489448  98 str
+     2     18   3    18792   1   2508240  99 _multiprocessing.Connection
+     3      9   1     4680   0   2512920  99 dict of multiprocessing.process.Process
+     4      9   1     4680   0   2517600  99 dict of multiprocessing.queues.Queue
+     5     99  15     3168   0   2520768  99 types.BuiltinFunctionType
+     6     82  12     3016   0   2523784  99 tuple
+     7     45   7     2520   0   2526304  99 function
+     8     18   3     2448   0   2528752  99 dict of Bio.Seq.Seq
+     9     18   3     2448   0   2531200  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 552830
+Partition of a set of 756 objects. Total size = 2827996 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     10   1  2212360  78   2212360  78 unicode
+     1     23   3   554556  20   2766916  98 str
+     2     20   3    20880   1   2787796  99 _multiprocessing.Connection
+     3     10   1     5200   0   2792996  99 dict of multiprocessing.process.Process
+     4     10   1     5200   0   2798196  99 dict of multiprocessing.queues.Queue
+     5    110  15     3520   0   2801716  99 types.BuiltinFunctionType
+     6     91  12     3348   0   2805064  99 tuple
+     7     50   7     2800   0   2807864  99 function
+     8     20   3     2720   0   2810584  99 dict of Bio.Seq.Seq
+     9     20   3     2720   0   2813304  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 608113
+Partition of a set of 833 objects. Total size = 3111556 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     11   1  2433596  78   2433596  78 unicode
+     1     27   3   610828  20   3044424  98 str
+     2     22   3    22968   1   3067392  99 _multiprocessing.Connection
+     3     11   1     5720   0   3073112  99 dict of multiprocessing.process.Process
+     4     11   1     5720   0   3078832  99 dict of multiprocessing.queues.Queue
+     5    121  15     3872   0   3082704  99 types.BuiltinFunctionType
+     6    100  12     3680   0   3086384  99 tuple
+     7     55   7     3080   0   3089464  99 function
+     8     22   3     2992   0   3092456  99 dict of Bio.Seq.Seq
+     9     22   3     2992   0   3095448  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 663396
+Partition of a set of 910 objects. Total size = 3395148 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     12   1  2654832  78   2654832  78 unicode
+     1     31   3   667100  20   3321932  98 str
+     2     24   3    25056   1   3346988  99 _multiprocessing.Connection
+     3     12   1     6240   0   3353228  99 dict of multiprocessing.process.Process
+     4     12   1     6240   0   3359468  99 dict of multiprocessing.queues.Queue
+     5    132  15     4224   0   3363692  99 types.BuiltinFunctionType
+     6    109  12     4012   0   3367704  99 tuple
+     7     60   7     3360   0   3371064  99 function
+     8     24   3     3264   0   3374328  99 dict of Bio.Seq.Seq
+     9     24   3     3264   0   3377592  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 718679
+Partition of a set of 985 objects. Total size = 3677800 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     13   1  2876068  78   2876068  78 unicode
+     1     33   3   722460  20   3598528  98 str
+     2     26   3    27144   1   3625672  99 _multiprocessing.Connection
+     3     13   1     6760   0   3632432  99 dict of multiprocessing.process.Process
+     4     13   1     6760   0   3639192  99 dict of multiprocessing.queues.Queue
+     5    143  15     4576   0   3643768  99 types.BuiltinFunctionType
+     6    118  12     4344   0   3648112  99 tuple
+     7     65   7     3640   0   3651752  99 function
+     8     26   3     3536   0   3655288  99 dict of Bio.Seq.Seq
+     9     26   3     3536   0   3658824  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 773962
+Partition of a set of 1055 objects. Total size = 3957752 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     14   1  3097304  78   3097304  78 unicode
+     1     30   3   775124  20   3872428  98 str
+     2     28   3    29232   1   3901660  99 _multiprocessing.Connection
+     3     14   1     7280   0   3908940  99 dict of multiprocessing.process.Process
+     4     14   1     7280   0   3916220  99 dict of multiprocessing.queues.Queue
+     5    154  15     4928   0   3921148  99 types.BuiltinFunctionType
+     6    127  12     4676   0   3925824  99 tuple
+     7     70   7     3920   0   3929744  99 function
+     8     28   3     3808   0   3933552  99 dict of Bio.Seq.Seq
+     9     28   3     3808   0   3937360  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 829245
+Partition of a set of 1130 objects. Total size = 4240432 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     15   1  3318540  78   3318540  78 unicode
+     1     32   3   830484  20   4149024  98 str
+     2     30   3    31320   1   4180344  99 _multiprocessing.Connection
+     3     15   1     7800   0   4188144  99 dict of multiprocessing.process.Process
+     4     15   1     7800   0   4195944  99 dict of multiprocessing.queues.Queue
+     5    165  15     5280   0   4201224  99 types.BuiltinFunctionType
+     6    136  12     5008   0   4206232  99 tuple
+     7     75   7     4200   0   4210432  99 function
+     8     30   3     4080   0   4214512  99 dict of Bio.Seq.Seq
+     9     30   3     4080   0   4218592  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 884528
+Partition of a set of 1206 objects. Total size = 4523956 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     16   1  3539776  78   3539776  78 unicode
+     1     35   3   886716  20   4426492  98 str
+     2     32   3    33408   1   4459900  99 _multiprocessing.Connection
+     3     16   1     8320   0   4468220  99 dict of multiprocessing.process.Process
+     4     16   1     8320   0   4476540  99 dict of multiprocessing.queues.Queue
+     5    176  15     5632   0   4482172  99 types.BuiltinFunctionType
+     6    145  12     5340   0   4487512  99 tuple
+     7     80   7     4480   0   4491992  99 function
+     8     32   3     4352   0   4496344  99 dict of Bio.Seq.Seq
+     9     32   3     4352   0   4500696  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 939811
+Partition of a set of 1282 objects. Total size = 4806644 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     17   1  3761012  78   3761012  78 unicode
+     1     38   3   942116  20   4703128  98 str
+     2     34   3    35496   1   4738624  99 _multiprocessing.Connection
+     3     17   1     8840   0   4747464  99 dict of multiprocessing.process.Process
+     4     17   1     8840   0   4756304  99 dict of multiprocessing.queues.Queue
+     5    187  15     5984   0   4762288  99 types.BuiltinFunctionType
+     6    154  12     5672   0   4767960  99 tuple
+     7     85   7     4760   0   4772720  99 function
+     8     34   3     4624   0   4777344  99 dict of Bio.Seq.Seq
+     9     34   3     4624   0   4781968  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 995094
+Partition of a set of 1355 objects. Total size = 5088412 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     18   1  3982248  78   3982248  78 unicode
+     1     38   3   996564  20   4978812  98 str
+     2     36   3    37584   1   5016396  99 _multiprocessing.Connection
+     3     18   1     9360   0   5025756  99 dict of multiprocessing.process.Process
+     4     18   1     9360   0   5035116  99 dict of multiprocessing.queues.Queue
+     5    198  15     6336   0   5041452  99 types.BuiltinFunctionType
+     6    163  12     6004   0   5047456  99 tuple
+     7     90   7     5040   0   5052496  99 function
+     8     36   3     4896   0   5057392  99 dict of Bio.Seq.Seq
+     9     36   3     4896   0   5062288  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1050377
+Partition of a set of 1430 objects. Total size = 5371064 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     19   1  4203484  78   4203484  78 unicode
+     1     40   3  1051924  20   5255408  98 str
+     2     38   3    39672   1   5295080  99 _multiprocessing.Connection
+     3     19   1     9880   0   5304960  99 dict of multiprocessing.process.Process
+     4     19   1     9880   0   5314840  99 dict of multiprocessing.queues.Queue
+     5    209  15     6688   0   5321528  99 types.BuiltinFunctionType
+     6    172  12     6336   0   5327864  99 tuple
+     7     95   7     5320   0   5333184  99 function
+     8     38   3     5168   0   5338352  99 dict of Bio.Seq.Seq
+     9     38   3     5168   0   5343520  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1105660
+Partition of a set of 1505 objects. Total size = 5653712 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     20   1  4424720  78   4424720  78 unicode
+     1     42   3  1107284  20   5532004  98 str
+     2     40   3    41760   1   5573764  99 _multiprocessing.Connection
+     3     20   1    10400   0   5584164  99 dict of multiprocessing.process.Process
+     4     20   1    10400   0   5594564  99 dict of multiprocessing.queues.Queue
+     5    220  15     7040   0   5601604  99 types.BuiltinFunctionType
+     6    181  12     6668   0   5608272  99 tuple
+     7    100   7     5600   0   5613872  99 function
+     8     40   3     5440   0   5619312  99 dict of Bio.Seq.Seq
+     9     40   3     5440   0   5624752  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1160943
+Partition of a set of 1582 objects. Total size = 5937304 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     21   1  4645956  78   4645956  78 unicode
+     1     46   3  1163556  20   5809512  98 str
+     2     42   3    43848   1   5853360  99 _multiprocessing.Connection
+     3     21   1    10920   0   5864280  99 dict of multiprocessing.process.Process
+     4     21   1    10920   0   5875200  99 dict of multiprocessing.queues.Queue
+     5    231  15     7392   0   5882592  99 types.BuiltinFunctionType
+     6    190  12     7000   0   5889592  99 tuple
+     7    105   7     5880   0   5895472  99 function
+     8     42   3     5712   0   5901184  99 dict of Bio.Seq.Seq
+     9     42   3     5712   0   5906896  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1216226
+Partition of a set of 1657 objects. Total size = 6219956 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     22   1  4867192  78   4867192  78 unicode
+     1     48   3  1218916  20   6086108  98 str
+     2     44   3    45936   1   6132044  99 _multiprocessing.Connection
+     3     22   1    11440   0   6143484  99 dict of multiprocessing.process.Process
+     4     22   1    11440   0   6154924  99 dict of multiprocessing.queues.Queue
+     5    242  15     7744   0   6162668  99 types.BuiltinFunctionType
+     6    199  12     7332   0   6170000  99 tuple
+     7    110   7     6160   0   6176160  99 function
+     8     44   3     5984   0   6182144  99 dict of Bio.Seq.Seq
+     9     44   3     5984   0   6188128  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1271509
+Partition of a set of 1730 objects. Total size = 6501692 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     23   1  5088428  78   5088428  78 unicode
+     1     48   3  1273364  20   6361792  98 str
+     2     46   3    48024   1   6409816  99 _multiprocessing.Connection
+     3     23   1    11960   0   6421776  99 dict of multiprocessing.process.Process
+     4     23   1    11960   0   6433736  99 dict of multiprocessing.queues.Queue
+     5    253  15     8096   0   6441832  99 types.BuiltinFunctionType
+     6    208  12     7664   0   6449496  99 tuple
+     7    115   7     6440   0   6455936  99 function
+     8     46   3     6256   0   6462192  99 dict of Bio.Seq.Seq
+     9     46   3     6256   0   6468448  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1326792
+Partition of a set of 1806 objects. Total size = 6785244 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     24   1  5309664  78   5309664  78 unicode
+     1     51   3  1329596  20   6639260  98 str
+     2     48   3    50112   1   6689372  99 _multiprocessing.Connection
+     3     24   1    12480   0   6701852  99 dict of multiprocessing.process.Process
+     4     24   1    12480   0   6714332  99 dict of multiprocessing.queues.Queue
+     5    264  15     8448   0   6722780  99 types.BuiltinFunctionType
+     6    217  12     7996   0   6730776  99 tuple
+     7    120   7     6720   0   6737496  99 function
+     8     48   3     6528   0   6744024  99 dict of Bio.Seq.Seq
+     9     48   3     6528   0   6750552  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1382075
+Partition of a set of 1881 objects. Total size = 7067896 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     25   1  5530900  78   5530900  78 unicode
+     1     53   3  1384956  20   6915856  98 str
+     2     50   3    52200   1   6968056  99 _multiprocessing.Connection
+     3     25   1    13000   0   6981056  99 dict of multiprocessing.process.Process
+     4     25   1    13000   0   6994056  99 dict of multiprocessing.queues.Queue
+     5    275  15     8800   0   7002856  99 types.BuiltinFunctionType
+     6    226  12     8328   0   7011184  99 tuple
+     7    125   7     7000   0   7018184  99 function
+     8     50   3     6800   0   7024984  99 dict of Bio.Seq.Seq
+     9     50   3     6800   0   7031784  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1437358
+Partition of a set of 1955 objects. Total size = 7349672 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     26   1  5752136  78   5752136  78 unicode
+     1     54   3  1439444  20   7191580  98 str
+     2     52   3    54288   1   7245868  99 _multiprocessing.Connection
+     3     26   1    13520   0   7259388  99 dict of multiprocessing.process.Process
+     4     26   1    13520   0   7272908  99 dict of multiprocessing.queues.Queue
+     5    286  15     9152   0   7282060  99 types.BuiltinFunctionType
+     6    235  12     8660   0   7290720  99 tuple
+     7    130   7     7280   0   7298000  99 function
+     8     52   3     7072   0   7305072  99 dict of Bio.Seq.Seq
+     9     52   3     7072   0   7312144  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1492641
+Partition of a set of 2030 objects. Total size = 7632352 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     27   1  5973372  78   5973372  78 unicode
+     1     56   3  1494804  20   7468176  98 str
+     2     54   3    56376   1   7524552  99 _multiprocessing.Connection
+     3     27   1    14040   0   7538592  99 dict of multiprocessing.process.Process
+     4     27   1    14040   0   7552632  99 dict of multiprocessing.queues.Queue
+     5    297  15     9504   0   7562136  99 types.BuiltinFunctionType
+     6    244  12     8992   0   7571128  99 tuple
+     7    135   7     7560   0   7578688  99 function
+     8     54   3     7344   0   7586032  99 dict of Bio.Seq.Seq
+     9     54   3     7344   0   7593376  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1547924
+Partition of a set of 2105 objects. Total size = 7914980 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     28   1  6194608  78   6194608  78 unicode
+     1     58   3  1550164  20   7744772  98 str
+     2     56   3    58464   1   7803236  99 _multiprocessing.Connection
+     3     28   1    14560   0   7817796  99 dict of multiprocessing.process.Process
+     4     28   1    14560   0   7832356  99 dict of multiprocessing.queues.Queue
+     5    308  15     9856   0   7842212  99 types.BuiltinFunctionType
+     6    253  12     9324   0   7851536  99 tuple
+     7    140   7     7840   0   7859376  99 function
+     8     56   3     7616   0   7866992  99 dict of Bio.Seq.Seq
+     9     56   3     7616   0   7874608  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1603207
+Partition of a set of 2180 objects. Total size = 8197628 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     29   1  6415844  78   6415844  78 unicode
+     1     60   3  1605524  20   8021368  98 str
+     2     58   3    60552   1   8081920  99 _multiprocessing.Connection
+     3     29   1    15080   0   8097000  99 dict of multiprocessing.process.Process
+     4     29   1    15080   0   8112080  99 dict of multiprocessing.queues.Queue
+     5    319  15    10208   0   8122288  99 types.BuiltinFunctionType
+     6    262  12     9656   0   8131944  99 tuple
+     7    145   7     8120   0   8140064  99 function
+     8     58   3     7888   0   8147952  99 dict of Bio.Seq.Seq
+     9     58   3     7888   0   8155840  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1658490
+Partition of a set of 2255 objects. Total size = 8480308 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     30   1  6637080  78   6637080  78 unicode
+     1     62   3  1660884  20   8297964  98 str
+     2     60   3    62640   1   8360604  99 _multiprocessing.Connection
+     3     30   1    15600   0   8376204  99 dict of multiprocessing.process.Process
+     4     30   1    15600   0   8391804  99 dict of multiprocessing.queues.Queue
+     5    330  15    10560   0   8402364  99 types.BuiltinFunctionType
+     6    271  12     9988   0   8412352  99 tuple
+     7    150   7     8400   0   8420752  99 function
+     8     60   3     8160   0   8428912  99 dict of Bio.Seq.Seq
+     9     60   3     8160   0   8437072  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1713773
+Partition of a set of 2330 objects. Total size = 8762960 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     31   1  6858316  78   6858316  78 unicode
+     1     64   3  1716244  20   8574560  98 str
+     2     62   3    64728   1   8639288  99 _multiprocessing.Connection
+     3     31   1    16120   0   8655408  99 dict of multiprocessing.process.Process
+     4     31   1    16120   0   8671528  99 dict of multiprocessing.queues.Queue
+     5    341  15    10912   0   8682440  99 types.BuiltinFunctionType
+     6    280  12    10320   0   8692760  99 tuple
+     7    155   7     8680   0   8701440  99 function
+     8     62   3     8432   0   8709872  99 dict of Bio.Seq.Seq
+     9     62   3     8432   0   8718304  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1769056
+Partition of a set of 2405 objects. Total size = 9045608 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     32   1  7079552  78   7079552  78 unicode
+     1     66   3  1771604  20   8851156  98 str
+     2     64   3    66816   1   8917972  99 _multiprocessing.Connection
+     3     32   1    16640   0   8934612  99 dict of multiprocessing.process.Process
+     4     32   1    16640   0   8951252  99 dict of multiprocessing.queues.Queue
+     5    352  15    11264   0   8962516  99 types.BuiltinFunctionType
+     6    289  12    10652   0   8973168  99 tuple
+     7    160   7     8960   0   8982128  99 function
+     8     64   3     8704   0   8990832  99 dict of Bio.Seq.Seq
+     9     64   3     8704   0   8999536  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1824339
+Partition of a set of 2480 objects. Total size = 9328288 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     33   1  7300788  78   7300788  78 unicode
+     1     68   3  1826964  20   9127752  98 str
+     2     66   3    68904   1   9196656  99 _multiprocessing.Connection
+     3     33   1    17160   0   9213816  99 dict of multiprocessing.process.Process
+     4     33   1    17160   0   9230976  99 dict of multiprocessing.queues.Queue
+     5    363  15    11616   0   9242592  99 types.BuiltinFunctionType
+     6    298  12    10984   0   9253576  99 tuple
+     7    165   7     9240   0   9262816  99 function
+     8     66   3     8976   0   9271792  99 dict of Bio.Seq.Seq
+     9     66   3     8976   0   9280768  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1879622
+Partition of a set of 2555 objects. Total size = 9610940 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     34   1  7522024  78   7522024  78 unicode
+     1     70   3  1882324  20   9404348  98 str
+     2     68   3    70992   1   9475340  99 _multiprocessing.Connection
+     3     34   1    17680   0   9493020  99 dict of multiprocessing.process.Process
+     4     34   1    17680   0   9510700  99 dict of multiprocessing.queues.Queue
+     5    374  15    11968   0   9522668  99 types.BuiltinFunctionType
+     6    307  12    11316   0   9533984  99 tuple
+     7    170   7     9520   0   9543504  99 function
+     8     68   3     9248   0   9552752  99 dict of Bio.Seq.Seq
+     9     68   3     9248   0   9562000  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1934905
+Partition of a set of 2630 objects. Total size = 9893588 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     35   1  7743260  78   7743260  78 unicode
+     1     72   3  1937684  20   9680944  98 str
+     2     70   3    73080   1   9754024  99 _multiprocessing.Connection
+     3     35   1    18200   0   9772224  99 dict of multiprocessing.process.Process
+     4     35   1    18200   0   9790424  99 dict of multiprocessing.queues.Queue
+     5    385  15    12320   0   9802744  99 types.BuiltinFunctionType
+     6    316  12    11648   0   9814392  99 tuple
+     7    175   7     9800   0   9824192  99 function
+     8     70   3     9520   0   9833712  99 dict of Bio.Seq.Seq
+     9     70   3     9520   0   9843232  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 1990188
+Partition of a set of 2705 objects. Total size = 10176268 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     36   1  7964496  78   7964496  78 unicode
+     1     74   3  1993044  20   9957540  98 str
+     2     72   3    75168   1  10032708  99 _multiprocessing.Connection
+     3     36   1    18720   0  10051428  99 dict of multiprocessing.process.Process
+     4     36   1    18720   0  10070148  99 dict of multiprocessing.queues.Queue
+     5    396  15    12672   0  10082820  99 types.BuiltinFunctionType
+     6    325  12    11980   0  10094800  99 tuple
+     7    180   7    10080   0  10104880  99 function
+     8     72   3     9792   0  10114672  99 dict of Bio.Seq.Seq
+     9     72   3     9792   0  10124464  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+
+Position 2045471
+Partition of a set of 2780 objects. Total size = 10459520 bytes.
+ Index  Count   %     Size   % Cumulative  % Kind (class / dict of class)
+     0     37   1  8185524  78   8185524  78 unicode
+     1     77   3  2049224  20  10234748  98 str
+     2     74   3    77256   1  10312004  99 _multiprocessing.Connection
+     3     37   1    19240   0  10331244  99 dict of multiprocessing.process.Process
+     4     37   1    19240   0  10350484  99 dict of multiprocessing.queues.Queue
+     5    407  15    13024   0  10363508  99 types.BuiltinFunctionType
+     6    334  12    12312   0  10375820  99 tuple
+     7    185   7    10360   0  10386180  99 function
+     8     74   3    10064   0  10396244  99 dict of Bio.Seq.Seq
+     9     74   3    10064   0  10406308  99 dict of multiprocessing.synchronize.Lock
+<23 more rows. Type e.g. '_.more' to view.>
+tuple "good_annealings" uses 12.20Mb
+
+list "bad_annealings" uses 13.31Mb
+
+dict "products" uses 4.79Mb
+
+dict "templates" uses 0.03Mb
+
+dict "annealings" uses 4.60Mb
+
+PCR_Simulation "unknown" uses 4.90Mb
+
+list "unknown" uses 2.05Mb
