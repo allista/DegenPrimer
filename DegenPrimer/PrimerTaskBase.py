@@ -18,12 +18,9 @@ Created on Mar 28, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-
 from PipelineTaskBase import PipelineTaskBase
 
-
 class PrimerTaskBase(PipelineTaskBase):
-    
     @staticmethod
     def check_options(args):
         #check if at least one primer is provided

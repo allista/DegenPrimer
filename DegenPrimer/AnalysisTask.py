@@ -19,22 +19,21 @@ Created on Jul 25, 2012
 '''
 
 #imports
-import os
 import sys
 import errno
-import signal
+import traceback as tb
 from time import time, sleep
 from datetime import timedelta
 from Queue import Empty
 from multiprocessing import Queue
-from multiprocessing.managers import BaseManager
-from threading import Thread
+from threading import Thread, Lock
 from contextlib import contextmanager
 import TD_Functions
 from PrimerTaskBase import PrimerTaskBase
 from BlastPrimers import BlastPrimers
-from SecStructures import AllSecStructures
-from StringTools import hr, wrap_text, time_hr, print_exception
+from AllSecStructures import AllSecStructures
+from MultiprocessingBase import UManager
+from StringTools import print_exception
 from SeqDB import SeqDB
 from iPCR import iPCR
 try:
@@ -46,12 +45,7 @@ except ImportError:
 
 
 #managers for subprocessed classes
-class ClassManager(BaseManager):
-    def getpid(self):
-        if '_process' in self.__dict__:
-            return self._process.pid
-        else: return None
-#end class
+class ClassManager(UManager): pass
 ClassManager.register('AllSecStructures', AllSecStructures)
 ClassManager.register('SeqDB', SeqDB)
 ClassManager.register('iPCR', iPCR)
@@ -65,7 +59,8 @@ class OutQueue(object):
         if queue == None:
             self._queue = Queue()
         else: self._queue = queue
-        
+    #end def
+    
     @property
     def queue(self):
         return self._queue
@@ -74,90 +69,54 @@ class OutQueue(object):
         self._queue.put(text)
     
     def flush(self): pass
-#end class
+#end class 
 
 
 class WaitThread(Thread):
     '''Thread that specially handle EOFError and IOError 4, interpreting them 
     as a signal that the target activity (which is supposed to run in another 
     process, e.g. in a Manager) has been terminated.'''
-    def __init__(self, target=None, name=None, args=(), kwargs=dict()):
+    def __init__(self, lock, t_id, target=None, name=None, args=(), kwargs=dict()):
         Thread.__init__(self, name=name)
+        self._lock   = lock
+        self._id     = t_id
         self._target = target
         self._args   = args
         self._kwargs = kwargs
+        self.daemon  = True
+    #end def
+        
+    def _print_exception(self):
+        with self._lock:
+            print '\nError in thread: %s' % self.name
+            tb.print_exc()
+    #end def
         
     def run(self):
-        try:
-            self._target(*self._args, **self._kwargs)
+        elapsed_time = 0
+        try: elapsed_time = self._target(*self._args, **self._kwargs)
         #Ctrl-C
-        except KeyboardInterrupt: return
         #EOF means that target activity was terminated in the Manager process
-        except EOFError: return
+        except (KeyboardInterrupt, EOFError): return
         #IO code=4 means the same
         except IOError, e:
-            if e.errno == errno.EINTR:
-                return
+            if e.errno == errno.EINTR: return
             elif e.errno == errno.EBADMSG:
-                print '\nError in thread: %s' % self.name
-                print e.message
-                print '\n*** It seems that an old degen_primer_gui ' \
-                'subprocess is running in the system. Kill it and try again. ***\n'
-                return
-            else:
-                print '\nError in thread: %s' % self.name
-                print print_exception(e)
-                return
-        except Exception, e:
-            print '\nError in thread: %s' % self.name
-            print print_exception(e)
-            return
+                with self._lock:
+                    print '\nError in thread: %s' % self.name
+                    print e.message
+                    print '\n*** It seems that an old degen_primer ' \
+                    'subprocess is running in the system. Kill it and try again. ***\n'
+            else: self._print_exception()
+        except Exception: self._print_exception()
+        finally:
+            #send back a message with elapsed time
+            sleep(0.1)
+            with self._lock:
+                print('\nTask #%d has finished:\n   %s\nElapsed time: %s' % \
+                      (self._id, self.name, timedelta(seconds=elapsed_time)))
     #end def
 #end class
-
-
-#a context manager to capture output of print into OutQueue object
-@contextmanager
-def capture_to_queue(out_queue=None):
-    oldout,olderr = sys.stdout, sys.stderr
-    try:
-        out = OutQueue(out_queue)
-        #need to leave stderr due to the http://bugs.python.org/issue14308
-        sys.stdout = out #sys.stderr = out
-        yield out
-    except Exception, e:
-        print_exception(e)
-        raise
-    finally:
-        sys.stdout,sys.stderr = oldout, olderr
-#end def
-
-
-#subprocess worker factory and launcher
-def _subroutine(func, args, queue, p_entry, p_name=None):
-    '''
-    Run a func in a subrocess with args provided as dictionary.
-    Output will be put into a queue q.
-    Return Process object. 
-    '''
-    routine_name = p_name if p_name else func.__name__
-     
-    def worker(_args, _q):
-        #remember start time
-        time0 = time()
-        #run the function
-        if _args is None: func()
-        else: func(*_args)
-        _q.put('\nTask has finished:\n   %s\nElapsed time: %s' % (routine_name, timedelta(seconds=time()-time0)))
-    #end def
-    
-    #start subprocess
-    subroutine = WaitThread(target=worker, args=[args, queue], name=routine_name)
-    subroutine.daemon = True
-    p_entry['process'] = subroutine
-    print '\nStarting CPU-intensive task:\n   %s\nThis may take awhile...' % routine_name
-    subroutine.start()
-#end def
 
 
 class AnalysisTask(PrimerTaskBase):
@@ -167,80 +126,111 @@ class AnalysisTask(PrimerTaskBase):
     #file format for saving primers
     _fmt = 'fasta'
     
+    #a context manager to capture output of print into OutQueue object
+    @staticmethod
+    @contextmanager
+    def capture_to_queue(out_queue=None):
+        oldout,olderr = sys.stdout, sys.stderr
+        try:
+            out = OutQueue(out_queue)
+            #need to leave stderr due to the http://bugs.python.org/issue14308
+            sys.stdout = out #sys.stderr = out
+            yield out
+        except Exception, e:
+            print_exception(e)
+            raise
+        finally:
+            sys.stdout,sys.stderr = oldout, olderr
+    #end def
+    
 
-    def __init__(self):
-        PrimerTaskBase.__init__(self)
+    def __init__(self, abort_event):
+        PrimerTaskBase.__init__(self, abort_event)
+        self._print_lock  = Lock()
         self._subroutines = [] #list of launched processes with their managers and output queues
-        self._terminated  = False #flag which is set when pipeline is terminated
     #end def
 
 
-    def terminate(self):
-        if self._terminated: return
-        self._terminated = True
-        #try to shutdown managers
+    def _clean_subroutines(self):
         for p_entry in self._subroutines:
-            try: 
-                p_entry['manager'].shutdown()
-                if p_entry['children']:
-                    for child in p_entry['children']:
-                        os.kill(child, signal.SIGTERM)
-                        sleep(0.1) #control shot
-                        os.kill(child, signal.SIGKILL)
+            try: p_entry['manager'].shutdown()
             except: pass
         self._subroutines = []
     #end def
 
 
-    def _generate_subroutine_entry(self, queue):
-        p_entry = {'process'  : None,
-                   'children' : [],
-                   'manager'  : ClassManager(),
-                   'queue'    : queue,
-                   'output'   : []}
+    def _generate_subroutine_entry(self):
+        with self.capture_to_queue() as out:
+            manager = ClassManager()
+            manager.start()
+        e_id     = (len(self._subroutines)+1)
+        p_entry  = {'process'  : None,
+                    'manager'  : manager,
+                    'queue'    : out.queue,
+                    'output'   : [],
+                    'id'       : e_id}
         self._subroutines.append(p_entry)
         return p_entry
     #end def
-
-
-    def run(self, args):
-        #reset global state of the module
-        self._terminated  = False
-        self._subroutines = []
-
-        #zero time, used to calculate elapsed time in the end
-        time0 = time()
-        
-        #set PCR parameters
-        TD_Functions.PCR_P.set(args.options)
-        
-        #calculate primers' Tm
-        for primer in args.primers: primer.calculate_Tms()
-        
-        #save primers 
-        if not self._save_primers(args.primers): return False
-        #----------------------------------------------------------------------#
     
+    
+    #subprocess worker factory and launcher
+    def _run_subroutine(self, func, args, p_entry, p_name=None):
+        '''Run a func in a thread with args provided as dictionary'''
+        def worker(_args):
+            #remember start time
+            time0 = time()
+            #run the function
+            if _args is None: func()
+            else: func(*_args)
+            #return elapsed time
+            return (time()-time0)
+        #start subprocess
+        routine_name = p_name if p_name else func.__name__
+        routine_id   = p_entry['id']
+        subroutine   = WaitThread(self._print_lock, routine_id, target=worker, 
+                                  name=routine_name, args=[args,])
+        p_entry['process'] = subroutine
+        with self._print_lock: 
+            print('\nStarting CPU-intensive task #%d:\n   %s\nThis may take awhile...' % \
+                  (routine_id, routine_name))
+        subroutine.start()
+    #end def
+    
+    
+    def _run_analysis(self, args):
+        analysis_routines = []
+        #-------------generate components and calculate primers' Tm------------#
+        print ('\nCalculating unambiguous components and melting temperatures '
+               'of the primers...')
+        for primer in args.primers:
+            if self._abort_event.is_set(): return None
+            primer.generate_components()
+            primer.calculate_Tms(self._abort_event)
+        print 'Done.'
+        #save primers 
+        if not self._save_primers(args.primers): return None
+        #----------------------------------------------------------------------#
         #following computations are CPU intensive, so they need parallelization#
-        #check primers for hairpins, dimers and cross-dimers
-        with capture_to_queue() as out:
-            p_entry = self._generate_subroutine_entry(out.queue)
-            p_entry['manager'].start()
-        all_sec_structures  = p_entry['manager'].AllSecStructures(args.primers)
+        #check primers for hairpins, dimers and cross-dimers                   #
+        print ('\nSearching for stable secondary structures of the primers...')
+        p_entry = self._generate_subroutine_entry()
+        all_sec_structures  = p_entry['manager'].AllSecStructures(self._abort_event, args.job_id, args.primers)
+        all_sec_structures.find_structures()
+        if self._abort_event.is_set(): return None
+        analysis_routines.append(all_sec_structures)
         side_reactions      = all_sec_structures.reactions()
         side_concentrations = all_sec_structures.concentrations()
-        _subroutine(all_sec_structures.calculate_equilibrium, None, out.queue, p_entry,
-                    'Calculate conversion degree of secondary structures.')
+        with self._print_lock: print 'Done.'
+        self._run_subroutine(all_sec_structures.calculate_equilibrium, None, p_entry,
+                             'Calculate relative concentrations of secondary structures at Tm.')
         #----------------------------------------------------------------------#
-        
-        
-        #in silica PCR simulation. This is only available if sequence database is provided in some form 
-        ipcr = None
+        #in silica PCR simulation. This is only available if sequence database #
+        #is provided in some form                                              #
         if args.fasta_files or args.sequence_db:
-            with capture_to_queue() as out:
-                p_entry = self._generate_subroutine_entry(out.queue)
-                p_entry['manager'].start()
-            ipcr = p_entry['manager'].iPCR(args.max_mismatches,
+            p_entry = self._generate_subroutine_entry()
+            ipcr = p_entry['manager'].iPCR(self._abort_event,
+                                           args.max_mismatches,
                                            args.job_id, 
                                            args.primers, 
                                            args.min_amplicon, 
@@ -251,22 +241,19 @@ class AnalysisTask(PrimerTaskBase):
                                            side_reactions, 
                                            side_concentrations,
                                            args.analyse_all_annealings)
+            analysis_routines.append(ipcr)
             #connect to sequence database
             seq_files = []
             if args.sequence_db: seq_files.append(args.sequence_db)
             else: seq_files = args.fasta_files
-            _subroutine(ipcr.find_and_analyse, 
-                        (seq_files, 
-                         args.use_sequences), out.queue, p_entry,
-                        'Simulate PCR using possible products found in provided sequences.')
-        #----------------------------------------------------------------------#
-        
-        
-        #test for primers specificity by BLAST
-        with capture_to_queue() as out:
-            p_entry = self._generate_subroutine_entry(out.queue)
-            p_entry['manager'].start()
-        blast_primers = p_entry['manager'].BlastPrimers(args.job_id, 
+            self._run_subroutine(ipcr.find_and_analyse, 
+                                 (seq_files, 
+                                  args.use_sequences), p_entry,
+                                 'Simulate PCR using provided sequences as DNA templates.')
+        #-----------------test for primers specificity by BLAST----------------#
+        p_entry = self._generate_subroutine_entry()
+        blast_primers = p_entry['manager'].BlastPrimers(self._abort_event,
+                                                        args.job_id, 
                                                         args.primers, 
                                                         args.min_amplicon, 
                                                         args.max_amplicon, 
@@ -276,6 +263,7 @@ class AnalysisTask(PrimerTaskBase):
                                                         side_reactions, 
                                                         side_concentrations,
                                                         include_side_annealings=args.analyse_all_annealings)
+        analysis_routines.append(blast_primers)
         #if --do-blast flag was provided, make an actual query
         if args.do_blast:
             #construct Entrez query
@@ -285,89 +273,29 @@ class AnalysisTask(PrimerTaskBase):
                     if entrez_query: entrez_query += ' OR '
                     entrez_query += organism+'[organism]'
             #do the blast and analyze the results
-            _subroutine(blast_primers.blast_and_analyze, 
-                        (entrez_query,),
-                        out.queue, p_entry,
-                        'Make BLAST query, then simulate PCR using returned alignments.')
+            self._run_subroutine(blast_primers.blast_and_analyze, 
+                                 (entrez_query,),
+                                 p_entry,
+                                 'Make BLAST query, then simulate PCR using returned alignments.')
         #else, try to load previously saved results and analyze them with current parameters
         elif blast_primers.load_results():
-            print '\nFound saved BLAST results.'
-            _subroutine(blast_primers.simulate_PCR, 
-                        None, 
-                        out.queue, p_entry,
-                        'Simulate PCR using alignments in BLAST results.')
+            self._run_subroutine(blast_primers.simulate_PCR, 
+                                 None, 
+                                 p_entry,
+                                 'Simulate PCR using alignments in BLAST results.')
         else: self._print_queue(p_entry['queue'])
         #----------------------------------------------------------------------#
-        
-        
-        #collect subroutines output, write it to stdout, wait for them to finish
-        self._listen_subroutines()
-        #if subroutines have been terminated, abort pipeline
-        if self._terminated:
-            print '\nDegenPrimer Pipeline aborted.' 
-            return -1
-        #----------------------------------------------------------------------#
-        
-        
-        #---------------------now write all the reports------------------------#
-        #write full and short reports
-        print ''
-        structures_full_report_filename  = args.job_id+'-full-report.txt'
-        structures_short_report_filename = args.job_id+'-short-report.txt'
-        try:
-            full_structures_file  = open(structures_full_report_filename, 'w')
-            short_structures_file = open(structures_short_report_filename, 'w')
-        except IOError, e:
-            print '\nUnable to open report file(s) for writing.'
-            print_exception(e)
-        else:
-            #write header
-            for f in (full_structures_file, short_structures_file):
-                f.write(self._format_primers_report_header(args.primers, args.polymerase))
-            #write secondary structures information
-            full_structures_file.write(all_sec_structures.print_structures())
-            short_structures_file.write(all_sec_structures.print_structures_short())
-            full_structures_file.close()
-            short_structures_file.close()
-            print '\nFull report with all secondary structures was written to:\n   ',structures_full_report_filename
-            print '\nShort report with a summary of secondary structures was written to:\n   ',structures_short_report_filename
-            args.register_report('Tm and secondary structures', structures_short_report_filename)
-                
-        #write iPCR report if it is available
-        if ipcr != None and ipcr.have_results():
-            ipcr.write_products_report()
-            ipcr.write_report()
-            for report in ipcr.reports():
-                args.register_report(**report)
-        
-        #write BLAST reports
-        if blast_primers.have_results():
-            blast_primers.write_hits_report()
-            blast_primers.write_report()
-            for report in blast_primers.reports():
-                args.register_report(**report)
-                    
-        #print last queued messages
-        sleep(0.1)
-        for p_entry in self._subroutines:
-            self._print_queue(p_entry['queue'])
-#        #----------------------------------------------------------------------#
-        
-        #terminate managers and delete queues
-        self.terminate()
-        
-        print '\nDone. Total elapsed time: %s' % timedelta(seconds=time()-time0)
-        return 1
+        return analysis_routines
     #end def
 
 
-    @classmethod
-    def _save_primers(cls, primers):
+    def _save_primers(self, primers):
         for primer in primers:
+            if self._abort_event.is_set(): return False
             if not primer: continue
-            filename = primer.id+'.'+cls._fmt
+            filename = primer.id+'.'+self._fmt
             try:
-                SeqIO.write(primer.all_seq_records, filename, cls._fmt)
+                SeqIO.write(primer.all_seq_records, filename, self._fmt)
             except Exception, e:
                 print '\nFailed to write %s primer and it\'s unambiguous components to:\n   %s' % (primer.id, filename)
                 print_exception(e)
@@ -377,78 +305,88 @@ class AnalysisTask(PrimerTaskBase):
     #end def
     
     
-    @staticmethod
-    def _print_queue(queue):
+    def _print_queue(self, queue):
         output = []
-        while True:
+        while not self._abort_event.is_set():
             try: output.append(queue.get(False))
             except Empty:
                 print ''.join(message for message in output)
                 return
+            except Exception, e:
+                print_exception(e)
     #end def
                 
     
     def _listen_subroutines(self):
         '''While waiting for their termination, get output from subroutines. 
         When some subroutine has finished, print out it's output.'''
-        while not self._terminated:
+        while True: #not self._abort_event.is_set():
             processes_alive = False
             for p_entry in self._subroutines:
-                if p_entry['process'] == None:
-                    continue
+                if p_entry['process'] == None: continue
                 try:
-                    while True: p_entry['output'].append(p_entry['queue'].get(False))
+                    while True: 
+                        p_entry['output'].append(p_entry['queue'].get(False))
                 except Empty:
                     if p_entry['process'].is_alive():
                         processes_alive = True
                     else:
                         p_entry['process'].join()
                         p_entry['process'] = None
-                        print ''.join(unicode(message) for message in p_entry['output'])
+                    if p_entry['output']:
+                        lines = ''.join(unicode(message) for message in p_entry['output']).split('\n')
+                        with self._print_lock:
+                            for line in lines:
+                                if line: print('[%d] %s' % (p_entry['id'], line))
+                                else: print ''
+                        p_entry['output'] = []
                     continue
                 except IOError, e:
                     if e.errno == errno.EINTR:
                         processes_alive = True
                         continue
                     else:
+                        with self._print_lock:
+                            print '\nAnalysisTask._listen_subroutines:'
+                            print_exception(e)
+                except Exception, e:
+                    with self._print_lock:
                         print '\nAnalysisTask._listen_subroutines:'
                         print_exception(e)
-                        self.terminate()
-                except Exception, e:
-                    print '\nAnalysisTask._listen_subroutines:'
-                    print_exception(e)
-                    self.terminate()
                 processes_alive = True
             if not processes_alive: break
             sleep(0.1)
     #end def
+
     
-    
-    @staticmethod
-    def _format_primers_report_header(primers, polymerase):
-        header_string  = ''
-        header_string += time_hr()
-        header_string += wrap_text('For each degenerate primer provided, a set '
-                                   'of unambiguous primers is generated. '
-                                   'For each such set the minimum, maximum and '
-                                   'mean melting temperatures are calculated. '
-                                   'For each primer in each set stable self-'
-                                   'dimers and hairpins are predicted. '
-                                   'For every possible combination of two '
-                                   'unambiguous primers cross-dimers are also '
-                                   'predicted. If an unambiguous primer is '
-                                   'provided, it is treated as a set with a '
-                                   'single element.\n\n')
-        header_string += hr(' PCR conditions ')
-        header_string += TD_Functions.format_PCR_conditions(primers, polymerase)+'\n'
-        header_string += hr(' primers and their melting temperatures ')
-        for primer in primers:
-            header_string += repr(primer) + '\n'
-        #warning
-        if len(primers) > 1:
-            if abs(primers[0].Tm_min - primers[1].Tm_min) >= 5:
-                header_string += '\nWarning: lowest melting temperatures of sense and antisense primes \n'
-                header_string += '         differ more then by 5C\n'
-        header_string += '\n'
-        return header_string
+    def run(self, args):
+        #reset global state of the module
+        self._subroutines = []
+        #zero time, used to calculate elapsed time
+        time0 = time()
+        #set PCR parameters
+        TD_Functions.PCR_P.set(args.options)
+        #run analysis routines and wait for them to finish
+        analysis_routines = self._run_analysis(args)
+        self._listen_subroutines()
+        #if subroutines have been terminated, abort pipeline
+        if self._abort_event.is_set():
+            self._clean_subroutines()
+            with self._print_lock: 
+                print '\nAnalysisTask aborted.'
+                print '\nTotal elapsed time: %s' % timedelta(seconds=time()-time0)
+            return False
+        #write reports
+        with self._print_lock: print '\nWriting analysis reports...'
+        for routine in analysis_routines:
+            if routine.have_results():
+                routine.write_reports()
+                args.register_reports(routine.reports())
+        #print last messages
+        for p_entry in self._subroutines: self._print_queue(p_entry['queue'])
+        #terminate managers
+        self._clean_subroutines()
+        print '\nDone. Total elapsed time: %s' % timedelta(seconds=time()-time0)
+        return 1
+    #end def
 #end class

@@ -32,8 +32,6 @@ class iPCR(iPCR_Base):
     
     def __init__(self, *args, **kwargs):
         iPCR_Base.__init__(self, *args, **kwargs)
-        self._PCR_products_filename = \
-        '%s-%s-products.txt' % (self._job_id, self._PCR_report_suffix)
         self._PCR_Simulation = self._PCR_Simulation_factory()
     #end def
     
@@ -75,7 +73,7 @@ class iPCR(iPCR_Base):
             ipcr_products.write(self._PCR_Simulation.format_products_report())
         else: ipcr_products.write(hr(' No PCR products have been found ', symbol='!')) 
         ipcr_products.close()
-        print '\nThe list of PCR products was written to:\n   ',self._PCR_products_filename
+        print '\nThe list of PCR products was written to:\n   %s' % self._PCR_products_filename
         self._add_report('iPCR products', self._PCR_products_filename)
     #end def
     

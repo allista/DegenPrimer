@@ -26,8 +26,8 @@ import TD_Functions
 
 class OptimizationTask(PrimerTaskBase):
     
-    def __init__(self):
-        PrimerTaskBase.__init__(self)
+    def __init__(self, abort_event):
+        PrimerTaskBase.__init__(self, abort_event)
         self._optimizer          = None
         self._primers            = []
         self._valid_parameters   = []
@@ -54,13 +54,6 @@ class OptimizationTask(PrimerTaskBase):
         if not has_parameters: return False
         return (bool(args.fasta_files) or 
                 bool(args.sequence_db) and bool(args.use_sequences))
-    #end def                
-        
-    
-    def terminate(self):
-        if self._optimizer is None: return
-        del self._optimizer
-        self._optimizer = None
     #end def
         
     
@@ -96,8 +89,7 @@ class OptimizationTask(PrimerTaskBase):
                                                    parameters,
                                                    seq_id):
             self._optimizer.write_report()
-            for report in self._optimizer.reports():
-                args.register_report(**report)
+            args.register_reports(self._optimizer.reports())
         del self._optimizer
         self._optimizer = None
         return 1

@@ -25,6 +25,7 @@ Tool to compute degenerate primer parameters using BioPython
 #imports
 import sys, os
 import signal
+from multiprocessing.managers import SyncManager
 from time import sleep
 from DegenPrimer.StringTools import hr, wrap_text
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
@@ -33,34 +34,35 @@ from DegenPrimer.Pipeline import Pipeline
 from DegenPrimer.AnalysisTask import AnalysisTask
 from DegenPrimer.DBManagementTask import DBManagmentTask
 from DegenPrimer.OptimizationTask import OptimizationTask
+from DegenPrimer.MultiprocessingBase import ignore_interrupt
 ###############################################################################
 
-#pipeline object
-pipeline = None
 
 _pid = -1
+abort_event = None
 def sig_handler(signal, frame):
     if _pid != os.getpid(): return
-    if pipeline is not None:
-        pipeline.terminate()
-        sleep(1)
-    sys.exit(1)
+    abort_event.set()
+    sleep(0.1)
 #end def
 
 
 if __name__ == '__main__':
-    #set PID
     _pid = os.getpid()
-    #initialize pipeline
-    pipeline = Pipeline()
-    pipeline.register_task(DBManagmentTask())
-    pipeline.register_task(OptimizationTask())
-    pipeline.register_task(AnalysisTask())
     #setup signal handler
     signal.signal(signal.SIGINT,  sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGQUIT, sig_handler)
-    ###
+    #setup abort event and print lock
+    event_manager = SyncManager()
+    event_manager.start(ignore_interrupt)
+    abort_event   = event_manager.Event()
+    #initialize pipeline
+    pipeline = Pipeline(abort_event)
+    pipeline.register_task(DBManagmentTask(abort_event))
+    pipeline.register_task(OptimizationTask(abort_event))
+    pipeline.register_task(AnalysisTask(abort_event))
+    #get commandline arguments
     args = DegenPrimerConfigCLI()
     try:
         #parse command line arguments and/or configuration file
@@ -82,6 +84,7 @@ if __name__ == '__main__':
                         'except "--do-blast" are discarded.\n')
         exit_code = False
         for config_file in args.config_files:
+            if abort_event.is_set(): break
             config = DegenPrimerConfig()
             try:
                 config.parse_configuration(config_file)

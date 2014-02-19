@@ -18,17 +18,14 @@ Created on Mar 28, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from abc import ABCMeta, abstractmethod
+from AbortableBase import AbortableBase
 
-class PipelineTaskBase(object):
+class PipelineTaskBase(AbortableBase):
     '''Base class for pipeline tasks'''
-    
-    def __del__(self):
-        self.terminate()
+    __metaclass__ = ABCMeta
     
     @staticmethod
+    @abstractmethod
     def check_options(args): pass
-    
-    def terminate(self): pass
-    
-    def run(self, args): pass
 #end class

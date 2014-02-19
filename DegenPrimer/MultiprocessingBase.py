@@ -21,76 +21,145 @@ Created on Mar 6, 2013
 '''
 
 import errno
+import signal
 import multiprocessing as mp
+from multiprocessing.managers import BaseManager 
 from Queue import Empty
-from time import sleep
+from AbortableBase import AbortableBase
 
 
-class MultiprocessingBase(object):
+def ignore_interrupt():
+    signal.signal(signal.SIGINT,  signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGQUIT, signal.SIG_IGN)
+#end def
+
+
+class UManager(BaseManager):
+    '''Multiprocessing Manager that ignores interrupt, term and quit signals'''
+    def start(self, initializer=ignore_interrupt, initargs=()):
+        BaseManager.start(self, initializer=initializer, initargs=initargs)
+#end class
+
+
+class UProcess(mp.Process):
+    '''Process that ignores interrupt, term and quit signals'''
+    def run(self):
+        ignore_interrupt()
+        mp.Process.run(self)
+#end class
+
+
+class MultiprocessingBase(AbortableBase):
     '''Base class for classes that use job parallelization through multiprocessing'''
 
     #aliases
-    _Process = mp.Process
+    _Process   = staticmethod(UProcess)
+    _Queue     = staticmethod(mp.Queue)
+    _Lock      = staticmethod(mp.Lock)
     
     #number of cpu cores
-    _cpu_count   = mp.cpu_count()
-    
+    cpu_count  = mp.cpu_count()
     
     #decorators
     @staticmethod
     def _worker(func):
-        def worker(queue, abort_e, *args):
+        def worker(queue, abort_event, *args):
             result = None
-            if args: result = func(abort_e, *args)
-            else: result = func(abort_e)
-            if abort_e.is_set():
-                queue.cancel_join_thread()
+            if args: result = func(abort_event, *args)
+            else: result = func(abort_event)
+            if abort_event.is_set(): queue.cancel_join_thread()
             else: queue.put(result)
+            queue.put(None)
             queue.close()
-            return
         #end def
         return worker
     #end def
     
     @staticmethod
+    def _worker_method(func):
+        def worker_method(self, queue, abort_event, *args):
+            result = None
+            if args: result = func(self, abort_event, *args)
+            else: result = func(self, abort_event)
+            if abort_event.is_set(): queue.cancel_join_thread()
+            else: queue.put(result)
+            queue.put(None)
+            queue.close()
+        #end def
+        return worker_method
+    #end def
+    
+    @staticmethod
     def _data_mapper(func):
-        @MultiprocessingBase._worker
-        def mapper(abort_e, start, end, data, args):
-            result = []
+        def mapper(queue, abort_event, start, end, data, args):
             for i, item in enumerate(data[start:end]):
-                if abort_e.is_set(): break
-                if args:
-                    result.append((start+i, func(item, *args)))
-                else:
-                    result.append((start+i, func(item)))
-            return result
+                if abort_event.is_set(): break
+                if args: result = func(item, *args)
+                else: result = func(item)
+                queue.put((start+i, result))
+            if abort_event.is_set(): queue.cancel_join_thread()
+            queue.put(None)
+            queue.close()
         return mapper
     #end def
-
-
-    #class body
-    def __init__(self):
-        self._all_jobs     = []
-        self._abort_lock   = mp.Lock()
-        self._abort_events = []
+    
+    @staticmethod
+    def _data_mapper_method(func):
+        def mapper_method(self, queue, abort_event, start, end, data, args):
+            for i, item in enumerate(data[start:end]):
+                if abort_event.is_set(): break
+                if args: result = func(self, item, *args)
+                else: result = func(self, item)
+                queue.put((start+i, result))
+            if abort_event.is_set(): queue.cancel_join_thread()
+            queue.put(None)
+            queue.close()
+        return mapper_method
     #end def
     
-    def __del__(self): self.abort()
+    @staticmethod
+    def _results_assembler(func):
+        def assembler(result, *args):
+            func(result[0], result[1], *args)
+        return assembler
+    #end def
+    
+    @staticmethod
+    def _results_assembler_methd(func):
+        def assembler_method(self, result, *args):
+            func(self, result[0], result[1], *args)
+        return assembler_method
+    #end def
+    
+
+    #class body
+    def __init__(self, abort_event):
+        AbortableBase.__init__(self, abort_event)
+        self._all_jobs     = []
+        self._abort_lock   = None
+    #end def
+    
+    def __del__(self): self._abort()
     
     
-    @classmethod
-    def _join_jobs(cls, abort_e, jobs, timeout, parser, *args):
+    def _join_jobs(self, jobs, timeout, parser, *args):
         jobs = list(jobs)
-        while jobs and not abort_e.is_set():
+        while jobs:
             finished_job = None
             for i,job in enumerate(jobs):
                 try: 
                     out = job[1].get(True, timeout)
-                    parser(out, *args)
-                    job[0].join()
-                    finished_job = i
+                    if out is not None:
+                        parser(out, *args)
+                    else: 
+                        job[0].join()
+                        finished_job = i
                     break
-                except Empty: 
+                except Empty:
+                    if not job[0].is_alive():
+                        job[0].join()
+                        finished_job = i
                     continue
                 except IOError, e:
                     if e.errno == errno.EINTR:
@@ -107,111 +176,98 @@ class MultiprocessingBase(object):
     #end def
     
     
-    @classmethod
-    def _new_queue(cls): return mp.Queue()
-    
-    
-    def _new_event(self):
-        abort_event = mp.Event()
-        self._abort_events.append(abort_event)
-        return abort_event
+    def _register_job(self, job):
+        if self._abort_lock is None:
+            self._abort_lock = self._Lock()
+        with self._abort_lock:
+            self._all_jobs.append(job)
     #end def
     
     
     def _clean_jobs(self, jobs):
+        if not self._all_jobs:
+            raise ValueError('MultiprocessingBase._clean_jobs: no jobs has been regestered.')
         with self._abort_lock:
             for job in jobs: 
                 if job in self._all_jobs:
                     self._all_jobs.remove(job)
-    #end def
-    
-    
-    def _clean_abort_even(self, abort_event):
-        with self._abort_lock:
-            if abort_event in self._abort_events:
-                self._abort_events.remove(abort_event)
+        if not self._all_jobs: self._abort_lock = None
     #end def
 
 
-    def _prepare_jobs(self, abort_e, worker, work, num_jobs, *args):
+    def _prepare_jobs(self, worker, work, num_jobs, *args):
         #process work in chunks
         work_len = len(work)
         jobs     = []
         start    = 0
-        if not num_jobs: num_jobs = self._cpu_count*2
-        chunk_size = int(work_len/(num_jobs)+1)
-        #prepare jobs
-        while start < work_len and not abort_e.is_set():
+        if not num_jobs: num_jobs = self.cpu_count*2
+        chunk_size = max(work_len/num_jobs, 1)
+        while start < work_len:
             end   = min(start+chunk_size, work_len)
-            queue = self._new_queue()
-            job   = self._Process(target=worker, args=(queue, abort_e, 
+            queue = self._Queue()
+            job   = self._Process(target=worker, args=(queue, self._abort_event, 
                                                        start, end, 
                                                        work, args))
+            job.daemon = 1
             jobs.append((job,queue))
-            self._all_jobs.append(jobs[-1])
+            self._register_job(jobs[-1])
             start += chunk_size
-        #if aborted, return None
-        if abort_e.is_set(): return None
         return jobs
     #end def
     
     
-    @classmethod
-    def _ordered_results_assembler(cls, out, results):
-        for result in out: results[result[0]] = result[1]
+    @staticmethod
+    @_results_assembler.__func__
+    def _ordered_results_assembler(index, result, output):
+        output[index] = result
         
-    @classmethod
-    def _unordered_results_assembler(cls, out, results):
-        for result in out: results.append(result[1])
+    @staticmethod
+    @_results_assembler.__func__
+    def _unordered_results_assembler(index, result, output):
+        output.append(result)
     
-    @classmethod
-    def _start_jobs(cls, jobs):
+    def _start_jobs(self, jobs):
         for job, _queue in jobs: job.start()
     
 
-    def _parallelize(self, abort_e, timeout, worker, work, *args):
+    def _parallelize(self, timeout, worker, work, *args):
         #prepare and start jobs
-        jobs = self._prepare_jobs(abort_e, worker, work, None, *args)
+        jobs = self._prepare_jobs(worker, work, None, *args)
         self._start_jobs(jobs)
         #allocate results container
         results = [None]*len(work)
         #assemble results
-        self._join_jobs(abort_e, jobs, timeout, 
-                        self._ordered_results_assembler, results)
+        self._join_jobs(jobs, timeout, self._ordered_results_assembler, results)
         #if aborted, return None
-        if abort_e.is_set(): return None
+        if self._abort_event.is_set(): return None
         #else, cleanup and return results
         self._clean_jobs(jobs)
         return results
     #end def
 
-    def _parallelize_work(self, abort_e, timeout, func, data, *args):
+    def _parallelize_work(self, timeout, func, data, *args):
         mapper = MultiprocessingBase._data_mapper(func)
-        return self._parallelize(abort_e, timeout, mapper, data, *args)
+        return self._parallelize(timeout, mapper, data, *args)
     #end def    
     
-    def _parallelize_functions(self, abort_e, timeout, func_list, *args):
+    def _parallelize_functions(self, timeout, func_list, *args):
         @MultiprocessingBase._worker
-        def worker(abort_e, start, end, _func_list, args):
+        def worker(abort_event, start, end, _func_list, args):
             result = []
             for fi, func in enumerate(_func_list[start:end]):
-                if abort_e.is_set(): break
+                if abort_event.is_set(): break
                 if args:
                     result.append((start+fi, func(*args)))
                 else:
                     result.append((start+fi, func()))
             return result
         #end def
-        return self._parallelize(abort_e, timeout, worker, func_list, *args)
+        return self._parallelize(timeout, worker, func_list, *args)
     #end def
     
     
-    def abort(self):
-        if self._abort_events:
-            with self._abort_lock:
-                for event in self._abort_events:
-                    event.set()
-            sleep(1)
+    def _abort(self):
+        if self._all_jobs:
             with self._abort_lock:
                 while self._all_jobs:
                     finished_job = None
@@ -225,6 +281,6 @@ class MultiprocessingBase(object):
                             break
                     if finished_job is not None:
                         del self._all_jobs[finished_job]
-                self._abort_events = []
+            self._abort_lock = None
     #end def
 #end class        

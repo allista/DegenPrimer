@@ -20,7 +20,7 @@ Created on Jun 23, 2012
 import TD_Functions
 from TD_Functions import dimer_dG_corrected, hairpin_dG_corrected, equilibrium_constant
 from StringTools import hr
-from Equilibrium import Equilibrium
+from Equilibrium import Reaction
 
 
 #default filtration parameters
@@ -77,6 +77,7 @@ class Dimer(object):
         if self.num_matches > 0: return True
         else: return False
     
+    
     @property
     def fwd_matches(self):
         l = list(self._fwd_matches)
@@ -104,6 +105,7 @@ class Dimer(object):
     @property
     def rev_max(self):
         return max(self._rev_matches)
+    
     
     @property
     def alternatives(self):
@@ -152,24 +154,25 @@ class Dimer(object):
         self._fwd_matches.add(fwd)
         self._rev_matches.add(rev)
         self.num_matches += 1
+    #end def
+    
         
     @classmethod
-    def from_sequences(cls, seq1, seq2):
-        '''form a simple dimer structure from two sequences of the same length;
+    def from_sequences(cls, seq1, seq2, anchor=None):
+        '''Form a dimer structure from two sequences using a pair of indexes 
+        as an anchor; if anchor is not provided, sequences are left-aligned;
         both sequences should be 5'->3' oriented'''
-        seq1_len = len(seq1)
-        seq2_len = len(seq2)
-        if seq1_len != seq2_len:
-            raise ValueError('SecStructures.Dimer.from_sequences: '
-                             'sequences must be of the same length.')
-        forward = str(seq1)
-        revcomp = str(seq2.complement())[::-1]
-        dimer  =  cls()
-        for i in xrange(seq1_len):
-            if forward[i] == revcomp[i]:
+        forward  = str(seq1)
+        revcomp  = str(seq2.complement())[::-1]
+        dimer    = cls()
+        offset   = (anchor[0]-anchor[1]) if anchor else 0
+        if offset > 0: _range = range(offset, min(len(seq1), len(seq2)+offset))
+        else: _range = range(0, min(len(seq1)-offset, len(seq2)+offset))
+        for i in _range:
+            if forward[i] == revcomp[i-offset]:
                 #add indexes directly is much faster than to call Dimer.add method
                 dimer._fwd_matches.add(i)
-                dimer._rev_matches.add(i)
+                dimer._rev_matches.add(i-offset)
                 dimer.num_matches += 1
         return dimer
     #end def
@@ -335,9 +338,14 @@ class Duplex(object):
     def filter_dimers_by_K(self, min_K):
         if len(self._dimers) < 2: return
         new_dimers = [self._dimers[0]]
-        for dimer in self._dimers[1:]:
+        for i, dimer in enumerate(self._dimers[1:]):
             if dimer.K >= min_K:
                 new_dimers.append(dimer)
+            else:
+                try:
+                    self._fwd_matches.remove(i+1)
+                    self._fwd_matches.remove(i+1)
+                except: pass 
         self._dimers = new_dimers
     #end def
     
@@ -442,41 +450,42 @@ class SecStructures(object):
             if self._seq1_dimers:
                 for d_hash in self._seq1_dimers:
                     D = self._seq1_dimers[d_hash]
-                    reactions[d_hash] = Equilibrium.compose_reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
-                                                                     str(self._seq1), 
-                                                                     None, 
-                                                                     '2A')
+                    reactions[d_hash] = Reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
+                                                 str(self._seq1), 
+                                                 None, 
+                                                 '2A')
             if self._seq1_hairpins:
                 for h_hash in self._seq1_hairpins:
                     H = self._seq1_hairpins[h_hash]
-                    reactions[h_hash] = Equilibrium.compose_reaction(equilibrium_constant(H.dG, TD_Functions.PCR_P.PCR_T), 
-                                                                     str(self._seq1), 
-                                                                     None, 
-                                                                     'A')
+                    reactions[h_hash] = Reaction(equilibrium_constant(H.dG, TD_Functions.PCR_P.PCR_T), 
+                                                 str(self._seq1), 
+                                                 None, 
+                                                 'A')
         else: #crossdimers
             if self._cross_dimers:
                 for d_hash in self._cross_dimers:
                     D = self._cross_dimers[d_hash]
-                    reactions[d_hash] = Equilibrium.compose_reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
-                                                                     str(self._seq1), 
-                                                                     str(self._seq2), 
-                                                                     'AB')
+                    reactions[d_hash] = Reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
+                                                 str(self._seq1), 
+                                                 str(self._seq2), 
+                                                 'AB')
         return reactions
     #end def
     
     
     def set_conversion_degree(self, s_hash, r):
         if not self._seq_rec2:
-            if   s_hash in self._seq1_dimers:
-                self._seq1_dimers[s_hash].conversion_degree   = r
-            elif s_hash in self._seq1_hairpins:
-                self._seq1_hairpins[s_hash].conversion_degree = r
-            else: return False
+            try: self._seq1_dimers[s_hash].conversion_degree   = r
+            except: pass
+            else: return True
+            try: self._seq1_hairpins[s_hash].conversion_degree = r
+            except: pass
+            else: return True
         else:
             if s_hash in self._cross_dimers:
-                self._cross_dimers[s_hash].conversion_degree  = r
+                self._cross_dimers[s_hash].conversion_degree   = r
+                return True
             else: return False
-        return True
     #end def
     
     
@@ -645,7 +654,7 @@ class SecStructures(object):
                 #find the most stable dimer
                 min_dG = max_dimer_dG
                 min_dG_dimer = None
-                new_dimers   = dimer.alternatives
+                new_dimers   = [dimer,] + dimer.alternatives
                 for dimer in new_dimers:
                     #calculate dG for every dimer
                     dimer.dG = dimer_dG_corrected(dimer, seq1, seq2)
@@ -687,7 +696,8 @@ class SecStructures(object):
                 #find the most stable
                 min_dG = max_hairpin_dG
                 min_dG_hairpin = None
-                new_dimers = Dimer(fwd_matches, set(seq_len-1-m for m in rev_matches)).alternatives
+                dimer = Dimer(fwd_matches, set(seq_len-1-m for m in rev_matches))
+                new_dimers = [dimer,] + dimer.alternatives
                 for new_dimer in new_dimers:
                     hairpin = Hairpin(new_dimer._fwd_matches, set(seq_len-1-m for m in new_dimer.rev_matches))
                     dG = hairpin_dG_corrected(hairpin, seq)
@@ -866,128 +876,3 @@ class SecStructures(object):
         return hairpins_string
     #end def
 #end class
-
-
-class AllSecStructures(object):
-    '''
-    Given two lists of non-degenerate primers calculate all possible secondary 
-    structures (hairpins, dimers, cross-dimers) and equilibrium state between them.
-    '''
-    def __init__(self, primers):
-        #initial check
-        try:
-            if len(primers) == 0: 
-                raise ValueError('AllSecStructures: no primers given.')
-        except TypeError:
-            raise TypeError(('AllSecStructures: primers should be an iterable. '
-                            'Given %s instead') % str(primers))
-        #all primers list
-        self._primers     = primers
-        self._all_primers = []
-        for primer in self._primers:
-            self._all_primers.extend(primer.seq_records)
-        #reactions
-        self._reactions = dict()
-        #secondary structures and reactions of their formation
-        self._self = []
-        for primer in self._primers:
-            #self-dimers and hairpins
-            self._self.append([SecStructures(p) for p in primer.seq_records])
-            for struct in self._self[-1]:
-                self._reactions.update(struct.compose_reactions())
-        #cross-dimers
-        self._cross = []
-        for i in xrange(len(self._all_primers)):
-            for j in xrange(i+1, len(self._all_primers)):
-                self._cross.append(SecStructures(self._all_primers[i],
-                                                 self._all_primers[j]))
-        for struct in self._cross:
-            self._reactions.update(struct.compose_reactions())
-        #concentrations
-        self._concentrations = dict()
-        for primer in self._primers:
-            self._concentrations.update(dict().fromkeys([p for p in primer.str_sequences], 
-                                                        primer.concentration))
-        #equilibrium system
-        self._equilibrium = None
-        self._equilibrium_concentrations = None
-    #end def
-    
-    
-    #property functions
-    def reactions(self): return self._reactions
-    def concentrations(self): return self._concentrations
-    def equilibrium_concentrations(self): return self._equilibrium_concentrations
-    
-    
-    def calculate_equilibrium(self):
-        if not self._reactions: return False
-        #calculate equilibrium
-        self._equilibrium = Equilibrium(self._reactions, self._concentrations)
-        sol = self._equilibrium.calculate()[0]
-        #calculate equilibrium primer concentrations
-        self._equilibrium_concentrations = dict()
-        for primer in self._concentrations:
-            _C = self._equilibrium.reactants_consumption(primer)[0]
-            self._equilibrium_concentrations[primer] = self._concentrations[primer] - _C
-        #set conversion degrees
-        for r_hash in sol:
-            all_structs = []
-            for structs in self._self: all_structs.extend(structs)
-            all_structs.extend(self._cross)
-            for struct in all_structs:
-                if struct.set_conversion_degree(r_hash, sol[r_hash]): break
-    #end def
-    
-    
-    @classmethod
-    def _print_structures(cls, structures, full=True):
-        structures_string = ''
-        for struct in structures:
-            if not struct: continue
-            if full: structures_string += struct.formatFull()
-            else: structures_string += struct.formatShort()
-        return structures_string
-    #end def
-    
-    
-    def print_structures(self, full=True):
-        structures_string = ''
-        for i, primer in enumerate(self._primers):
-            structs = self._print_structures(self._self[i], full)
-            if structs:
-                structures_string += hr(' secondary structures of %s primers ' % primer.id, '#')
-                structures_string += structs 
-        if self._cross:
-            cross_structs = self._print_structures(self._cross, full)
-            if cross_structs:
-                structures_string += hr(' cross-dimers ', '#')
-                structures_string += cross_structs
-        if structures_string:
-            structures_string = hr(' stable secondary structures ', symbol='#') + structures_string
-        return structures_string
-    #end def
-    
-    def print_structures_short(self):
-        return self.print_structures(full=False)
-#end class
-
-
-#tests
-if __name__ == '__main__':
-    from Bio.Seq import Seq
-    from Bio.SeqRecord import SeqRecord
-    from Primer import Primer
-    TD_Functions.PCR_P.PCR_T = 55
-    
-    fwd_primer  = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATCC').reverse_complement()), 0.9e-6)
-    rev_primer  = Primer(SeqRecord(Seq('CAAGGGTTAGAAGCGGAAG').complement()), 0.9e-6)
-    all_structs = AllSecStructures([fwd_primer, rev_primer])
-
-    print all_structs.concentrations()
-    print all_structs.reactions()
-    
-    all_structs.calculate_equilibrium()
-    print all_structs.equilibrium_concentrations()
-    print ''
-    print all_structs.print_structures()

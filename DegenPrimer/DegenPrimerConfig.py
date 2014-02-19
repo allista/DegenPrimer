@@ -27,6 +27,7 @@ from Primer import Primer, load_sequence
 from Option import Option, OptionGroup
 from itertools import chain
 from copy import deepcopy
+from datetime import datetime
                                
 
 
@@ -493,13 +494,15 @@ class DegenPrimerConfig(object):
         return self.__hash__() != other.__hash__()
     
     def __hash__(self):
-        values = []
+        option_hashes = []
         for option in self._options:
+            if not option.save: continue
             if hasattr(self, option.dest):
                 value = getattr(self, option.dest)
-                if type(value) == list: value = tuple(value)
-                values.append(value)
-        return hash(tuple(values)) & 0xFFFFFFF
+                try: value = hash(value)
+                except: value = str(value)
+                option_hashes.append(value)
+        return hash(tuple(option_hashes)) & 0xFFFFFFF
     #end def
     
     
@@ -627,8 +630,7 @@ class DegenPrimerConfig(object):
                 for primer in self.primer_list:
                     seq_record = load_sequence(primer['sequence'], 
                                                primer['id'])
-                    if not seq_record.id:
-                        seq_record.id = random_text(6)
+                    if not seq_record.id: seq_record.id = random_text(6)
                     self.primers.append(Primer(seq_record, primer['concentration']))
                     primer['sequence'] = str(seq_record.seq)
                     primer['id']       = seq_record.id
@@ -649,6 +651,7 @@ class DegenPrimerConfig(object):
             if self.job_id: self.job_id += '-'
             if primer.id:
                 self.job_id += primer.id
+        self.job_id += '_%s' % str(hash(self))
     #end def
     
     
@@ -656,17 +659,31 @@ class DegenPrimerConfig(object):
         #read in configuration file if it is provided
         self._config_file = config_file
         self._config      = None
+        saved_hash        = None
         if self._config_file:
             self._config = SafeConfigParser()
             if not self._config.read(self._config_file):
                 print '\nUnable to load configuration from', self._config_file
                 self._config = None
+            else: saved_hash = config_file.split('_')[-1].rstrip('.cfg')
         #fill in the configuration
         for option in self._options:
             self._fill_option(option)
         #process filled options
         self._convert_obsolete_options()
         self._process_options()
+        #check hash
+        if saved_hash is not None and saved_hash != 'master':
+            self_hash = str(hash(self))
+            if saved_hash != self_hash:
+                print ('\nWarning: configuration checksum mismatch:\n'
+                       '         expected "%s" found "%s".\n'
+                       'Either configuration file was renamed or parameters\n'
+                       'inside the file were changed.\n'
+                       'If you wish to play with configuration in a file and\n'
+                       'avoid this warning, rename it to be a master file\n'
+                       '(e.g. from "file.cfg" to "file_master.cfg").\n') \
+                       % (self_hash, saved_hash)
     #end def
     
     
@@ -693,8 +710,13 @@ class DegenPrimerConfig(object):
                 config.add_section(option.group)
             value = self._unscaled_value(option)
             config.set(option.group, option.dest, unicode(value).encode('UTF-8'))
+        #save checksum and time
+        tech_group = 'technical info'
+        config.add_section(tech_group)
+        config.set(tech_group, 'checksum', unicode(hash(self)).encode('UTF-8'))
+        config.set(tech_group, 'timestamp', unicode(datetime.now().strftime('%Y.%m.%d %H:%M:%S')).encode('UTF-8'))
         #write output
-        self._config_file = self.job_id + '.cfg'
+        self._config_file = '%s.cfg' % self.job_id
         try:
             config_file = open(self._config_file, 'wb')
             config.write(config_file)
@@ -713,13 +735,20 @@ class DegenPrimerConfig(object):
     
     def register_report(self, report_name, report_file):
         self._reports.append((report_name, report_file))
+        
+    def register_reports(self, reports):
+        if not reports: return
+        for report_name, report_file in reports:
+            self._reports.append((report_name, report_file))
+    #end def
 #end class
 
 
 #tests
 if __name__ == '__main__':
     conf = DegenPrimerConfig()
-    conf.parse_configuration('../A9F-A915R.cfg')
+#    conf.parse_configuration('../A9F-A915R_master.cfg')
+    conf.parse_configuration('../A9F-U1492-A9F-U1492.cfg')
     opts = conf.options
     print conf.find_option('primers/primer/sequence').full_name
     conf.from_options(opts)

@@ -23,7 +23,7 @@ from scipy.optimize import fmin_l_bfgs_b
 from StringTools import wrap_text
 from iPCR_Base import iPCR_Base
 from MultiprocessingBase import MultiprocessingBase
-from SecStructures import AllSecStructures
+from AllSecStructures import AllSecStructures
 
 
 class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
@@ -34,8 +34,8 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
 
     _PCR_report_suffix = 'PCR-optimization'
     
-    def __init__(self, max_steps, purity, *args, **kwargs):
-        MultiprocessingBase.__init__(self)
+    def __init__(self, abort_event, max_steps, purity, *args, **kwargs):
+        MultiprocessingBase.__init__(self, abort_event)
         iPCR_Base.__init__(self, *args, **kwargs)
         #simulators
         self._sec_structures     = None
@@ -59,14 +59,6 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
     #end def
     
     
-    def __del__(self):
-        self.abort()
-        iPCR_Base.__del__(self)
-        for _PCR_Sim in self._PCR_Simulations:
-            _PCR_Sim.abort()
-    #end def
-    
-    
     @staticmethod
     def _recalculate_annealing(annealing):
         for duplex, _unused in annealing[1]:
@@ -76,17 +68,15 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
     
     
     def _recalculate_annealings(self):
-        abort_event = self._new_event()
         for i, annealings in self._seq_annealings.items():
-            if abort_event.is_set(): return
-            fwd_annealings = self._parallelize_work(abort_event, 1e-3, 
+            if self._abort_event.is_set(): return
+            fwd_annealings = self._parallelize_work(1, 
                                                     self._recalculate_annealing, 
                                                     annealings[0])
-            rev_annealings = self._parallelize_work(abort_event, 1e-3, 
+            rev_annealings = self._parallelize_work(1, 
                                                     self._recalculate_annealing, 
                                                     annealings[1])
             self._seq_annealings[i] = (fwd_annealings, rev_annealings)
-        self._clean_abort_even(abort_event)
     #end def
     
     
@@ -119,11 +109,12 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
         #recalculate annealings' dG and K
         self._recalculate_annealings()
         #recalculate secondary structures
-        sec_structs               = AllSecStructures(self._primers)
+        sec_structs = AllSecStructures(self._abort_event, self._job_id, self._primers)
+        sec_structs.find_structures()
         self._side_concentrations = sec_structs.concentrations()
         self._side_reactions      = sec_structs.reactions()
         #create new simulator
-        _PCR_Sim                  = self._PCR_Simulation_factory()
+        _PCR_Sim = self._PCR_Simulation_factory()
         self._PCR_Simulations.append(_PCR_Sim)
         if not self._add_annealings_for_seqs(_PCR_Sim): return result
         #simulate PCR
@@ -183,7 +174,8 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
         #simulate PCR at optimum
         self._set_parameters(self._optimum)
         self._recalculate_annealings()
-        sec_structs               = AllSecStructures(self._primers)
+        sec_structs = AllSecStructures(self._abort_event, self._job_id, self._primers)
+        sec_structs.find_structures()
         self._side_concentrations = sec_structs.concentrations()
         self._side_reactions      = sec_structs.reactions()
         self._PCR_Simulation      = self._PCR_Simulation_factory()

@@ -21,12 +21,21 @@ Created on Feb 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from abc import ABCMeta, abstractmethod
+
 class ReporterInterface(object):
     '''Provides common interface to register reports if DegenPrimerConfig'''
+    __metaclass__ = ABCMeta
     
     def __init__(self):
         self._reports = []
+        self._have_results = False
+    #end def
     
+    def have_results(self): return self._have_results
+    
+    @abstractmethod
+    def write_reports(self): pass
          
     #property function to use with a Proxy
     def reports(self): return self._reports

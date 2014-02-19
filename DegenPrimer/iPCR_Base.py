@@ -21,7 +21,7 @@ Created on Feb 27, 2013
 '''
 
 import os
-from StringTools import print_exception, hr, time_hr
+from StringTools import print_exception
 from iPCR_Interface import iPCR_Interface
 from SeqDB import SeqDB
 
@@ -31,23 +31,15 @@ class iPCR_Base(iPCR_Interface):
     primers and report results in human readable form in a text file.
     '''
     
-    def __init__(self, max_mismatches, *args, **kwargs):
-        iPCR_Interface.__init__(self, *args, **kwargs)
+    def __init__(self, abort_event, max_mismatches, *args, **kwargs):
+        iPCR_Interface.__init__(self, abort_event, *args, **kwargs)
         self._max_mismatches    = max_mismatches
         #ipcr parameters
-        self._seq_db            = SeqDB()
+        self._seq_db            = SeqDB(self._abort_event)
         self._seq_names         = None
         self._seq_annealings    = None
         #simulation
         self._PCR_Simulation    = None
-    #end def
-    
-    
-    def __del__(self):
-        self._seq_db.abort_search()
-        self._seq_db.close()
-        if self._PCR_Simulation is not None:
-            self._PCR_Simulation.abort()
     #end def
     
     
@@ -91,20 +83,19 @@ class iPCR_Base(iPCR_Interface):
         self._seq_names = self._get_names(seq_ids)
         if not self._seq_names: return False
         #find primer annealing sites
-        primer_annealings = []
-        for primer in self._primers:
-            print '\n\nStarting search for annealing sites of %s\n' % str(primer)
-            results = self._seq_db.find_in_db(primer, 
-                                              self._max_mismatches, 
-                                              self._seq_names.keys())
-            print '\nResults obtained for %s\n' % str(primer)
-            primer_annealings.append(results)
+        print '\nPSR Simulation: searching for annealing sites in the sequence database...'
+        primer_annealings = self._seq_db.find_in_db(self._primers, 
+                                                    self._max_mismatches, 
+                                                    self._seq_names.keys())
         self._seq_db.close()
+        if self._abort_event.is_set(): return False
+        #sort found annealing sites by sequence and strand
         self._seq_annealings = dict()
         for seq_id in self._seq_names:
             fwd_annealings = []
             rev_annealings = []
             for annealings in primer_annealings:
+                if self._abort_event.is_set(): return False
                 if annealings[seq_id]:
                     fwd_annealings.extend(annealings[seq_id][0])
                     rev_annealings.extend(annealings[seq_id][1])
@@ -116,6 +107,7 @@ class iPCR_Base(iPCR_Interface):
     def _add_annealings_for_seqs(self, _PCR_Sim):
         products_added = False
         for seq_id, seq_name in self._seq_names.items():
+            if self._abort_event.is_set(): return False
             if _PCR_Sim.add_annealings(seq_name, 
                                        self._seq_annealings[seq_id][0], 
                                        self._seq_annealings[seq_id][1]):

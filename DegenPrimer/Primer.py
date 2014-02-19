@@ -35,6 +35,7 @@ except ImportError:
     raise
 import TD_Functions
 from StringTools import print_exception
+from MultiprocessingBase import MultiprocessingBase
 
 
 class Primer(object):
@@ -51,17 +52,18 @@ class Primer(object):
                        'H': ['A', 'C', 'T'],
                        'V': ['A', 'C', 'G'],
                        'N': ['A', 'T', 'C', 'G']}
-
+    
+    IUPAC_unambiguous = ['A', 'T', 'G', 'C']
     
     def __init__(self, seq_rec, concentration):
         self._seq_record    = seq_rec
         self._concentration = concentration
-        self._unambiguous   = self.generate_unambiguous(seq_rec)
-        #annealing temperatures
+        self._n_components  = 1
+        self._unambiguous   = None 
+        #components and annealing temperatures
         self._Tm_max  = None
         self._Tm_mean = None
         self._Tm_min  = None
-        self.calculate_Tms()
     #end def
 
     def __len__(self): return len(self._seq_record)
@@ -85,24 +87,41 @@ class Primer(object):
             rep += '   Concentration of each: %(cons)s\n'
         else: 
             rep += '   Tm:       %(Tm_max).1f\n'
-            rep += '   Concentration: %(cons)s'
+            rep += '   Concentration: %(cons)s\n'
         return rep % {'id':      self.id,
                       'seq':     str(self._seq_record.seq),
                       'len':     len(self._seq_record.seq),
-                      'unambs':  len(self._unambiguous),
+                      'unambs':  self._n_components,
                       'Tm_max':  self._Tm_max,
                       'Tm_mean': self._Tm_mean,
                       'Tm_min':  self._Tm_min,
                       'cons':    TD_Functions.format_concentration(self.concentration)}
     #end def
 
+    
+    @property
+    def num_components(self): return self._n_components
 
-    def calculate_Tms(self):
+
+    def generate_components(self):
+        self._unambiguous  = self.generate_unambiguous(self._seq_record)
+        self._n_components = len(self._unambiguous)
+    #end def
+        
+        
+    def calculate_Tms(self, abort_event=None):
         if self.self_complement: return
-        temperatures  = []
-        concentration = self.concentration 
-        for sequence in self.sequences:
-            temperatures.append(TD_Functions.primer_template_Tm(sequence, concentration))
+        #iterative algorithm is faster or no abort event is given to control parallelization
+        if self._n_components < 256 or abort_event is None:
+            temperatures  = []
+            concentration = self.concentration
+            for seq in (sequence.seq for sequence in self.seq_records):
+                temperatures.append(TD_Functions.primer_template_Tm(seq, concentration))
+        else: #parallel algorithm is faster
+            mpb = MultiprocessingBase(abort_event)
+            temperatures = mpb._parallelize_work(1, TD_Functions.primer_template_Tm, 
+                                                 self.sequences, self.concentration)
+        if not temperatures: return
         self._Tm_max  = max(temperatures)
         self._Tm_min  = min(temperatures)
         self._Tm_mean = (self._Tm_max + self._Tm_min)/2.0
@@ -183,7 +202,7 @@ class Primer(object):
     def concentration(self):
         if self._unambiguous:
             return self._concentration/float(len(self._unambiguous))
-        else: return self._concentration
+        return self._concentration
     #end def
 
 
@@ -239,7 +258,7 @@ class Primer(object):
                 return record.id
         return ''
     #end def
-
+             
 
     @classmethod
     def generate_unambiguous(cls, seq_rec):
@@ -248,7 +267,7 @@ class Primer(object):
         #generate list of sequence strings
         for letter in seq_rec.seq:
             n_sequences = len(unambiguous_strings)
-            if letter in ['A', 'T', 'G', 'C']:
+            if letter in cls.IUPAC_unambiguous:
                 for s in xrange(n_sequences):
                     unambiguous_strings[s] += letter
             elif letter in cls.IUPAC_ambiguous:
@@ -277,7 +296,7 @@ def load_sequence(seq_string, rec_id='', desc=''):
     '''generate a SeqRecord object with sequence from a raw string or a file'''
     #check seq_string to be a sequence
     _is_sequence  = True
-    full_alphabet = ['A', 'T', 'C', 'G'] + Primer.IUPAC_ambiguous.keys() 
+    full_alphabet = Primer.IUPAC_unambiguous + Primer.IUPAC_ambiguous.keys() 
     for letter in seq_string:
         _is_sequence &= letter in full_alphabet
         if not _is_sequence: break
@@ -322,3 +341,39 @@ def load_sequence(seq_string, rec_id='', desc=''):
     else:
         raise ValueError('No such file o directory: %s' % seq_string)
 #end def
+
+
+
+#tests
+if __name__ == '__main__':
+#    import cProfile
+#    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATKCAGNCTGGGANGGNTACGNGGGTAAANAAACG'),id='primer1'), 0.9e-6)
+    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCNATKCAGGNCTGGGA'),id='primer1'), 0.9e-6)
+    primer.generate_components()
+    primer.calculate_Tms()
+    print primer.str_sequences
+    print primer.concentration
+    print repr(primer)
+    
+#    from timeit import timeit
+#    from tests.violin_plot import violin_plot
+#    from matplotlib.pyplot import figure, show
+#    
+#    gen = [timeit('primer.generate_components()', 'from __main__ import primer', number=1) for _i in xrange(1)]
+#    gen_mp = [timeit('primer.generate_components_mp()', 'from __main__ import primer', number=1) for _i in xrange(1)]
+#    data = [gen, gen_mp]
+#    print data
+#    
+#    fig=figure()
+#    ax = fig.add_subplot(111)
+#    violin_plot(ax,data,range(len(data)),bp=1)
+#    show()
+    
+    
+#    cProfile.run('''
+#for _n in xrange(100): primer.generate_components_mp()
+#for _n in xrange(100): primer.generate_components()
+#''',
+#    'gen_components.profile')
+    print 'Done.'
+    

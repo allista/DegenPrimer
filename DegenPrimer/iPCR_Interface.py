@@ -20,17 +20,21 @@ Created on Dec 15, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from abc import ABCMeta, abstractmethod
+from AbortableBase import AbortableBase
 from ReporterInterface import ReporterInterface
 from PCR_Simulation import PCR_Simulation
 from StringTools import hr, time_hr
 
 
-class iPCR_Interface(ReporterInterface):
+class iPCR_Interface(AbortableBase, ReporterInterface):
     '''Interface class to create facilities which use PCR_Simulation'''
+    __metaclass__ = ABCMeta
 
     _PCR_report_suffix = 'iPCR'
 
     def __init__(self,
+                 abort_event,
                  job_id,  
                  primers, 
                  min_amplicon, 
@@ -41,6 +45,7 @@ class iPCR_Interface(ReporterInterface):
                  side_reactions=None,
                  side_concentrations=None,
                  include_side_annealings=False):
+        AbortableBase.__init__(self, abort_event)
         ReporterInterface.__init__(self)
         #parameters
         try:
@@ -68,14 +73,16 @@ class iPCR_Interface(ReporterInterface):
         #report files
         self._PCR_report_filename = '%s-%s-report.txt' % (self._job_id, 
                                                           self._PCR_report_suffix)
+        self._PCR_products_filename = '%s-%s-products.txt' % (self._job_id, 
+                                                              self._PCR_report_suffix)
         self._possible_products   = None
-        self._have_results        = False
     #end def
     
     
     #factory for PCR_Simulation objects
     def _PCR_Simulation_factory(self):
-        _PCR_simulation = PCR_Simulation(self._primers,
+        _PCR_simulation = PCR_Simulation(self._abort_event,
+                                         self._primers,
                                          self._min_amplicon,
                                          self._max_amplicon,
                                          self._polymerase,
@@ -90,17 +97,17 @@ class iPCR_Interface(ReporterInterface):
     #end def
     
     
-    #property functions
-    def have_results(self): return self._have_results
-    
-    
-    #virtual
+    @abstractmethod
     def simulate_PCR(self): pass
     
+    @abstractmethod
     def _format_header(self): return ''
     
+    @abstractmethod
     def _format_report_body(self): return ''
     
+    @abstractmethod
+    def write_products_report(self): pass
     
     def write_report(self):
         if not self._have_results: return
@@ -121,5 +128,10 @@ class iPCR_Interface(ReporterInterface):
         print '\n%s report was written to:\n   %s' % (self._PCR_report_suffix,
                                                       self._PCR_report_filename)
         self._add_report(self._PCR_report_suffix.replace('_', ' '), self._PCR_report_filename)
+    #end def
+    
+    def write_reports(self):
+        self.write_products_report()
+        self.write_report()
     #end def
 #end class

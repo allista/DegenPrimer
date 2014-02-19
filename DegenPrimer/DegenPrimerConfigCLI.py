@@ -30,10 +30,7 @@ class BoolAction(argparse.Action):
         if values is None: 
             setattr(namespace, self.dest, True)
             return
-        bool_values = []
-        for val in values:
-            bool_values.append(True if val == 'True' else False)
-        setattr(namespace, self.dest, bool_values)
+        setattr(namespace, self.dest, True if values == 'True' else False)
 #end class
 
                 

@@ -41,16 +41,12 @@ class DBManagmentTask(PipelineTaskBase):
     #end def
     
 
-    def __init__(self):
-        PipelineTaskBase.__init__(self)
-        self._seq_db = SeqDB()
+    def __init__(self, abort_event):
+        PipelineTaskBase.__init__(self, abort_event)
+        self._seq_db = SeqDB(self._abort_event)
     #end def
     
     
-    def terminate(self):
-        self._seq_db.close()
-    
-        
     def _print_db_content(self):
         if not self._seq_db: return
         seq_names = self._seq_db.get_names()

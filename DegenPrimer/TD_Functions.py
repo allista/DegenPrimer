@@ -122,7 +122,7 @@ def format_concentration(concentration):
     return StringTools.format_quantity(concentration, 'M') 
     
     
-def format_PCR_conditions(primers, polymerase):
+def format_PCR_conditions(primers, polymerase=None):
     conditions = [['C(Na)',   ]+format_concentration(PCR_P.Na).split(),
                   ['C(Mg)',   ]+format_concentration(PCR_P.Mg).split(),
                   ['C(dNTP)', ]+format_concentration(PCR_P.dNTP).split(),
@@ -130,9 +130,10 @@ def format_PCR_conditions(primers, polymerase):
     if primers:
         for primer in primers:
             conditions.append(['C(%s)' % primer.id,]+format_concentration(primer.total_concentration).split())
-    conditions += [['C(DMSO)', '%.1f' % PCR_P.DMSO, '%'],
-                   ['C(Poly)', ]+StringTools.format_quantity(polymerase*1e-6, 'u/ul').split(),
-                   ['T', '%.1f' % PCR_P.PCR_T, 'C']]
+    conditions.append(['C(DMSO)', '%.1f' % PCR_P.DMSO, '%'])
+    if polymerase:
+        conditions.append(['C(Poly)', ]+StringTools.format_quantity(polymerase*1e-6, 'u/ul').split())
+    conditions.append(['T', '%.1f' % PCR_P.PCR_T, 'C'])
     return StringTools.print_table(conditions, delimiter='')
 #end_def
 

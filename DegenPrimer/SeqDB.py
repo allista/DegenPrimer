@@ -21,24 +21,52 @@ import os
 import gc
 import shutil
 import sqlite3
+import traceback as tb
+import errno
 from time import time
+from Bio import SeqIO
+from Bio.Alphabet import IUPAC
 from StringIO import StringIO
 from SearchEngine import SearchEngine
-from multiprocessing.managers import BaseManager
+from AbortableBase import AbortableBase
+from StringTools import print_exception
+from MultiprocessingBase import UManager
 
 
-#managers for subprocessed classes
-class SearchEngineManager(BaseManager):
-    def getpid(self):
-        if '_process' in self.__dict__:
-            return self._process.pid
-        else: return None
-#end class
+#managers for for SearchEngine class and it's instances
+class SearchEngineManager(UManager): pass
 SearchEngineManager.register('SearchEngine', SearchEngine)
 SearchEngineManager.register('gc_collect', gc.collect)
 
 
-class SeqDB(object):
+class SearcherManager(object):
+    '''Context manager that creates and destroys searcher object '''
+    def __init__(self, client):
+        self._client     = client
+        client._searcher = client._search_manager.SearchEngine(client._abort_event) 
+    #end def
+    
+    def __del__(self):
+        try: del self._client._searcher
+        except: pass
+        self._client._searcher = None
+        try: self._client._search_manager.gc_collect()
+        except: pass
+    #end def
+    
+    def __enter__(self): return self._client._searcher
+    
+    def __exit__(self, _type, value, traceback):
+        if _type in (None, KeyboardInterrupt, EOFError): return True
+        if _type is IOError and value.errno == errno.EINTR: return True
+        print 'Error in SearcherManager:\n'
+        print_exception(value)
+        tb.print_tb(traceback)
+        return False
+#end class
+
+
+class SeqDB(AbortableBase):
     '''Create and manage a database of sequences with fast approximate match 
     searching.'''
     
@@ -50,20 +78,16 @@ class SeqDB(object):
            "length"     INTEGER UNSIGNED NOT NULL)'''
   
     
-    def __init__(self):
-        self._db_name  = None
-        self._db       = None
-        self._cursor   = None
+    def __init__(self, abort_event):
+        AbortableBase.__init__(self, abort_event)
+        self._db_name        = None
+        self._db             = None
+        self._cursor         = None
         self._search_manager = SearchEngineManager()
-        self._search_manager.start()
-        self._searcher = None #self._search_manager.SearchEngine()
+        self._searcher       = None
     #end def
     
-    def __del__(self):
-        self.abort_search()            
-        if self._search_manager is not None:
-            self._search_manager.shutdown()
-    #end def
+    def __del__(self): self.close()
     
     @property
     def name(self): return self._db_name
@@ -113,6 +137,7 @@ class SeqDB(object):
         '''Create and SQLite database of sequences in a given file.'''
         self._init_db(filename)
         self._populate_db(sequences)
+        self._search_manager.start()
     #end def
     
     
@@ -169,6 +194,7 @@ class SeqDB(object):
         if filename != ':memory:' and not os.path.isfile(filename):
             print '\nSeqDB.connect: no such file:\n%s' % filename 
             return False
+        self._search_manager.start()
         self._db = sqlite3.connect(filename, isolation_level='DEFERRED')
         self._cursor = self._db.cursor()
         self._configure_connection()
@@ -178,12 +204,15 @@ class SeqDB(object):
     
     
     def close(self):
+        try: self._search_manager.shutdown()
+        except: pass
         if self._db is None: return
         self._db.commit()
         self._db.close()
         self._db      = None
         self._cursor  = None
         self._db_name = None
+        gc.collect()
     #end def
     
     
@@ -216,38 +245,54 @@ class SeqDB(object):
     #end def
     
     
-    def find_in_db(self, primer, mismatches, seq_ids=None):
-        '''In the connected DB find all occurrences of the possibly degenerate 
+    def find_in_db(self, primers, mismatches, seq_ids=None):
+        '''In the connected DB find all occurrences of each degenerate 
         primer with number of mismatches less than or equal to the given number.
         If an optional list of sequence ids is provided, search will be performed 
         only within corresponding subset of sequences.
-        Return a dict of following structure: 
-        [sequence_id: [fwd_matches, rev_matches], ...]
-        where *_matches are lists:
+        Return a list of dictionaries of following structure: 
+        [{sequence_id: [fwd_matches, rev_matches], ...}, ...]
+        where a dictionary index corresponds to the index of a primer
+        and *_matches are lists:
         [(3'-position, [(matching duplex, id), ...]), ...]
         If no DB is connected, return None.'''
         #check DB and get sequences
         if self._db is None: return None
-        seqs = self.get_seqs(seq_ids)
-        if not seqs: return None
-        #start searcher
-        results = None
-        self._searcher = self._search_manager.SearchEngine()
-        if len(seqs) == 1:
-            results = self._searcher.find(seqs[0][2], primer, mismatches)
-            if results: results = {seqs[0][0]: results}
-        else:
-            results = self._searcher.batch_find(seqs, primer, mismatches)
-        #free memory allocated by manager
-        del self._searcher; self._searcher = None
-        self._search_manager.gc_collect()
+        templates = self.get_seqs(seq_ids)
+        if not templates: return None
+        results = [dict() for _p in primers]
+        #sort templates into short, suitable for plain search and long -- for mp 
+        short_templates = []
+        long_templates  = []
+        for t in templates:
+            if SearchEngine.mp_better(t[1]):
+                long_templates.append(t)
+            else: short_templates.append(t)
+        #If there's enough short templates, run a series of batch searches.
+        #This is needed to lower memory usage pikes during search and to 
+        #better utilize cpus.
+        while short_templates:
+            num_templates = len(short_templates)
+            if num_templates >= SearchEngine.cpu_count*2:
+                front = SearchEngine.cpu_count
+            else: front = num_templates
+            chunk = short_templates[:front]
+            for i, primer in enumerate(primers):
+                if self._abort_event.is_set(): return None
+                with SearcherManager(self):
+                    result = self._searcher.batch_find(chunk, primer, mismatches)
+                    if result is None: return None
+                    results[i].update(result)
+            short_templates = short_templates[front:]
+        #if there're long templates, search in them one by one
+        for template in long_templates:
+            for i, primer in enumerate(primers):
+                if self._abort_event.is_set(): return None
+                with SearcherManager(self):
+                    result = self._searcher.find(template[2], primer, mismatches)
+                    if result is None: return None
+                    results[i][template[0]] = result
         return results
-    #end def
-    
-    
-    def abort_search(self): 
-        if self._searcher is not None:
-            self._searcher.abort()
     #end def
 #end class
 
@@ -318,7 +363,7 @@ if __name__ == '__main__':
         print seqs[0][1]
     
     query = Primer(SeqRecord(Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna), id='test'), 0.1e-6)
-    
+    query.generate_components()
     
     def print_out(out, name):
         print name
@@ -334,13 +379,16 @@ if __name__ == '__main__':
                 print '\n'
     #end def
     
+    
+    
     mismatches = 8
-    results = None
-    for _i in range(5): 
-        results = sdb.find_in_db(query, mismatches)
-        del results
-        gc.collect()
-        sleep(5)
+    results = sdb.find_in_db([query,], mismatches)
+#    results = None
+#    for _i in range(5): 
+#        results = sdb.find_in_db([query,], mismatches)
+#        del results
+#        gc.collect()
+#        sleep(5)
 #    for rid in results:
 #        print '\n'
 #        print_out(results[rid], rid)

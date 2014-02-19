@@ -41,7 +41,7 @@ def random_text(length):
 #end def
 
 
-def hr(s, symbol='-', width=text_width):
+def hr(s='', symbol='-', width=text_width):
     return s.center(width, symbol) + '\n\n'
 #end def
 

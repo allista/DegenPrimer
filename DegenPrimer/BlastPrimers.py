@@ -70,12 +70,6 @@ class BlastPrimers(iPCR_Interface):
     #end def
    
    
-    def __del__(self):
-        for _PCR_Sim in self._PCR_Simulations.values():
-            _PCR_Sim.abort()
-    #end def
-    
-    
     def _format_query(self):
         '''Construct a concatenated query: primer1NNNNNNNprimer2NNNNNNprimer3...
         Also save primer boundaries positions in the concatenate.'''
@@ -111,9 +105,9 @@ class BlastPrimers(iPCR_Interface):
             query_config.write(query_file)
             query_file.close()
         except IOError, e:
-            print '\nUnable to write blast configuration file:\n   %s' % query_filename
+            print '\nUnable to write BLAST configuration file:\n   %s' % query_filename
             print e.message
-        print '\nBlast query configuration was written to:\n   %s' % query_filename
+        print '\nBLAST query configuration was written to:\n   %s' % query_filename
     #end def
     
     
@@ -124,12 +118,11 @@ class BlastPrimers(iPCR_Interface):
             if query_start < bounds[0] \
             or query_end   > bounds[1]:
                 continue
-            dimer = Dimer()
             for i in xrange(len(hsp.match)):
                 if hsp.match[i] == '|':
-                    dimer.add(query_start-bounds[0]+i,i)
-            template = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement()
-            return Duplex(primer, template, dimer)
+                    template = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement()
+                    dimer = Dimer.from_sequences(primer, template, (query_start-bounds[0]+i, i))
+                    return Duplex(primer, template, dimer)
         return None
     #end def 
     
@@ -137,6 +130,7 @@ class BlastPrimers(iPCR_Interface):
     def blast_query(self, entrez_query=''):
         self._save_query_config()
         try:
+            print '\nLaunching BLAST query...'
             blast_results = NCBIWWW.qblast('blastn', 
                                            self.database, 
                                            self._query.format('fasta'), 
@@ -152,7 +146,7 @@ class BlastPrimers(iPCR_Interface):
             results_file.write(blast_results.read())
             results_file.close()
             blast_results.close()
-            print '\nBlast output was written to:\n   %s' % self._results_filename
+            print '\nBLAST output was written to:\n   %s' % self._results_filename
             #parse results
             results_file  = open(self._results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
@@ -176,6 +170,7 @@ class BlastPrimers(iPCR_Interface):
         or  not os.path.isfile(self._query_filename): 
             return False
         #load blast results
+        print '\nLoading previously saved BLAST results...'
         try:
             #load query configuration
             query_config = SafeConfigParser()
@@ -205,6 +200,7 @@ class BlastPrimers(iPCR_Interface):
     
     def simulate_PCR(self):
         if not self._have_blast_results: return False
+        print '\nSearching for possible PCR products in BLAST results...'
         for record in self._blast_results:
             _PCR_Sim = self._PCR_Simulation_factory()
             self._PCR_Simulations[record.query] = _PCR_Sim
@@ -214,6 +210,7 @@ class BlastPrimers(iPCR_Interface):
                 rev_annealings = []
                 #check and sort all hsps
                 for hsp in alignment.hsps:
+                    if self._abort_event.is_set(): return False
                     #construct annealing duplex and check if it's stable
                     hsp_duplex = self._duplex_from_hsp(hsp)
                     if not hsp_duplex: continue
@@ -266,6 +263,7 @@ class BlastPrimers(iPCR_Interface):
                            'using equilibrium equations and ' 
                            'current PCR parameters.\n')
         header += self._PCR_Simulations.values()[0].format_report_header()
+        header += self._PCR_Simulations.values()[0].format_quantity_explanation()
         return header
     #end def
     
@@ -274,8 +272,6 @@ class BlastPrimers(iPCR_Interface):
         body = ''
         for record_name in self._PCR_Simulations:
             body += hr(' query ID: %s ' % record_name, symbol='#')
-            body += self._PCR_Simulations[record_name].format_report_header()
-            body += self._PCR_Simulations[record_name].format_quantity_explanation()
             if len(self._PCR_Simulations[record_name].hits()) == 1:
                 #all products histogram
                 hit = self._PCR_Simulations[record_name].hits()[0]
@@ -294,6 +290,21 @@ class BlastPrimers(iPCR_Interface):
                 body += hr(' histograms and electrophorograms of PCR products of each hit ', symbol='=')
                 body += self._PCR_Simulations[record_name].all_graphs_grouped_by_hit()
         return body
+    #end def
+    
+    
+    def write_products_report(self):
+        if not self._have_results: return
+        #open report file
+        ipcr_products = self._open_report('BLAST PCR products', self._PCR_products_filename)
+        ipcr_products.write(time_hr())
+        for record_name in self._PCR_Simulations:
+            ipcr_products.write(hr(' query ID: %s ' % record_name, symbol='#'))
+            ipcr_products.write(self._PCR_Simulations[record_name].format_products_report())
+        ipcr_products.close()
+        print '\nThe list of BLAST PCR products was written to:\n   ',self._PCR_products_filename
+        self._add_report('BLAST PCR products', self._PCR_products_filename)
+    #end def
     
         
     def write_hits_report(self):
@@ -305,7 +316,7 @@ class BlastPrimers(iPCR_Interface):
         blast_report.write(wrap_text('All hits are filtered by dG of the annealing '
                                      'of alignments and, if --no-exonuclease '
                                      'option was provided, hits with mismatches on '
-                                     "3'-end are also filtered.\n"))
+                                     "3'-end are ignored.\n"))
         blast_report.write('\n')
         #filter parameters
         blast_report.write(hr(' filtration parameters '))
@@ -354,7 +365,7 @@ class BlastPrimers(iPCR_Interface):
                         hsp_text += 'sense\n'
                         hsp_text += 'Position on template: %d <== %d\n' \
                               % (hsp.sbjct_start, hsp.sbjct_end)
-                    hsp_text += '\n\n'
+                    hsp_text += hr('', '.')
                     hsps.append((hsp_duplex.dG, hsp_text))
                 #no need to include weak hits to the report
                 if not hsps: continue 
@@ -402,5 +413,10 @@ class BlastPrimers(iPCR_Interface):
         print '\nTop hits with top HSPs from BLAST results were written to:\n   ' + \
             self._hits_report_filename
         self._add_report('BLAST hits', self._hits_report_filename)
+    #end def
+    
+    def write_reports(self):
+        self.write_hits_report()
+        iPCR_Interface.write_reports(self)
     #end def
 #end class
