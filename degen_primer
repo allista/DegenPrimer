@@ -22,7 +22,6 @@ Tool to compute degenerate primer parameters using BioPython
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-#imports
 import sys, os
 import signal
 from multiprocessing.managers import SyncManager
@@ -34,7 +33,8 @@ from DegenPrimer.Pipeline import Pipeline
 from DegenPrimer.AnalysisTask import AnalysisTask
 from DegenPrimer.DBManagementTask import DBManagmentTask
 from DegenPrimer.OptimizationTask import OptimizationTask
-from DegenPrimer.MultiprocessingBase import ignore_interrupt
+from DegenPrimer.UMP import ignore_interrupt
+from DegenPrimer import tmpStorage
 ###############################################################################
 
 
@@ -42,8 +42,8 @@ _pid = -1
 abort_event = None
 def sig_handler(signal, frame):
     if _pid != os.getpid(): return
-    abort_event.set()
-    sleep(0.1)
+    abort_event.set(); sleep(0.1)
+    tmpStorage.clean_tmp_files()
 #end def
 
 

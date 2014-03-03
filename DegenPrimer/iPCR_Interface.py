@@ -23,6 +23,7 @@ Created on Dec 15, 2012
 from abc import ABCMeta, abstractmethod
 from AbortableBase import AbortableBase
 from ReporterInterface import ReporterInterface
+from PCR_ProductsFinder import PCR_ProductsFinder
 from PCR_Simulation import PCR_Simulation
 from StringTools import hr, time_hr
 
@@ -75,12 +76,21 @@ class iPCR_Interface(AbortableBase, ReporterInterface):
                                                           self._PCR_report_suffix)
         self._PCR_products_filename = '%s-%s-products.txt' % (self._job_id, 
                                                               self._PCR_report_suffix)
-        self._possible_products   = None
     #end def
     
     
+    #factory for PCR_ProductsFinder objects
+    def _new_PCR_ProductsFinder(self):
+        return PCR_ProductsFinder(self._abort_event,
+                                  self._primers,
+                                  self._min_amplicon, 
+                                  self._max_amplicon,
+                                  self._with_exonuclease,
+                                  self._include_side_annealings)
+    #end def
+    
     #factory for PCR_Simulation objects
-    def _PCR_Simulation_factory(self):
+    def _new_PCR_Simulation(self):
         _PCR_simulation = PCR_Simulation(self._abort_event,
                                          self._primers,
                                          self._min_amplicon,

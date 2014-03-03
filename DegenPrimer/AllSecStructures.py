@@ -66,7 +66,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
     
     
     @staticmethod
-    @MultiprocessingBase._data_mapper
+    @MultiprocessingBase.data_mapper
     def _self_structures(seq):
         structures = SecStructures(seq)
         reactions  = structures.compose_reactions() 
@@ -74,7 +74,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
     #end def
     
     @staticmethod
-    @MultiprocessingBase._data_mapper
+    @MultiprocessingBase.data_mapper
     def _cross_structures(index, sequences): 
         structures = SecStructures(sequences[index[0]], sequences[index[1]])
         reactions  = structures.compose_reactions() 
@@ -82,7 +82,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
     #end def
     
     @staticmethod
-    @MultiprocessingBase._results_assembler
+    @MultiprocessingBase.results_assembler
     def _structure_assembler(index, result, 
                                 structures, reactions, all_structures):
         structures[index] = result[0]
@@ -97,7 +97,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
             #list of all primers
             self._all_primers.extend(primer.seq_records)
             #self structure jobs
-            self_jobs.append(self._prepare_jobs(self._self_structures, 
+            self_jobs.append(self.prepare_jobs(self._self_structures, 
                                                 primer.seq_records, None))
         #cross structures jobs
         num_primers = len(self._all_primers)
@@ -105,19 +105,19 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
         for i in xrange(num_primers):
             for j in xrange(i+1, num_primers):
                 pair_index.append((i,j))
-        cross_jobs = self._prepare_jobs(self._cross_structures, 
+        cross_jobs = self.prepare_jobs(self._cross_structures, 
                                         pair_index, None, self._all_primers)
         #run jobs
-        self._start_jobs(list(chain(*self_jobs))+cross_jobs)
+        self.start_jobs(list(chain(*self_jobs))+cross_jobs)
         #assemble self structures jobs
         for i, jobs in enumerate(self_jobs):
             structures = [None]*len(self._primers[i].seq_records)
-            self._join_jobs(jobs, 1, self._structure_assembler, 
+            self.join_jobs(jobs, 1, self._structure_assembler, 
                             structures, self._reactions, self._all_structures)
             self._self.append(structures)
         #assemble cross structures jobs
         self._cross = [None]*len(pair_index)
-        self._join_jobs(cross_jobs, 1, self._structure_assembler, 
+        self.join_jobs(cross_jobs, 1, self._structure_assembler, 
                         self._cross, self._reactions, self._all_structures)
         #prepare primer concentrations dictionary
         for primer in self._primers:

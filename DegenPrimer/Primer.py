@@ -35,7 +35,7 @@ except ImportError:
     raise
 import TD_Functions
 from StringTools import print_exception
-from MultiprocessingBase import MultiprocessingBase
+from MultiprocessingBase import parallelize_work
 
 
 class Primer(object):
@@ -55,7 +55,7 @@ class Primer(object):
     
     IUPAC_unambiguous = ['A', 'T', 'G', 'C']
     
-    def __init__(self, seq_rec, concentration):
+    def __init__(self, seq_rec, concentration, generate_components=False):
         self._seq_record    = seq_rec
         self._concentration = concentration
         self._n_components  = 1
@@ -64,6 +64,9 @@ class Primer(object):
         self._Tm_max  = None
         self._Tm_mean = None
         self._Tm_min  = None
+        if generate_components: 
+            self.generate_components()
+            self.calculate_Tms()
     #end def
 
     def __len__(self): return len(self._seq_record)
@@ -97,6 +100,8 @@ class Primer(object):
                       'Tm_min':  self._Tm_min,
                       'cons':    TD_Functions.format_concentration(self.concentration)}
     #end def
+    
+    def __hash__(self): return hash(str(self._seq_record.seq))
 
     
     @property
@@ -118,9 +123,9 @@ class Primer(object):
             for seq in (sequence.seq for sequence in self.seq_records):
                 temperatures.append(TD_Functions.primer_template_Tm(seq, concentration))
         else: #parallel algorithm is faster
-            mpb = MultiprocessingBase(abort_event)
-            temperatures = mpb._parallelize_work(1, TD_Functions.primer_template_Tm, 
-                                                 self.sequences, self.concentration)
+            temperatures  = parallelize_work(abort_event, 
+                                             1, TD_Functions.primer_template_Tm, 
+                                             self.sequences, self.concentration)
         if not temperatures: return
         self._Tm_max  = max(temperatures)
         self._Tm_min  = min(temperatures)
@@ -348,7 +353,7 @@ def load_sequence(seq_string, rec_id='', desc=''):
 if __name__ == '__main__':
 #    import cProfile
 #    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATKCAGNCTGGGANGGNTACGNGGGTAAANAAACG'),id='primer1'), 0.9e-6)
-    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCNATKCAGGNCTGGGA'),id='primer1'), 0.9e-6)
+    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCNATKCAGGNCTGRGGA'),id='primer1'), 0.9e-6)
     primer.generate_components()
     primer.calculate_Tms()
     print primer.str_sequences

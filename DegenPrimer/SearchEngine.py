@@ -25,6 +25,7 @@ from SecStructures import Duplex
 from StringTools import print_exception
 from MultiprocessingBase import MultiprocessingBase
 
+
 class SearchEngine(MultiprocessingBase):
     '''Fast search of a pattern sequence in a given set of template sequences 
     with parallelization using multiprocessing.'''
@@ -114,19 +115,19 @@ class SearchEngine(MultiprocessingBase):
         unambiguous components of the primer'''
         duplexes = []
         for var in primer.seq_records:
-            dup = Duplex(var.seq, template[position:position+p_len].complement()[::-1])
+            dup = Duplex(str(var.seq), str(template[position:position+p_len].complement())[::-1])
             if not dup: continue
             duplexes.append((dup, var.id))
         if not reverse:
-            return position+p_len, duplexes
+            return position+p_len, tuple(duplexes)
         else:
-            return t_len+1-(position+p_len), duplexes
+            return t_len+1-(position+p_len), tuple(duplexes)
     #end def
-    _compile_duplexes_mapper = staticmethod(MultiprocessingBase._data_mapper(_compile_duplexes_for_position.__func__)) 
+    _compile_duplexes_mapper = staticmethod(MultiprocessingBase.data_mapper(_compile_duplexes_for_position.__func__)) 
     
     
     @staticmethod
-    @MultiprocessingBase._results_assembler
+    @MultiprocessingBase.results_assembler
     def _duplexes_assembler(index, result, output):
         if result[1]: output.append(result)
     #end def
@@ -138,25 +139,26 @@ class SearchEngine(MultiprocessingBase):
                                fwd_matches, rev_matches):
         '''Compile duplexes for both strands of a template in parallel'''
         #prepare and start two sets of jobs
-        fwd_jobs = self._prepare_jobs(self._compile_duplexes_mapper, 
-                                      fwd_matches, self.cpu_count, 
+        fwd_jobs = self.prepare_jobs(self._compile_duplexes_mapper, 
+                                      fwd_matches, None, 
                                       fwd_seq, primer, t_len, p_len, False)
-        rev_jobs = self._prepare_jobs(self._compile_duplexes_mapper, 
-                                      rev_matches, self.cpu_count,
+        rev_jobs = self.prepare_jobs(self._compile_duplexes_mapper, 
+                                      rev_matches, None,
                                       rev_seq, primer, t_len, p_len, True)
-        self._start_jobs(fwd_jobs+rev_jobs)
+        self.start_jobs(fwd_jobs+rev_jobs)
         #allocate containers for results
         fwd_results = []
         rev_results = []
         #assemble results
-        self._join_jobs(fwd_jobs, 1, 
+        self.join_jobs(fwd_jobs, 1, 
                         self._duplexes_assembler, fwd_results)
-        self._join_jobs(rev_jobs, 1, 
+        self.join_jobs(rev_jobs, 1, 
                         self._duplexes_assembler, rev_results)
         #if aborted, return None
         if self._abort_event.is_set(): return None
         #else, cleanup
-        self._clean_jobs(fwd_jobs+rev_jobs)
+        self.clean_jobs(fwd_jobs+rev_jobs)
+        del fwd_jobs; del rev_jobs 
         #sort duplexes by position and return them
         fwd_results.sort(key=lambda x: x[0])
         rev_results.sort(key=lambda x: x[0])
@@ -236,12 +238,14 @@ class SearchEngine(MultiprocessingBase):
             raise ValueError('SearchEngine._find: template sequence should be '
                              'longer or equal to primer sequence and both '
                              'should be grater than zero.')
-
+    #end def
+    
     
     @classmethod
     def mp_better(cls, t_len):
         #based on computation time statistics
         return cls.cpu_count > 1 and t_len > 25000
+    #end def
     
     
     @classmethod
@@ -253,36 +257,31 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
     
-    def _start_find_worker(self, jobs, queue, start, fwd_seq, rev_seq, 
-                             p_fft, correction, end, s_stride, c_size, c_stride):
-        @MultiprocessingBase._worker
-        def worker(abort_e, start, fwd_seq, rev_seq, p_fft, 
-                   correction, end, s_stride, c_size, c_stride):
-            fwd_score = np.ndarray(0,dtype=float)
-            rev_score = np.ndarray(0,dtype=float)
-            pos = start
-            while pos < end and not abort_e.is_set():
-                front = min(end, pos+c_size)
-                score = self._find_in_chunk(fwd_seq[pos:front], p_fft, correction,
-                                            c_size, c_stride)
-                fwd_score = np.concatenate([fwd_score, score])
-                score = self._find_in_chunk(rev_seq[pos:front], p_fft, correction,
-                                            c_size, c_stride)
-                rev_score = np.concatenate([rev_score, score])
-                pos += c_stride
-            return (start, 
-                    fwd_score[:s_stride], 
-                    rev_score[:s_stride])
-        #end def
-        job = self._Process(target=worker, 
-                            args=(queue, self._abort_event, start, fwd_seq, rev_seq, p_fft, 
-                                  correction, end, s_stride, c_size, c_stride))
-        job.daemon = 1
-        job.start()
-        jobs.append((job,queue))
+    @staticmethod
+    @MultiprocessingBase.worker
+    def _find_in_slice(abort_e, _id, start, end, fwd_seq, rev_seq, 
+                         p_fft, correction, s_stride, c_size, c_stride):
+        fwd_score = []
+        rev_score = []
+        pos = start
+        while pos < end and not abort_e.is_set():
+            front = min(end, pos+c_size)
+            fwd_score.append(SearchEngine._find_in_chunk(fwd_seq[pos:front], 
+                                                         p_fft, correction,
+                                                         c_size, c_stride))
+            rev_score.append(SearchEngine._find_in_chunk(rev_seq[pos:front], 
+                                                         p_fft, correction,
+                                                         c_size, c_stride))
+            pos += c_stride
+        fwd_score = np.concatenate(fwd_score)
+        rev_score = np.concatenate(rev_score)
+        return (start, 
+                fwd_score[:s_stride], 
+                rev_score[:s_stride])
     #end def
     
 
+#    @profile
     def _find_mp(self, template, primer, t_len, p_len, mismatches):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
@@ -295,38 +294,41 @@ class SearchEngine(MultiprocessingBase):
         fwd_seq      = template.seq
         rev_seq      = template.seq.reverse_complement()
         correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
-        fwd_score    = []
-        rev_score    = []
         jobs         = []
-        #start find_in_chunk jobs
-        i = 0 
-        while i < t_len and not self._abort_event.is_set():
-            front = min(t_len, i+slice_size)
-            self._start_find_worker(jobs, self._Queue(), i, 
-                                    fwd_seq, rev_seq, p_fft, 
-                                    correction, front, slice_stride, chunk_size, chunk_stride)
-            self._register_job(jobs[-1])
-            i += slice_stride
-        #join all jobs
-        def parse_out(out, fwd_list, rev_list):
-            fwd_list.append((out[0],out[1]))
-            rev_list.append((out[0],out[2]))
-        self._join_jobs(jobs, 1, parse_out, fwd_score, rev_score)
+        #start find_in_slice jobs
+        pos = 0
+        while pos < t_len and not self._abort_event.is_set():
+            front = min(t_len, pos+slice_size)
+            queue = self._Queue()
+            job = self._Process(target=self._find_in_slice, 
+                                args=(queue, self._abort_event, 
+                                      len(jobs), 
+                                      pos, front, 
+                                      fwd_seq, rev_seq, 
+                                      p_fft, correction,  
+                                      slice_stride, chunk_size, chunk_stride))
+            job.daemon = 1
+            job.start()
+            jobs.append((job,queue))
+            self.register_job(jobs[-1])
+            pos  += slice_stride
+        #join all jobs; if scores arrays are allocated beforehand, the memory
+        #is returned upon deletion
+        scores_len = slice_stride*len(jobs)
+        scores = [np.zeros(scores_len), np.zeros(scores_len)]
+        def assemble_scores(out, scores):
+            scores[0][out[0]:out[0]+slice_stride] = out[1]
+            scores[1][out[0]:out[0]+slice_stride] = out[2]
+        self.join_jobs(jobs, 1, assemble_scores, scores)
         #if search was aborted, return empty results
         if self._abort_event.is_set(): return None
         #else, cleanup
-        self._clean_jobs(jobs)
-        #sort, correct and concatenate scores
-        fwd_score.sort(key=lambda(x): x[0])
-        fwd_score = [result[1] for result in fwd_score]
-        rev_score.sort(key=lambda(x): x[0])
-        rev_score = [result[1] for result in rev_score]
-        fwd_score = np.concatenate(fwd_score)[:t_len]
-        rev_score = np.concatenate(rev_score)[:t_len]
-        #match indices
+        self.clean_jobs(jobs); del jobs
+        #compute match indices
         matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]; del fwd_score
-        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]; del rev_score
+        fwd_matches = np.where(scores[0][:t_len-p_len+1] >= matches)[0]
+        rev_matches = np.where(scores[1][:t_len-p_len+1] >= matches)[0] 
+        del scores
         #construct and return duplexes
         return self._compile_duplexes_mp(fwd_seq, rev_seq, primer, 
                                          t_len, p_len, fwd_matches, rev_matches)
@@ -342,34 +344,32 @@ class SearchEngine(MultiprocessingBase):
         p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
         fwd_seq      = template.seq
         rev_seq      = template.seq.reverse_complement()
-        fwd_score    = []
-        rev_score    = []
         correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
+        fwd_score    = np.zeros(t_len+chunk_stride)
+        rev_score    = np.zeros(t_len+chunk_stride)
         #_find in chunks of a template, which is faster due to lower cost of memory allocation
-        i = 0
-        while i < t_len and not self._abort_event.is_set():
-            front = min(t_len, i+chunk_size)
-            fwd_score.append(self._find_in_chunk(fwd_seq[i:front], p_fft, correction, 
-                                                 chunk_size, chunk_stride))
-            
-            rev_score.append(self._find_in_chunk(rev_seq[i:front], p_fft, correction, 
-                                                 chunk_size, chunk_stride))
-            i += chunk_stride
+        pos = 0
+        while pos < t_len and not self._abort_event.is_set():
+            front = min(t_len, pos+chunk_size)
+            fwd_score[pos:pos+chunk_stride] = self._find_in_chunk(fwd_seq[pos:front], 
+                                                                  p_fft, correction, 
+                                                                  chunk_size, chunk_stride) 
+            rev_score[pos:pos+chunk_stride] = self._find_in_chunk(rev_seq[pos:front], 
+                                                                  p_fft, correction, 
+                                                                  chunk_size, chunk_stride)
+            pos += chunk_stride
         #if search was aborted, return empty results
         if self._abort_event.is_set(): return None
-        #concatenate scores
-        fwd_score = np.concatenate(fwd_score)
-        rev_score = np.concatenate(rev_score)
-        #match indices
+        #match indexes
         matches     = max(1, p_len - mismatches)-0.5
-        fwd_matches = np.arange(t_len-p_len+1)[fwd_score[:t_len-p_len+1] >= matches]; del fwd_score
-        rev_matches = np.arange(t_len-p_len+1)[rev_score[:t_len-p_len+1] >= matches]; del rev_score
+        fwd_matches = np.where(fwd_score[:t_len-p_len+1] >= matches)[0]; del fwd_score
+        rev_matches = np.where(rev_score[:t_len-p_len+1] >= matches)[0]; del rev_score
         #construct and return duplexes
         return self._compile_duplexes(fwd_seq, rev_seq, primer, 
                                       t_len, p_len, fwd_matches, rev_matches)
     #end def
     
-    
+
     def find(self, template, primer, mismatches):
         '''Find occurrences of a degenerate primer in a template sequence.
         Return positions and Duplexes formed. This method uses 
@@ -377,16 +377,14 @@ class SearchEngine(MultiprocessingBase):
         search in a long sequence.''' 
         p_len,t_len = len(primer),len(template)
         self._check_length_inequality(t_len, p_len)
-        results = None
         if self.mp_better(t_len):
-            results = self._find_mp(template, primer, t_len, p_len, mismatches)
+            return self._find_mp(template, primer, t_len, p_len, mismatches)
         else:
-            results = self._find(template, primer, t_len, p_len, mismatches)
-        return results
+            return self._find(template, primer, t_len, p_len, mismatches)
     #end def
     
     
-    @MultiprocessingBase._data_mapper_method
+    @MultiprocessingBase.data_mapper_method
     def _batch_find(self, template, primer, p_len, mismatches):
         t_id, t_len, _template = template
         result = self._find(_template, primer, t_len, p_len, mismatches)
@@ -400,19 +398,28 @@ class SearchEngine(MultiprocessingBase):
         It uses multiprocessing to parallelize searches, each of which does 
         not use parallelization. Use it to search in many short sequences.'''
         p_len   = len(primer)
-        jobs    = self._prepare_jobs(self._batch_find, templates, 
-                                     None,
-                                     primer, p_len, mismatches)
-        self._start_jobs(jobs)
-        results = dict()
-        self._join_jobs(jobs, 1, self._ordered_results_assembler, results)
+        jobs    = self.prepare_jobs(self._batch_find, templates, None,
+                                    primer, p_len, mismatches)
+        self.start_jobs(jobs)
+        results = []
+        self.join_jobs(jobs, 1, self.unordered_results_assembler, results)
         if self._abort_event.is_set(): return None
-        return results
+        return dict(results)
     #end def
 #end class
 
+#shortcut functions
+mp_better = SearchEngine.mp_better
+cpu_count = SearchEngine.cpu_count
+
+def find(template, primer, mismatches, abort_event):
+    return SearchEngine(abort_event).find(template, primer, mismatches)
+
+def batch_find(templates, primer, mismatches, abort_event):
+    return SearchEngine(abort_event).batch_find(templates, primer, mismatches)
 
 
+#tests
 if __name__ == '__main__':
     #tests
     import signal
@@ -460,30 +467,32 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGQUIT, sig_handler)
 
-    os.chdir('../')
-    seq_file = 'ThGa.fa'
+#    os.chdir('../')
+    seq_file = '../ThGa.fa'
     try:
         record_file = open(seq_file, 'r')
     except IOError, e:
         print 'Unable to open %s' % seq_file
         print_exception(e)
         sys.exit(1)
-    record = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
+    template = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
     record_file.close()
     
-    query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
-    query = Seq('GACTAATGCTAACGGGGGATT', IUPAC.ambiguous_dna)
-    query = Seq('AGGGTTAGAAGNACTCAAGGAAA', IUPAC.ambiguous_dna)
+#    query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+#    query = Seq('GACTAATGCTAACGGGGGATT', IUPAC.ambiguous_dna)
+#    query = Seq('AGGGTTAGAAGNACTCAAGGAAA', IUPAC.ambiguous_dna)
+#    
+#    ftgam = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+    rtgam = Seq('GAASGCRAAKATYGGGAAC', IUPAC.ambiguous_dna)
     
-    ftgam_f = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
-    
-    template = record#+record+record+record
+#    template = template+record+record+record
 #    query    = query+query+query+query+query
 
-    searcher = SearchEngine(abort_event)
-    primer   = Primer(SeqRecord(ftgam_f, id='ftgam_f'), 0.43e-6)
+#    
+#    primer   = Primer(SeqRecord(ftgam, id='ftgam'), 0.43e-6)
+    primer   = Primer(SeqRecord(rtgam, id='rtgam'), 0.43e-6) #48C, 9mism, results: 564.85Mb, 410.37Mb, 240.07Mb
     primer.generate_components()
-
+    
     def print_out(out, name):
         print name
         for i, results in enumerate(out):
@@ -502,45 +511,45 @@ if __name__ == '__main__':
     #end def
     
     
-    def gather_statistics1(start_len, end_len, delta, title=None):
-        global ppid, data1, data2, T,P,mult
-        ppid  = os.getpid()
-        p_len = 20
-        lens  = range(start_len, end_len+1, delta)
-        if title:
-            data2 = [('t_len', 'p_len', '_find time %s'%title, 
-                      '_find_mp time %s'%title)]
-        else: data2 = [('t_len', 'p_len', '_find time', '_find_mp time')]
-        find_times    = dict([(l,[]) for l in lens])
-        find_mp_times = dict([(l,[]) for l in lens])
-        for i in xrange(20):
-            print 'iteration', i
-            for t_len in lens:
-                print 't_len:',t_len
-                T = template[:t_len]
-                P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
-                et = timeit.timeit('searcher._find(T, P, 3)', 
-                                   setup='from __main__ import T,P,searcher', 
-                                   number=1)
-                find_times[t_len].append(et)
-                et = timeit.timeit('searcher._find_mp(T, P, 3)', 
-                                   setup='from __main__ import T,P,searcher', 
-                                   number=1)
-                find_mp_times[t_len].append(et)
-                print ''
-        for t_len in lens:
-            data2.append((t_len, p_len, 
-                          min(find_times[t_len]), min(find_mp_times[t_len])))
-        if title:
-            filename = 'find_mp_vs_find-%s-%d.csv' % (title, time())
-        else: filename = 'find_mp_vs_find-%d.csv' % time()
-        out_file = open(filename, 'wb')
-        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-        csv_writer.writerows(data2)
-        out_file.close()
-        data2 = []
-        print 'Gather statistics 1: data was written to %s' % filename 
-    #end def
+#    def gather_statistics1(start_len, end_len, delta, title=None):
+#        global ppid, data1, data2, T,P,mult
+#        ppid  = os.getpid()
+#        p_len = 20
+#        lens  = range(start_len, end_len+1, delta)
+#        if title:
+#            data2 = [('t_len', 'p_len', '_find time %s'%title, 
+#                      '_find_mp time %s'%title)]
+#        else: data2 = [('t_len', 'p_len', '_find time', '_find_mp time')]
+#        find_times    = dict([(l,[]) for l in lens])
+#        find_mp_times = dict([(l,[]) for l in lens])
+#        for i in xrange(20):
+#            print 'iteration', i
+#            for t_len in lens:
+#                print 't_len:',t_len
+#                T = template[:t_len]
+#                P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
+#                et = timeit.timeit('searcher._find(T, P, 3)', 
+#                                   setup='from __main__ import T,P,searcher', 
+#                                   number=1)
+#                find_times[t_len].append(et)
+#                et = timeit.timeit('searcher._find_mp(T, P, 3)', 
+#                                   setup='from __main__ import T,P,searcher', 
+#                                   number=1)
+#                find_mp_times[t_len].append(et)
+#                print ''
+#        for t_len in lens:
+#            data2.append((t_len, p_len, 
+#                          min(find_times[t_len]), min(find_mp_times[t_len])))
+#        if title:
+#            filename = 'find_mp_vs_find-%s-%d.csv' % (title, time())
+#        else: filename = 'find_mp_vs_find-%d.csv' % time()
+#        out_file = open(filename, 'wb')
+#        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
+#        csv_writer.writerows(data2)
+#        out_file.close()
+#        data2 = []
+#        print 'Gather statistics 1: data was written to %s' % filename 
+#    #end def
 
     ppid = os.getpid()
     
@@ -551,14 +560,37 @@ if __name__ == '__main__':
 #    del searcher
 #    searcher = mgr.SearchEngine()
     
+    from time import sleep
     import TD_Functions
     TD_Functions.PCR_P.PCR_T = 48
+
+#    from pympler.asizeof import asizeof
+
+    def mem_test(num):
+        for _n in xrange(num):
+            t0 = time()
+            searcher = SearchEngine(abort_event)
+            results = searcher.find(template, primer, 5)
+            t1 = (time()-t0)
+#            print 'results use: %fMb' % (asizeof(results)/1024.0/1024.0)
+            print results
+#            print_out(results, '')
+            print 'elapsed %f seconds\n' % t1
+    #end def
     
-#    from tests.asizeof import mem_used
+    mem_test(1)
+        
+#    from tests.asizeof import mem_used, heappy
 #    t0 = time()
-#    results = searcher.find(template, primer, 9)
+#    profile = 'tests/results/SearchEngine_results.hpy'
+#    heappy.setref()
+#    results = searcher.find(template, primer, 4)
 #    mem_used(results)
+#    heappy.heap().stat.dump(profile)
+#    print heappy.heap()
 #    t1 = (time()-t0)
+#    sleep(5)
+#    heappy.pb(profile)
 #    print_out(results, 'test')
 #    print 'elapsed %f seconds\n' % t1 
 
@@ -589,43 +621,4 @@ if __name__ == '__main__':
         #gather_statistics(5000000, 10000000, 1000000)
         
     
-#    cProfile.run('''
-#for i in xrange(10): 
-#    searcher.find(template, primer, 9)
-#    ''', 
-#    'Dimer_new-find.profile')
-
-    t_len = len(template)
-    p_len = len(primer)
-    cProfile.run('''
-for i in xrange(10): 
-    searcher._find(template, primer, t_len, p_len, 6)
-    ''', 
-    'Dimer_new-find.profile')
-    
-#    from scipy.stats import sem
-#    find_times = [timeit.timeit('searcher.find(template, primer, 9)', 'from __main__ import template, primer, searcher', number=1) for _i in xrange(10)]
-#    print 'mean time: %.02f\nsem: %.02f' % (np.mean(find_times), sem(find_times))
-    
-
-
-#    ar1, ar2 = None,None
-#    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
-#        ar1 = np.random.random_sample(l).astype(complex)
-#        ar2 = np.random.random_sample(l).astype(complex)
-#        times = []
-#        for i in xrange(10):
-#            et = timeit.timeit('ifft(fft(ar1)*fft(ar2))', 
-#                               setup='from __main__ import ar1, ar2\n'
-#                                     'from scipy.fftpack import fft, ifft', 
-#                               number=10)
-#            times.append(et)
-#        print '%d %f' % (l, min(times))
-#        cProfile.run("for i in xrange(10):\
-#            ifft(fft(ar1)*fft(ar2))",
-#            'ifft_fft_%d.profile'%l)
-    
-    
-    #print_out(out0, '_find')
-    #print_out(out1, '_find_mp')
     print 'Done'

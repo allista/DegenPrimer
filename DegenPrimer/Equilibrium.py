@@ -22,9 +22,11 @@ Created on Nov 25, 2012
 '''
 
 import warnings
+import numpy as np
+from numpy.random import random
 from scipy.optimize import fsolve, newton_krylov
-from numpy.random import random_sample
-from scipy.sparse.csgraph import connected_components
+from scipy.sparse import csr_matrix, csgraph
+from AbortableBase import AbortableBase
 from StringTools import print_exception
 
 
@@ -86,15 +88,16 @@ class EquilibriumBase(object):
 #end class
 
 
-class EquilibriumSolver(EquilibriumBase):
+class EquilibriumSolver(EquilibriumBase, AbortableBase):
     '''
     Calculate equilibrium parameters in a system of connected concurrent 
     reactions. The system is defined by dictionaries of Reactions and 
     concentrations of reactants.
     '''
 
-    def __init__(self, reactions, concentrations, precision):
-        super(EquilibriumSolver, self).__init__(reactions, concentrations, precision)
+    def __init__(self, abort_event, reactions, concentrations, precision):
+        EquilibriumBase.__init__(self, reactions, concentrations, precision)
+        AbortableBase.__init__(self, abort_event)
         #indexed reactants and concentrations
         self._concentrations = [concentrations[r] for r in self._reactants_ids] #list of reactants' concentrations
         self._min_C          = min(self._concentrations)
@@ -167,23 +170,24 @@ class EquilibriumSolver(EquilibriumBase):
     
     
     @staticmethod
-    def _fsolve(sys_func, r0):
-        return fsolve(sys_func, r0, xtol=1e-10)
+    def _fsolve(sys_func, r0, precision):
+        return fsolve(sys_func, r0, xtol=precision)
     
     @staticmethod
-    def _nksolve(sys_func, r0):
-        return newton_krylov(sys_func, r0, x_tol=1e-10)
+    def _nksolve(sys_func, r0, precision):
+        return newton_krylov(sys_func, r0, x_tol=precision)
         
     
     def _solve(self, sys_func, obj_func, r0, solver):
         #try to find the solution using selected solver
-        sol = solver(sys_func, r0)
+        sol = solver(sys_func, r0, self._precision)
         #if failed for the first time, iterate fsolve while jitter r0 a little
         r0_obj = obj_func(sol)
         while r0_obj > self._precision \
         or    min(sol) < 0 \
         or    max(sol) > 1:
-            sol = solver(sys_func, [ri+(random_sample(1)[0]-ri)*0.3 for ri in r0])
+            if self._abort_event.is_set(): return None
+            sol = solver(sys_func, r0 + (random(r0.shape)-r0)*0.3, self._precision)
             if  min(sol) >= 0 and max(sol) <= 1: 
                 r0 = sol
                 r0_obj = obj_func(sol)
@@ -207,8 +211,8 @@ class EquilibriumSolver(EquilibriumBase):
             return tuple(l_func(r, consumptions) for l_func in l_funcs)
         obj_func = lambda(r): sum(sf**2 for sf in sys_func(r))
         #choose the solver
-        if n_reactions < 10000: solver = self._fsolve
-        else: solver = self._nksolve
+        if n_reactions < 100: solver = self._fsolve #fsole is fast for small systems
+        else: solver = self._nksolve #but nksolve is MUCH faster for big ones
         #solve the system
         try:
             with warnings.catch_warnings():
@@ -217,7 +221,8 @@ class EquilibriumSolver(EquilibriumBase):
         except Exception, e:
             print '\nUnable to calculate equilibrium.'
             print_exception(e)
-            return
+            return None
+        if r0 is None: return None
         #calculate solution objective function and reactant consumptions
         self.objective_value = obj_func(r0)
         self.solution     = dict((self._reaction_ids[ri], r) 
@@ -248,39 +253,32 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
         self._reactions_groups = self._group_reactions()
     #end def
     
-    
     def __nonzero__(self): return self.solution is not None
     
     
-    def _indexed_reaction(self, R):
-        #check reactants
-        if R.Ai != None and R.Ai not in self._reactants_ids:
-            raise ValueError(('Equilibrium: reactant %s is not present in '
-                              'the list of concentrations.') % str(R.Ai))
-        if R.Bi != None and R.Bi not in self._reactants_ids:
-            raise ValueError(('Equilibrium: reactant %s is not present in '
-                              'the list of concentrations.') % str(R.Bi))
-        return EquilibriumBase._indexed_reaction(self, R)
+    def _index_reaction(self, reaction):
+        rid, R = reaction
+        iR = self._indexed_reaction(R)
+        Ai = iR[1]; Bi = iR[2] if iR[2] is not None else Ai
+        return rid, iR, (Ai,Bi)
     #end def
-    
     
     def _group_reactions(self):
         n_reactants = len(self.concentrations)
-        r_graph     = [[0]*n_reactants for _n in xrange(n_reactants)]
-        #convert reactions to indexed form and fill reactions graph and 
-        ireactions  = dict()
-        for rid, R in self.reactions.items():
-            iR = self._indexed_reaction(R)
-            Ai = iR[1]; Bi = iR[2] if iR[2] is not None else Ai
-            ireactions[rid] = iR
-            r_graph[Ai][Bi] = 1
+        #convert reactions to indexed form and fill reactions graph and
+        ireactions = self.parallelize_work(1, self._index_reaction, 
+                                           self.reactions.items())
+        if ireactions is None: return []
+        inds = np.array([AiBi for _rid, _iR, AiBi in ireactions]).transpose()
+        data = np.ones(len(ireactions))
+        r_graph = csr_matrix((data, (inds[0],inds[1])), shape=(n_reactants, n_reactants), dtype='int8')
         #lable reactants by connected component of the reactions graph
-        n_comps, comps = connected_components(r_graph, directed=False)
+        n_comps, comps = csgraph.connected_components(r_graph, directed=False)
         del r_graph
         #group reactions and concentrations by connected component of the reactions graph
         if n_comps < 2: return []
         groups = [[dict(), dict()] for _n in xrange(n_comps)]
-        for rid, iR in ireactions.items(): 
+        for rid, iR, _AiBi in ireactions: 
             groups[comps[iR[1]]][0][rid] = self.reactions[rid]
         for cidx, cid in enumerate(self._reactants_ids):
             groups[comps[cidx]][1][cid]  = self.concentrations[cid]
@@ -328,9 +326,9 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
     #end def
     
 
-    @staticmethod
-    def _calculate(reactions_group, precision):
-        eq = EquilibriumSolver(reactions_group[0], reactions_group[1], precision)
+    def _calculate(self, reactions_group, precision):
+        eq = EquilibriumSolver(self._abort_event, 
+                               reactions_group[0], reactions_group[1], precision)
         eq.calculate()
         return eq.objective_value, eq.solution, eq.consumptions
     #end def
@@ -338,14 +336,17 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
     def calculate(self):
         if len(self._reactions_groups) < 2:
             #single process mode
-            equilibrium = EquilibriumSolver(self.reactions, self.concentrations, self._precision)
+            equilibrium = EquilibriumSolver(self._abort_event, 
+                                            self.reactions, 
+                                            self.concentrations, 
+                                            self._precision)
             equilibrium.calculate()
             self.objective_value = equilibrium.objective_value
             self.solution        = equilibrium.solution
             self.consumptions    = equilibrium.consumptions
         else:
             #parallel processing
-            solutions = self._parallelize_work(1, self._calculate, 
+            solutions = self.parallelize_work(1, self._calculate, 
                                                self._reactions_groups, 
                                                self._precision)
             if solutions is None: return
@@ -366,102 +367,53 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
 #end class
 
 
-#tests
+
+
+################################### tests ######################################
+from time import sleep
+_pid = -1
+abort_event = None
+def sig_handler(signal, frame):
+    if _pid != os.getpid(): return
+    abort_event.set()
+    sleep(0.1)
+#end def
+
+
 if __name__ == '__main__':
-    from scipy.stats import sem, histogram
-    import numpy as np
-    reactions = {'A1A2': Reaction(1e15,
-                                  1,
-                                  2,
-                                  'AB'),
-                 '2A1': Reaction(1e6,
-                                 1,
-                                 None,
-                                 '2A'),
-                 '2A2': Reaction(1e9,
-                                 2,
-                                 None,
-                                 '2A'),
-                 'A1*': Reaction(1e3,
-                                 1,
-                                 None,
-                                 'A'),
-                 'A2*': Reaction(1e2,
-                                 2,
-                                 None,
-                                 'A'),
-                 }
-
-
+    #setup signal handler
+    import signal
+    signal.signal(signal.SIGINT,  sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
+    signal.signal(signal.SIGQUIT, sig_handler)
+    
     import cProfile, os, sys
-#    from timeit import timeit
-#    from tests.asizeof import heappy
-#    from tests.violin_plot import violin_plot
-#    from matplotlib.pyplot import figure, show
-    os.chdir('../')
+    from multiprocessing import Event
+    import shelve
     
-#    l = ['a', 'b', 'c', 'd']
-#    d = {'a':'a', 'b':'b', 'c':'c', 'd':'d'}
-#    c = Reaction('a', 'b', 'c', 'd')
-#    
-#    print heappy.iso(l)
-#    print heappy.iso(d)
-#    print heappy.iso(c)
-#
-#    lt = [timeit('l[3] = 123', 'from __main__ import l') for _i in xrange(100)]
-#    ld = [timeit('d[\'c\'] = 123', 'from __main__ import d') for _i in xrange(100)]
-#    lc = [timeit('c.Bi = 123', 'from __main__ import c') for _i in xrange(100)]
-#    
-#    fig=figure()
-#    ax = fig.add_subplot(111)
-#    violin_plot(ax,[lt,ld,lc],range(3),bp=1)
-#    show()
-#    
-#    print 'Done'
-#    sys.exit(0)
+    abort_event = Event()
+    _pid = os.getpid()
+#    os.chdir('../')
     
-    ov_sum = 0
-    size = 1000
-    scale = 1e-2/size
+    db = shelve.open('../tests/results/Equilibrium-test.new', 'r', protocol=-1)
+    reactions = db['reactions']
+    concentrations = db['concentrations']
     
-    C_A1, C_A2 = 0.6543, 0.0353
-    C_dict = {1: (1+C_A1*size)*scale, 2: (1+C_A2*size)*scale}
+    print len(reactions)
+    print len(concentrations)
     
-    eq = Equilibrium(reactions, C_dict, 1e-10)
-    print eq.calculate()
+    eq = Equilibrium(abort_event, reactions, concentrations, 1e-10)
+    eq.calculate()
+    print eq.objective_value
+    print eq.solution
+    
     sys.exit(0)
     
-    solutions = []
-#    pow = lambda x: x**2
-#    cProfile.run('''
-#for i in xrange(1000):
-#    abs(-123.464)
-#    x = pow(-123.464)''',
-#'abs-power.profile')
     cProfile.run('''
 for i in xrange(size):
     eq_system = Equilibrium(reactions, C_dict, 1e-10)
     solutions.append(eq_system.calculate())
 ''',
 'equilibrium.profile')
-    sols = dict((key, []) for key in solutions[0][0].keys())
-    for sol, obj in solutions:
-        for s in sol:
-            sols[s].append(sol[s])
-    for s in sols:
-        print s, np.mean(sols[s]), sem(sols[s])
-        print histogram(sols[s])
-        print '\n'
-#    for C_A1, C_A2 in zip(random_sample(size), random_sample(size)):
-#        print 'A1: %f, A2: %f' % ((1+C_A1*size)*scale, (1+C_A2*size)*scale)
-#        C_dict = {1: (1+C_A1*size)*scale, 2: (1+C_A2*size)*scale}
-#        eq_system = Equilibrium(reactions, C_dict)
-#        sol, obj = eq_system.calculate()
-#        ov_sum += obj
-#        print 'objective function value at the solution: %e' % obj
-#        print 'solution:', sol
-#        for R in reactions:
-#            print 'Reaction %s [%s]: %e' % (R, reactions[R].type, eq_system[R])
-#        print ''
 
     print 'Done'

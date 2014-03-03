@@ -70,12 +70,12 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
     def _recalculate_annealings(self):
         for i, annealings in self._seq_annealings.items():
             if self._abort_event.is_set(): return
-            fwd_annealings = self._parallelize_work(1, 
-                                                    self._recalculate_annealing, 
-                                                    annealings[0])
-            rev_annealings = self._parallelize_work(1, 
-                                                    self._recalculate_annealing, 
-                                                    annealings[1])
+            fwd_annealings = self.parallelize_work(1, 
+                                                   self._recalculate_annealing, 
+                                                   annealings[0])
+            rev_annealings = self.parallelize_work(1, 
+                                                   self._recalculate_annealing, 
+                                                   annealings[1])
             self._seq_annealings[i] = (fwd_annealings, rev_annealings)
     #end def
     
@@ -114,7 +114,7 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
         self._side_concentrations = sec_structs.concentrations()
         self._side_reactions      = sec_structs.reactions()
         #create new simulator
-        _PCR_Sim = self._PCR_Simulation_factory()
+        _PCR_Sim = self._new_PCR_Simulation()
         self._PCR_Simulations.append(_PCR_Sim)
         if not self._add_annealings_for_seqs(_PCR_Sim): return result
         #simulate PCR
@@ -178,7 +178,7 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
         sec_structs.find_structures()
         self._side_concentrations = sec_structs.concentrations()
         self._side_reactions      = sec_structs.reactions()
-        self._PCR_Simulation      = self._PCR_Simulation_factory()
+        self._PCR_Simulation      = self._new_PCR_Simulation()
         if self._add_annealings_for_seqs(self._PCR_Simulation):
             self._PCR_Simulation.run()
         self._have_results = bool(self._PCR_Simulation)

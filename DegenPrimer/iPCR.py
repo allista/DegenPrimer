@@ -32,35 +32,17 @@ class iPCR(iPCR_Base):
     
     def __init__(self, *args, **kwargs):
         iPCR_Base.__init__(self, *args, **kwargs)
-        self._PCR_Simulation = self._PCR_Simulation_factory()
+        self._PCR_Simulation = self._new_PCR_Simulation()
+        self._ProductsFinder = self._new_PCR_ProductsFinder()
     #end def
     
     
-    
-    def find_possible_products(self, seq_files, seq_ids=None):
-        if not self._find_annealings(seq_files, seq_ids): return False
-        #add annealings to the simulation
-        self._possible_products = self._add_annealings_for_seqs(self._PCR_Simulation)
-        del self._seq_annealings; self._seq_annealings = None
-        if not self._possible_products:
-            print '\niPCR: None of the possible PCR products satisfy given reaction ' \
-                  'parameters.'
-        return self._possible_products
-    #end def
-    
-    
-    def simulate_PCR(self):
-        if not self._possible_products: return False
-        #compute PCR products quantities
-        self._PCR_Simulation.run()
-        self._have_results = bool(self._PCR_Simulation)
-        return self._have_results
-    #end def
-
-
-    def find_and_analyse(self, seq_files, seq_ids=None):
-        return self.find_possible_products(seq_files, seq_ids) \
-            and self.simulate_PCR()
+    def simulate_PCR(self, seq_files, seq_ids=None):
+        if self._find_products(self._PCR_Simulation, self._ProductsFinder, seq_files, seq_ids):
+            self._PCR_Simulation.run()
+            self._have_results = bool(self._PCR_Simulation)
+            return self._have_results
+        return False
     #end def
     
     
@@ -122,52 +104,65 @@ class iPCR(iPCR_Base):
 
 #tests
 if __name__ == '__main__':
+    from multiprocessing import Manager
     from Primer import Primer, load_sequence
     import TD_Functions
-    import cProfile
-    import os, sys
-    os.chdir('../')
+    
+    mgr = Manager()
+    abort_event = mgr.Event()
+    
     TD_Functions.PCR_P.PCR_T = 53
     TD_Functions.PCR_P.Mg    = 3e-3
     TD_Functions.PCR_P.dNTP  = 300e-6
     TD_Functions.PCR_P.DNA   = 1e-10
-    fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'fwd_test', 'fwd_test'), 0.43e-6)
-    rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'rev_test', 'rev_test'), 0.43e-6)
-    ipcr = iPCR(5, 'test-job', 
-               [fwd_primer,
-               rev_primer],
-               50, 
-               1500, 
-               40000,
-               False, 
-               33,
-               include_side_annealings=False)
-
+    fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'fwd_test', 'fwd_test'), 0.43e-6, True)
+    rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'rev_test', 'rev_test'), 0.43e-6, True)
+    ipcr = iPCR(abort_event,
+                max_mismatches=6,
+                job_id='test-job', 
+                primers=[fwd_primer,
+                         rev_primer], 
+                min_amplicon=50, 
+                max_amplicon=2000, 
+                polymerase=40000, 
+                with_exonuclease=False, 
+                num_cycles=30,
+                side_reactions=None, 
+                side_concentrations=None,
+                include_side_annealings=True)
     
-#    out_file = open('iPCR.out', 'w')
-#    stdout = sys.stdout 
-#    sys.stdout = out_file
-    
-#    l1 = [1,]*1000000000
-#    l2 = [2,]*1000000000
-#    l3 = [1,]*1000000000
-#    def iadd(x, y): 
-#        x += y
-#        return x
-#    cProfile.run('''
-#iadd(l3,l2)
-#l1.extend(l2)
-#''',
-#'iadd-extend.profile')
-    
-    cProfile.run('''
-ipcr.find_possible_products(('ThGa.fa',))
-ipcr.simulate_PCR()''',
-    'iPCR.profile')
-    
-#    sys.stdout = stdout
-#    out_file.close()
-    
+    ipcr.simulate_PCR(('../ThGa.fa', #single sequence
+                    '../Ch5_gnm.fa', '../ThDS1.fa', '../ThES1.fa', #long sequences 
+                    '../ThDS1-FC.fa', '../ThDS1-850b-product.fa', #short sequences
+                       ))
     
     ipcr.write_products_report()
     ipcr.write_report()
+    
+############################## statistics ######################################
+#TD_Functions.PCR_P.PCR_T = 53
+#TD_Functions.PCR_P.Mg    = 3e-3
+#TD_Functions.PCR_P.dNTP  = 300e-6
+#TD_Functions.PCR_P.DNA   = 1e-10
+#(abort_event,
+#max_mismatches=7,
+#job_id='test-job', 
+#primers=[#fwd_primer,
+#         rev_primer], 
+#min_amplicon=50, 
+#max_amplicon=2000, 
+#polymerase=40000, 
+#with_exonuclease=False, 
+#num_cycles=30,
+#side_reactions=None, 
+#side_concentrations=None,
+#include_side_annealings=False)
+
+#Results use: 44.114922Mb
+#PCR Simulation: searching for possible PCR products in Thermococcus gammatolerans EJ3...
+#Results use: 29.034309Mb
+#PCR Simulation: searching for possible PCR products in TBCH5...
+#Results use: 41.029671Mb
+#PCR Simulation: searching for possible PCR products in DS1 complete temp...
+#Results use: 21.963631Mb
+#PCR Simulation: searching for possible PCR products in Thermococcus sp. ES1...

@@ -45,11 +45,11 @@ except ImportError:
 
 
 #managers for subprocessed classes
-class ClassManager(UManager): pass
-ClassManager.register('AllSecStructures', AllSecStructures)
-ClassManager.register('SeqDB', SeqDB)
-ClassManager.register('iPCR', iPCR)
-ClassManager.register('BlastPrimers', BlastPrimers)
+class SubroutineManager(UManager): pass
+SubroutineManager.register('AllSecStructures', AllSecStructures)
+SubroutineManager.register('SeqDB', SeqDB)
+SubroutineManager.register('iPCR', iPCR)
+SubroutineManager.register('BlastPrimers', BlastPrimers)
 
 
 class OutQueue(object):
@@ -149,6 +149,9 @@ class AnalysisTask(PrimerTaskBase):
         self._print_lock  = Lock()
         self._subroutines = [] #list of launched processes with their managers and output queues
     #end def
+    
+    
+    def __del__(self): self._clean_subroutines()
 
 
     def _clean_subroutines(self):
@@ -161,7 +164,7 @@ class AnalysisTask(PrimerTaskBase):
 
     def _generate_subroutine_entry(self):
         with self.capture_to_queue() as out:
-            manager = ClassManager()
+            manager = SubroutineManager()
             manager.start()
         e_id     = (len(self._subroutines)+1)
         p_entry  = {'process'  : None,
@@ -181,8 +184,8 @@ class AnalysisTask(PrimerTaskBase):
             #remember start time
             time0 = time()
             #run the function
-            if _args is None: func()
-            else: func(*_args)
+            if _args: func(*_args)
+            else: func()
             #return elapsed time
             return (time()-time0)
         #start subprocess
@@ -246,7 +249,7 @@ class AnalysisTask(PrimerTaskBase):
             seq_files = []
             if args.sequence_db: seq_files.append(args.sequence_db)
             else: seq_files = args.fasta_files
-            self._run_subroutine(ipcr.find_and_analyse, 
+            self._run_subroutine(ipcr.simulate_PCR, 
                                  (seq_files, 
                                   args.use_sequences), p_entry,
                                  'Simulate PCR using provided sequences as DNA templates.')
@@ -278,8 +281,8 @@ class AnalysisTask(PrimerTaskBase):
                                  p_entry,
                                  'Make BLAST query, then simulate PCR using returned alignments.')
         #else, try to load previously saved results and analyze them with current parameters
-        elif blast_primers.load_results():
-            self._run_subroutine(blast_primers.simulate_PCR, 
+        elif blast_primers.have_saved_results():
+            self._run_subroutine(blast_primers.load_and_analyze, 
                                  None, 
                                  p_entry,
                                  'Simulate PCR using alignments in BLAST results.')
@@ -310,7 +313,7 @@ class AnalysisTask(PrimerTaskBase):
         while not self._abort_event.is_set():
             try: output.append(queue.get(False))
             except Empty:
-                print ''.join(message for message in output)
+                if output: print ''.join(message for message in output)
                 return
             except Exception, e:
                 print_exception(e)
@@ -325,8 +328,7 @@ class AnalysisTask(PrimerTaskBase):
             for p_entry in self._subroutines:
                 if p_entry['process'] == None: continue
                 try:
-                    while True: 
-                        p_entry['output'].append(p_entry['queue'].get(False))
+                    while True: p_entry['output'].append(p_entry['queue'].get_nowait())
                 except Empty:
                     if p_entry['process'].is_alive():
                         processes_alive = True

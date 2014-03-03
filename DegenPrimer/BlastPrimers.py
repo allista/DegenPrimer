@@ -21,7 +21,7 @@ Created on Jun 26, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import os
+import os, re
 try:
     from Bio.Blast import NCBIWWW, NCBIXML 
     from Bio.SeqRecord import SeqRecord
@@ -30,6 +30,7 @@ try:
 except ImportError:
     print'The BioPython must be installed in your system.'
     raise
+from MultiprocessingBase import MultiprocessingBase
 from iPCR_Interface import iPCR_Interface
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
@@ -37,7 +38,7 @@ from SecStructures import Dimer, Duplex
 import TD_Functions, SecStructures
 
 
-class BlastPrimers(iPCR_Interface):
+class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     '''Check specificity of primers using BLAST query and iPCR_Simulation'''
 
     #values adjusted for short sequences
@@ -52,21 +53,26 @@ class BlastPrimers(iPCR_Interface):
     
     _PCR_report_suffix = 'BLAST-PCR'
     
-    def __init__(self, *args, **kwargs):
-        iPCR_Interface.__init__(self, *args, **kwargs) 
+    def __init__(self, abort_event, *args, **kwargs):
+        iPCR_Interface.__init__(self, abort_event, *args, **kwargs)
+        MultiprocessingBase.__init__(self, abort_event) 
         self._blast_results    = None
         self._bounds           = None
         self._query            = None
-        self._format_query()
         #PCR parameters
         self._PCR_Simulations  = dict()
+        #query_id use hash of primers instead of all-config hash as in job_id
+        self._primers_hash = (hash(tuple(self._primers)) & 0xFFFFFFF)
+        self._query_id  = re.split('_[0-9]+\Z', self._job_id)[0]
+        self._query_id += '_%d' % self._primers_hash
         #results
-        self._results_filename = self._job_id+'-blast.xml'
-        self._query_filename   = self._job_id+'-blast.cfg'
+        self._results_filename = self._query_id+'-blast.xml'
+        self._query_filename   = self._query_id+'-blast.cfg'
         #reports
-        self._hits_report_filename = self._job_id + '-blast-hits-report.txt'
+        self._hits_report_filename = self._job_id+'-blast-hits-report.txt'
         #flags
         self._have_blast_results = False
+        self._have_saved_results = False
     #end def
    
    
@@ -74,15 +80,15 @@ class BlastPrimers(iPCR_Interface):
         '''Construct a concatenated query: primer1NNNNNNNprimer2NNNNNNprimer3...
         Also save primer boundaries positions in the concatenate.'''
         all_primers = []
-        for primer in self._primers: all_primers.extend(primer.sequences)
+        for primer in self._primers: all_primers.extend(primer.str_sequences)
         self._bounds = [[[1,1],]]
         query = ''
-        for p in xrange(len(all_primers)):
+        for p, primer in enumerate(all_primers):
             #construct query
-            query += str(all_primers[p])
+            query += primer
             #calculate boundaries
-            self._bounds[-1][0][1] += len(all_primers[p])-1
-            self._bounds[-1].append(all_primers[p]) 
+            self._bounds[-1][0][1] += len(primer)-1
+            self._bounds[-1].append(primer) 
             #if not the last primer, add polyN spacer
             if p < len(all_primers)-1:
                 query += self.spacer
@@ -97,6 +103,7 @@ class BlastPrimers(iPCR_Interface):
         query_config   = SafeConfigParser()
         query_config.optionxform = str
         query_config.add_section('query')
+        query_config.set('query', 'id', str(self._primers_hash))
         query_config.set('query', 'query', str(self._query.seq))
         query_config.set('query', 'boundaries', str(self._bounds))
         query_filename = self._job_id+'-blast.cfg'
@@ -120,17 +127,18 @@ class BlastPrimers(iPCR_Interface):
                 continue
             for i in xrange(len(hsp.match)):
                 if hsp.match[i] == '|':
-                    template = Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement()
+                    template = str(Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement())
                     dimer = Dimer.from_sequences(primer, template, (query_start-bounds[0]+i, i))
                     return Duplex(primer, template, dimer)
         return None
-    #end def 
+    #end def
     
     
     def blast_query(self, entrez_query=''):
+        self._format_query()
         self._save_query_config()
         try:
-            print '\nLaunching BLAST query...'
+            print '\nLaunching BLAST query #%d...' % self._primers_hash
             blast_results = NCBIWWW.qblast('blastn', 
                                            self.database, 
                                            self._query.format('fasta'), 
@@ -164,24 +172,46 @@ class BlastPrimers(iPCR_Interface):
     #end def
 
 
-    def load_results(self):
-        #check for file existence
+    def have_saved_results(self):
         if  not os.path.isfile(self._results_filename) \
         or  not os.path.isfile(self._query_filename): 
+            print '\nNo results for BLAST query #%d were found.' % self._primers_hash
             return False
-        #load blast results
-        print '\nLoading previously saved BLAST results...'
+        self._have_saved_results = True
+        return True
+    #end def
+    
+
+    def load_results(self):
+        '''One should call have_saved_results() prior to this method.'''
+        if not self._have_saved_results: return False
+        print(('\nLoading previously saved BLAST results '
+               'for query #%d...') % self._primers_hash)
         try:
+            #check that results to be loaded are the results for the same query
+            query_id = None
+            with open(self._results_filename, 'r') as results:
+                query_id_re = re.compile('\<BlastOutput_query-def\>(.*)\<\/BlastOutput_query-def\>')
+                for line in results:
+                    match = query_id_re.search(line)
+                    if match is None: continue
+                    query_id = match.group(1).split()[0]
+                    break
+            if query_id is None:
+                print(('Error: <BlastOutput_query-def> tag was not found in %s'
+                       'The file is corrupted.')
+                      % self._results_filename)
+                return False
+            if query_id != self._query_id:
+                print(('Error: query ID in saved results:\n   %s\n'
+                       'does not match current query ID:\n   %s')
+                      % (query_id, self._query_id))
+                return False
             #load query configuration
             query_config = SafeConfigParser()
             query_config.read(self._query_filename)
             #parse query configuration
-            query = SeqRecord(Seq(query_config.get('query', 'query'), 
-                                  IUPAC.ambiguous_dna), self._job_id)
-            #if saved query represents different set of primers, discard saved results
-            if str(self._query.seq) != str(query.seq): 
-                raise AssertionError('BlastPrimers.load_results: saved query '
-                                     'differs from current query.')
+            self._bounds = eval(query_config.get('query', 'boundaries'))
             #load blast query results
             results_file = open(self._results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
@@ -198,45 +228,57 @@ class BlastPrimers(iPCR_Interface):
     #end def
     
     
+    def _find_products_in_alignment(self, alignment, products_finder):
+        hit_title = (alignment.title.split('|')[-1]).strip()
+        fwd_annealings = []
+        rev_annealings = []
+        #check and sort all hsps
+        for hsp in alignment.hsps:
+            if self._abort_event.is_set(): return None
+            #construct annealing duplex and check if it's stable
+            hsp_duplex = self._duplex_from_hsp(hsp)
+            if not hsp_duplex: continue
+            #find id of the primer
+            hsp_id = ''
+            for primer in self._primers:
+                hsp_id = primer.find_id(hsp_duplex.fwd_seq)
+                if hsp_id: break
+            #add hsp_duplex to corresponding dictionary
+            primer_dir = hsp.frame[0]
+            target_dir = hsp.frame[1]
+            #fwd hsp
+            if primer_dir == 1 and target_dir == 1:
+                product_bound = hsp.sbjct_end + hsp_duplex.fwd_3_overhang
+                fwd_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
+            #rev hsp
+            elif primer_dir == 1 and target_dir == -1:
+                product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang
+                rev_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
+        #add primers' annealings to PCR simulation
+        mixture = products_finder.create_PCR_mixture(hit_title, 
+                                                     fwd_annealings, 
+                                                     rev_annealings)
+        if mixture is None: return hit_title, None
+        return hit_title, mixture.save()
+    #end def
+    
+    
     def simulate_PCR(self):
         if not self._have_blast_results: return False
         print '\nSearching for possible PCR products in BLAST results...'
+        P_Finder = self._new_PCR_ProductsFinder()
         for record in self._blast_results:
-            _PCR_Sim = self._PCR_Simulation_factory()
-            self._PCR_Simulations[record.query] = _PCR_Sim
-            for alignment in record.alignments:
-                hit_title = (alignment.title.split('|')[-1]).strip()
-                fwd_annealings = []
-                rev_annealings = []
-                #check and sort all hsps
-                for hsp in alignment.hsps:
-                    if self._abort_event.is_set(): return False
-                    #construct annealing duplex and check if it's stable
-                    hsp_duplex = self._duplex_from_hsp(hsp)
-                    if not hsp_duplex: continue
-                    #find id of the primer
-                    hsp_id = ''
-                    for primer in self._primers:
-                        hsp_id = primer.find_id(hsp_duplex.fwd_seq)
-                        if hsp_id: break
-                    #add hsp_duplex to corresponding dictionary
-                    primer_dir = hsp.frame[0]
-                    target_dir = hsp.frame[1]
-                    #fwd hsp
-                    if primer_dir == 1 and target_dir == 1:
-                        product_bound = hsp.sbjct_end + hsp_duplex.fwd_3_overhang
-                        fwd_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
-                    #rev hsp
-                    elif primer_dir == 1 and target_dir == -1:
-                        product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang
-                        rev_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
-                #add primers' annealings to PCR simulation
-                _PCR_Sim.add_annealings(hit_title, fwd_annealings, rev_annealings)
+            PCR_Sim  = self._new_PCR_Simulation()
+            mixtures = self.parallelize_work(1, self._find_products_in_alignment, 
+                                             record.alignments, P_Finder)
+            if mixtures is None: return False
+            for hit_title, mixture_path in mixtures:
+                if mixture_path is not None:
+                    PCR_Sim.add_mixture(hit_title, mixture_path)
             #compute PCR products quantities
-            _PCR_Sim.run()
-            #remove empty query products dict
-            if not _PCR_Sim: 
-                del self._PCR_Simulations[record.query]
+            PCR_Sim.run()
+            #add successful simulation to the dict 
+            if PCR_Sim: self._PCR_Simulations[record.query] = PCR_Sim
         if not self._PCR_Simulations:
             print '\nNo possible PCR products have been found using BLAST hits.'
             return False
@@ -247,6 +289,11 @@ class BlastPrimers(iPCR_Interface):
     
     def blast_and_analyze(self, entrez_query=''):
         return self.blast_query(entrez_query) \
+        and    self.simulate_PCR()
+    #end def
+    
+    def load_and_analyze(self):
+        return self.load_results() \
         and    self.simulate_PCR()
     #end def
     
@@ -420,3 +467,41 @@ class BlastPrimers(iPCR_Interface):
         iPCR_Interface.write_reports(self)
     #end def
 #end class
+
+
+#tests
+if __name__ == '__main__':
+    import os
+    from multiprocessing import Manager
+    from Primer import Primer, load_sequence
+    import TD_Functions
+    
+    os.chdir('../')
+    
+    mgr = Manager()
+    abort_event = mgr.Event()
+    
+    TD_Functions.PCR_P.PCR_T = 53
+    TD_Functions.PCR_P.Mg    = 3e-3
+    TD_Functions.PCR_P.dNTP  = 300e-6
+    TD_Functions.PCR_P.DNA   = 1e-10
+    fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'F-TGAM_0057-268_d1', 'F-TGAM_0057-268_d1'), 0.43e-6, True)
+    rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'R-TGAM_0055-624-d4', 'R-TGAM_0055-624-d4'), 0.43e-6, True)
+    blastp = BlastPrimers(abort_event,
+                          job_id='F-TGAM_0057-268_d1-R-TGAM_0055-624-d4', 
+                          primers=[fwd_primer,
+                                   rev_primer], 
+                          min_amplicon=50, 
+                          max_amplicon=2000, 
+                          polymerase=40000, 
+                          with_exonuclease=False, 
+                          num_cycles=30,
+                          side_reactions=None, 
+                          side_concentrations=None,
+                          include_side_annealings=False)
+    
+    
+    blastp.have_saved_results()
+    blastp.load_results()
+    blastp.simulate_PCR()
+    blastp.write_reports()
