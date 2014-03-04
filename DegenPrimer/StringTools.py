@@ -26,18 +26,22 @@ import string
 import random
 from time import ctime
 from math import log
+from textwrap import TextWrapper
 
 text_width = 80
+wrapper = TextWrapper(width=text_width, expand_tabs=False)
 
 def print_exception(e):
-    print '\n%s: error code %s; %s\n' % (type(e).__name__,
-                                         hasattr(e, 'errno') and str(e.errno) or 'N/A',  
-                                         e.message or 'no message.')
+    print('\n%s: error code %s; %s\n' % 
+          (type(e).__name__,
+           hasattr(e, 'errno') and str(e.errno) or 'N/A',  
+           e.message or 'no message.'))
 #end def
     
     
 def random_text(length):
-    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _unused in xrange(length))
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) 
+                   for _unused in xrange(length))
 #end def
 
 
@@ -49,17 +53,16 @@ def time_hr(symbol='#'):
     return hr(' %s ' % ctime(), symbol)
 
 
-def wrap_text(_text, _width=text_width):
-    wrapped_text = ''
-    lines = _text.splitlines()
-    for line in lines:
-        while len(line) > _width:
-            new_line   = line[:_width]
-            last_space = new_line.rfind(' ')
-            last_space = last_space if last_space >=0 else _width-1
-            wrapped_text += new_line[:last_space+1]+'\n'
-            line = line[last_space+1:]
-        wrapped_text += line + '\n'
+def wrap_text(text, width=None):
+    #replace intermediate whitespaces with single spaces
+    text = ' '.join(text.split())
+    #wrap text
+    if width:
+        old_width = wrapper.width
+        wrapper.width = width
+        wrapped_text  = wrapper.fill(text)
+        wrapper.width = old_width
+    else: wrapped_text = wrapper.fill(text)
     return wrapped_text
 #end def
 
@@ -150,3 +153,16 @@ def format_quantity(quantity, unit='U'):
     #if everything fails for some unknown reason
     return 'N/A  %s' % unit
 #end def
+
+
+#tests
+if __name__ == '__main__':
+    txt = '''If true, TextWrapper attempts to detect sentence endings and ensure 
+    that sentences are always separated by exactly two spaces. This is generally 
+    desired for text in a monospaced font. However, the sentence detection 
+    algorithm is imperfect: it assumes that a sentence ending consists of a 
+    lowercase letter followed by one of '.', '!', or '?', possibly followed by 
+    one of '"' or "'", followed by a space. One problem with this is algorithm 
+    is that it is unable to detect the difference between “Dr.” in'''
+    print wrap_text(txt)
+    

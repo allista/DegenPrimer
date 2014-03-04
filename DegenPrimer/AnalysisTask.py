@@ -18,17 +18,16 @@ Created on Jul 25, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-#imports
-import sys
 import errno
 import traceback as tb
 from time import time, sleep
 from datetime import timedelta
 from Queue import Empty
-from multiprocessing import Queue
 from threading import Thread, Lock
-from contextlib import contextmanager
+from Bio import SeqIO
 import TD_Functions
+from OutQueue import OutQueue
+from EchoLogger import EchoLogger
 from PrimerTaskBase import PrimerTaskBase
 from BlastPrimers import BlastPrimers
 from AllSecStructures import AllSecStructures
@@ -36,12 +35,6 @@ from MultiprocessingBase import UManager
 from StringTools import print_exception
 from SeqDB import SeqDB
 from iPCR import iPCR
-try:
-    from Bio import SeqIO
-except ImportError:
-    print'The BioPython must be installed in your system.'
-    raise
-################################################################################ 
 
 
 #managers for subprocessed classes
@@ -50,27 +43,6 @@ SubroutineManager.register('AllSecStructures', AllSecStructures)
 SubroutineManager.register('SeqDB', SeqDB)
 SubroutineManager.register('iPCR', iPCR)
 SubroutineManager.register('BlastPrimers', BlastPrimers)
-
-
-class OutQueue(object):
-    '''A file-like object which puts text written into it 
-    in a cross-process queue'''
-    def __init__(self, queue=None):
-        if queue == None:
-            self._queue = Queue()
-        else: self._queue = queue
-    #end def
-    
-    @property
-    def queue(self):
-        return self._queue
-        
-    def write(self, text):
-        self._queue.put(text)
-    
-    def flush(self): pass
-#end class 
-
 
 class WaitThread(Thread):
     '''Thread that specially handle EOFError and IOError 4, interpreting them 
@@ -124,32 +96,13 @@ class AnalysisTask(PrimerTaskBase):
     parallelized subroutines for CPU-intensive computations.'''
     
     #file format for saving primers
-    _fmt = 'fasta'
-    
-    #a context manager to capture output of print into OutQueue object
-    @staticmethod
-    @contextmanager
-    def capture_to_queue(out_queue=None):
-        oldout,olderr = sys.stdout, sys.stderr
-        try:
-            out = OutQueue(out_queue)
-            #need to leave stderr due to the http://bugs.python.org/issue14308
-            sys.stdout = out #sys.stderr = out
-            yield out
-        except Exception, e:
-            print_exception(e)
-            raise
-        finally:
-            sys.stdout,sys.stderr = oldout, olderr
-    #end def
-    
+    _fmt = 'fasta'    
 
     def __init__(self, abort_event):
         PrimerTaskBase.__init__(self, abort_event)
         self._print_lock  = Lock()
         self._subroutines = [] #list of launched processes with their managers and output queues
     #end def
-    
     
     def __del__(self): self._clean_subroutines()
 
@@ -163,7 +116,7 @@ class AnalysisTask(PrimerTaskBase):
 
 
     def _generate_subroutine_entry(self):
-        with self.capture_to_queue() as out:
+        with OutQueue() as out:
             manager = SubroutineManager()
             manager.start()
         e_id     = (len(self._subroutines)+1)
@@ -362,33 +315,34 @@ class AnalysisTask(PrimerTaskBase):
 
     
     def run(self, args):
-        #reset global state of the module
-        self._subroutines = []
-        #zero time, used to calculate elapsed time
-        time0 = time()
-        #set PCR parameters
-        TD_Functions.PCR_P.set(args.options)
-        #run analysis routines and wait for them to finish
-        analysis_routines = self._run_analysis(args)
-        self._listen_subroutines()
-        #if subroutines have been terminated, abort pipeline
-        if self._abort_event.is_set():
+        with EchoLogger(args.job_id):
+            #reset global state of the module
+            self._subroutines = []
+            #zero time, used to calculate elapsed time
+            time0 = time()
+            #set PCR parameters
+            TD_Functions.PCR_P.set(args.options)
+            #run analysis routines and wait for them to finish
+            analysis_routines = self._run_analysis(args)
+            self._listen_subroutines()
+            #if subroutines have been terminated, abort pipeline
+            if self._abort_event.is_set():
+                self._clean_subroutines()
+                with self._print_lock: 
+                    print '\nAnalysisTask aborted.'
+                    print '\nTotal elapsed time: %s' % timedelta(seconds=time()-time0)
+                return False
+            #write reports
+            with self._print_lock: print '\nWriting analysis reports...'
+            for routine in analysis_routines:
+                if routine.have_results():
+                    routine.write_reports()
+                    args.register_reports(routine.reports())
+            #print last messages
+            for p_entry in self._subroutines: self._print_queue(p_entry['queue'])
+            #terminate managers
             self._clean_subroutines()
-            with self._print_lock: 
-                print '\nAnalysisTask aborted.'
-                print '\nTotal elapsed time: %s' % timedelta(seconds=time()-time0)
-            return False
-        #write reports
-        with self._print_lock: print '\nWriting analysis reports...'
-        for routine in analysis_routines:
-            if routine.have_results():
-                routine.write_reports()
-                args.register_reports(routine.reports())
-        #print last messages
-        for p_entry in self._subroutines: self._print_queue(p_entry['queue'])
-        #terminate managers
-        self._clean_subroutines()
-        print '\nDone. Total elapsed time: %s' % timedelta(seconds=time()-time0)
+            print '\nDone. Total elapsed time: %s' % timedelta(seconds=time()-time0)
         return 1
     #end def
 #end class
