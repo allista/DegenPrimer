@@ -54,6 +54,7 @@ class EchoLogger(object):
         self._olderr = sys.stderr
         sys.stdout = self
         sys.stderr = self
+        self._logger.log(self._level, '=== START LOGGING ===')
         return self
     #end def
     
@@ -65,6 +66,7 @@ class EchoLogger(object):
             traceback.print_exception(_type, _value, _traceback, file=self._olderr)
         sys.stdout = self._oldout
         sys.stderr = self._olderr
+        self._logger.log(self._level, '=== END LOGGING ===')
         return True
     #end def
     

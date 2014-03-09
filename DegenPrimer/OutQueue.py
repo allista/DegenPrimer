@@ -20,36 +20,37 @@ Created on Mar 4, 2014
 
 import sys
 import traceback
-from multiprocessing import Queue
+from multiprocessing.queues import Queue
 from StringTools import print_exception
 
-class OutQueue(object):
+class OutQueue(Queue):
     '''A file-like object which puts text written into it 
     in a cross-process queue'''
-    def __init__(self, queue=None):
-        if queue == None:
-            self._queue = Queue()
-        else: self._queue = queue
+    def __init__(self, maxsize=0):
+        Queue.__init__(self, maxsize)
+        self._id     = None
         #saved std-streams
-        self._oldout    = None
-        self._olderr    = None
+        self._oldout = None
+        self._olderr = None
     #end def
-    
-    @property
-    def queue(self):
-        return self._queue
+
+    def set_id(self, _id):
+        self._id = _id
+        return self
+    #end def
+
+    def put(self, obj, block=True, timeout=None):
+        Queue.put(self, (self._id, obj), block=block, timeout=timeout)
         
-    def write(self, text):
-        self._queue.put(text)
+    def write(self, text): self.put(text)
     
     def flush(self): pass
-    
     
     def __enter__(self):
         self._oldout = sys.stdout
         self._olderr = sys.stderr
-        sys.stdout = self
-        sys.stderr = self
+        sys.stdout = sys.stdout = self
+        if self._id is None: self._id = -1
         return self
     #end def
     
@@ -59,6 +60,7 @@ class OutQueue(object):
             traceback.print_exception(_type, _value, _traceback, file=self._olderr)
         sys.stdout = self._oldout
         sys.stderr = self._olderr
+        self._id = None
         return True
     #end def
 #end class

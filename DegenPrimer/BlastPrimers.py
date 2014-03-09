@@ -35,6 +35,7 @@ from iPCR_Interface import iPCR_Interface
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
 from SecStructures import Dimer, Duplex
+from WorkCounter import WorkCounter
 import TD_Functions, SecStructures
 
 
@@ -134,9 +135,10 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     #end def
     
     
-    def blast_query(self, entrez_query=''):
-        self._format_query()
-        self._save_query_config()
+    def blast_query(self, counter, entrez_query=''):
+        counter.set_work(5)
+        self._format_query(); counter.count()
+        self._save_query_config(); counter.count()
         try:
             print '\nLaunching BLAST query #%d...' % self._primers_hash
             blast_results = NCBIWWW.qblast('blastn', 
@@ -149,16 +151,19 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
                                            filter       = self.fltr,
                                            entrez_query = entrez_query,
                                            ungapped_alignment = self.no_gaps,)
+            counter.count()
             #save results to a file
             results_file = open(self._results_filename, 'w')
             results_file.write(blast_results.read())
             results_file.close()
             blast_results.close()
             print '\nBLAST output was written to:\n   %s' % self._results_filename
+            counter.count()
             #parse results
             results_file  = open(self._results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
             results_file.close()
+            counter.count()
         except Exception, e:
             print '\nFailed to obtain BLAST query results from NCBI.'
             print_exception(e)
@@ -182,7 +187,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     #end def
     
 
-    def load_results(self):
+    def load_results(self, counter):
         '''One should call have_saved_results() prior to this method.'''
         if not self._have_saved_results: return False
         print(('\nLoading previously saved BLAST results '
@@ -216,7 +221,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
             results_file = open(self._results_filename, 'r')
             self._blast_results = list(NCBIXML.parse(results_file))
             results_file.close()
-            self._have_blast_results = True
+            self._have_blast_results = len(self._blast_results)
         except Exception, e:
             print '\nFailed to load blast results:\n   %s\n   %s' \
                 % (self._results_filename, self._query_filename)
@@ -224,6 +229,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
             return False
         print '\nPreviously saved BLAST results were loaded:\n   %s\n   %s' \
               % (self._results_filename, self._query_filename)
+        counter.done()
         return True
     #end def
     
@@ -255,7 +261,8 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
                 product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang
                 rev_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
         #add primers' annealings to PCR simulation
-        mixture = products_finder.create_PCR_mixture(hit_title, 
+        mixture = products_finder.create_PCR_mixture(WorkCounter(),
+                                                     hit_title, 
                                                      fwd_annealings, 
                                                      rev_annealings)
         if mixture is None: return hit_title, None
@@ -263,20 +270,25 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     #end def
     
     
-    def simulate_PCR(self):
+    def simulate_PCR(self, counter):
         if not self._have_blast_results: return False
         print '\nSearching for possible PCR products in BLAST results...'
         P_Finder = self._new_PCR_ProductsFinder()
-        for record in self._blast_results:
-            PCR_Sim  = self._new_PCR_Simulation()
-            mixtures = self.parallelize_work(1, self._find_products_in_alignment, 
-                                             record.alignments, P_Finder)
+        counter.set_subwork(self._blast_results)
+        for i, record in enumerate(self._blast_results):
+            #setup counter
+            counter[i].set_subwork(2)
+            #find_products
+            mixtures = self.parallelize_work(0.1, self._find_products_in_alignment, 
+                                             record.alignments, P_Finder, 
+                                             counter=counter[i][0])
             if mixtures is None: return False
+            #collect results and run the simulation
+            PCR_Sim = self._new_PCR_Simulation()
             for hit_title, mixture_path in mixtures:
                 if mixture_path is not None:
                     PCR_Sim.add_mixture(hit_title, mixture_path)
-            #compute PCR products quantities
-            PCR_Sim.run()
+            PCR_Sim.run(counter[i][1])
             #add successful simulation to the dict 
             if PCR_Sim: self._PCR_Simulations[record.query] = PCR_Sim
         if not self._PCR_Simulations:
@@ -287,14 +299,16 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     #end def
     
     
-    def blast_and_analyze(self, entrez_query=''):
-        return self.blast_query(entrez_query) \
-        and    self.simulate_PCR()
+    def blast_and_analyze(self, counter, entrez_query=''):
+        counter.set_subwork(2)
+        return self.blast_query(counter[0], entrez_query) \
+        and    self.simulate_PCR(counter[1])
     #end def
     
-    def load_and_analyze(self):
-        return self.load_results() \
-        and    self.simulate_PCR()
+    def load_and_analyze(self, counter):
+        counter.set_subwork(2)
+        return self.load_results(counter[0]) \
+        and    self.simulate_PCR(counter[1])
     #end def
     
     
@@ -469,12 +483,16 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
 #end class
 
 
+
 #tests
 if __name__ == '__main__':
-    import os
+    import sys
+    from time import sleep
     from multiprocessing import Manager
     from Primer import Primer, load_sequence
-    import TD_Functions
+    from WorkCounter import WorkCounterManager
+    from WaitingThread import WaitingThread
+    from threading import Lock
     
     os.chdir('../')
     
@@ -485,8 +503,10 @@ if __name__ == '__main__':
     TD_Functions.PCR_P.Mg    = 3e-3
     TD_Functions.PCR_P.dNTP  = 300e-6
     TD_Functions.PCR_P.DNA   = 1e-10
+    
     fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'F-TGAM_0057-268_d1', 'F-TGAM_0057-268_d1'), 0.43e-6, True)
     rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'R-TGAM_0055-624-d4', 'R-TGAM_0055-624-d4'), 0.43e-6, True)
+    
     blastp = BlastPrimers(abort_event,
                           job_id='F-TGAM_0057-268_d1-R-TGAM_0055-624-d4', 
                           primers=[fwd_primer,
@@ -499,9 +519,23 @@ if __name__ == '__main__':
                           side_reactions=None, 
                           side_concentrations=None,
                           include_side_annealings=False)
+    if not blastp.have_saved_results(): sys.exit()
+
+    cmgr = WorkCounterManager()
+    cmgr.start()
     
+    plock = Lock()    
     
-    blastp.have_saved_results()
-    blastp.load_results()
-    blastp.simulate_PCR()
+    counter = cmgr.WorkCounter()
+    job = WaitingThread(plock, 1, target=blastp.load_and_analyze, 
+                        name='load_and_analyze', kwargs=dict(counter=counter))
+    job.start(); print ''
+    while job.is_alive():
+        with plock: 
+            print counter
+        sleep(0.1)
+    job.join()
+    with plock: 
+        print counter
+    
     blastp.write_reports()

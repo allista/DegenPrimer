@@ -130,9 +130,6 @@ class ShelvedMixture(object):
 #end class
 
 
-#minimum equilibrium constant: reactions with EC less than this will not be taken into account
-min_K = 100  
-
 class MixtureFactory(AbortableBase):
     def __init__(self, 
                   abort_event,
@@ -165,9 +162,6 @@ class MixtureFactory(AbortableBase):
             good_annealings = (_pos, [], _template)
             bad_annealings  = (_pos, [], _template)
             for _duplex, _id in _duplexes:
-                #check equilibrium constant
-                if _duplex.K < min_K: continue
-                _duplex.filter_dimers_by_K(min_K)
                 #check if there are such primers in the system at all
                 duplex_with_primer = False
                 for primer in self._primers:
@@ -188,7 +182,7 @@ class MixtureFactory(AbortableBase):
     #end def
     
 
-    def create_PCR_mixture(self, hit, fwd_annealings, rev_annealings):
+    def create_PCR_mixture(self, counter, hit, fwd_annealings, rev_annealings):
         '''Within annealing sites of primers find PCR products; add other 
         annealings as side reactions.
         hit - name of a target sequence
@@ -198,8 +192,11 @@ class MixtureFactory(AbortableBase):
         of the target sequence (the structure is the same).
         Return PCR_Mixture object if some products produced by the annealings 
         were found. None otherwise.'''
-        if not fwd_annealings or not rev_annealings: return None
+        if not fwd_annealings or not rev_annealings: 
+            counter.done(); return None
         print 'PCR Simulation: searching for possible PCR products in %s...' % hit
+        if self._include_side_annealings: counter.set_work(3)
+        else: counter.set_work(2)
         mixture = PCR_Mixture(hit)        
         hit = str(hit) #if hit is unicode
         #sort annealings into good (ones that are suitable for product generation) 
@@ -213,6 +210,7 @@ class MixtureFactory(AbortableBase):
         #sort good annealings by position
         good_annealings[1].sort(key=lambda x: x[0])
         good_annealings[0].sort(key=lambda x: x[0])
+        counter.count()
         #find possible products in range [min_amplicon, max_amplicon]
         products_added  = False
         added_positons  = (set(), set())
@@ -234,6 +232,7 @@ class MixtureFactory(AbortableBase):
                     mixture.add_annealing(rev_dups, rev_templ)
                     added_positons[0].add(rev_pi)
                 if not products_added: products_added = True
+        counter.count()
         if products_added: #if some products were found, set nonzero flag and save PCR mixture to the DB
             if self._include_side_annealings: #add side annealings if requested
                 self._add_side_annealings(mixture, [ann for i, ann in enumerate(good_annealings[1])
@@ -241,6 +240,7 @@ class MixtureFactory(AbortableBase):
                 self._add_side_annealings(mixture, [ann for i, ann in enumerate(good_annealings[0])
                                                        if i not in added_positons[0]])
                 self._add_side_annealings(mixture, bad_annealings)
+            counter.count()
             print 'PCR Simulation: found some possible products in %s.' % hit
             return mixture
         print 'PCR Simulation: no products was found in %s.' % hit

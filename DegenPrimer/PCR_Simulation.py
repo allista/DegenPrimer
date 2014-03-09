@@ -29,27 +29,30 @@ from TD_Functions import format_PCR_conditions
 from StringTools import wrap_text, line_by_line, hr
 from Product import Region
 from MultiprocessingBase import Parallelizer, FuncManager
+from SecStructures import min_K
 from SinglePCR import PCR_Base, SinglePCR
-from PCR_Mixture import ShelvedMixture, min_K
+from PCR_Mixture import ShelvedMixture
 from tmpStorage import roDict, cleanup_file, register_tmp_file
 
 
 #manager to isolate forking point in a low-memory process
 class run_pcr_from_file(object):
-    def __init__(self, pcr):
+    def __init__(self, pcr, counter=None):
         self._pcr = pcr
+        self._counter = counter
+    #end def
         
     def __call__(self, mixture_path):
-        return self._pcr(ShelvedMixture(mixture_path))
+        return self._pcr(ShelvedMixture(mixture_path), self._counter)
 #end class
 
 #manager to isolate forking point in a low-memory process
-def _ParallelPCR(abort_event, pcr, mixture_paths):
+def _ParallelPCR(counter, abort_event, pcr, mixture_paths):
     p = Parallelizer()
     p.start()
-    result_path = p.parallelize_work(abort_event, False, 1, 
+    result_path = p.parallelize_work(abort_event, False, 0.1, 
                                      run_pcr_from_file(pcr), 
-                                     mixture_paths)
+                                     mixture_paths, counter=counter)
     result_path = result_path._getvalue()
     p.shutdown()
     return result_path
@@ -168,19 +171,22 @@ class PCR_Simulation(PCR_Base):
     #end def
     
 
-    def run(self):
+    def run(self, counter):
         if not self._PCR_mixtures: return
         print('PCR Simulation: calculating equilibrium in the system '
               'and running the simulation...')
         pcr = self._new_PCR()
         if len(self._PCR_mixtures) > 1:
-            results_path = self._pcrM.ParallelPCR(self._abort_event, pcr,
+            counter.set_subwork(2, (len(self._PCR_mixtures), 1))
+            results_path = self._pcrM.ParallelPCR(counter[0],
+                                                  self._abort_event, pcr,
                                                   self._PCR_mixtures.values())
             results_path = results_path._getvalue()
             results = roDict(results_path)['result']
             cleanup_file(results_path)
+            counter[1].done()
         else:
-            pcr = run_pcr_from_file(pcr)
+            pcr = run_pcr_from_file(pcr, counter)
             results = (pcr(self._PCR_mixtures.itervalues().next()),)
         if results is None or self._abort_event.is_set(): return
         for hit_id, obj_val, products, reaction_end in results:

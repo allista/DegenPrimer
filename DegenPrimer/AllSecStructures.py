@@ -18,7 +18,6 @@ Created on Feb 15, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from itertools import chain
 from Equilibrium import Equilibrium
 from ReporterInterface import ReporterInterface
 from MultiprocessingBase import MultiprocessingBase
@@ -90,6 +89,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
         all_structures.update(dict().fromkeys(result[1].keys(), result[0]))
     #end def
     
+    
     def find_structures(self):
         #self structures jobs
         self_jobs  = []
@@ -98,7 +98,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
             self._all_primers.extend(primer.seq_records)
             #self structure jobs
             self_jobs.append(self.prepare_jobs(self._self_structures, 
-                                                primer.seq_records, None))
+                                               primer.seq_records, None))
         #cross structures jobs
         num_primers = len(self._all_primers)
         pair_index  = []
@@ -106,19 +106,19 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
             for j in xrange(i+1, num_primers):
                 pair_index.append((i,j))
         cross_jobs = self.prepare_jobs(self._cross_structures, 
-                                        pair_index, None, self._all_primers)
+                                       pair_index, None, self._all_primers)
         #run jobs
-        self.start_jobs(list(chain(*self_jobs))+cross_jobs)
+        self.start_jobs(cross_jobs, *self_jobs)
         #assemble self structures jobs
         for i, jobs in enumerate(self_jobs):
             structures = [None]*len(self._primers[i].seq_records)
-            self.join_jobs(jobs, 1, self._structure_assembler, 
-                            structures, self._reactions, self._all_structures)
+            self.get_result(jobs, 1, self._structure_assembler, 
+                           structures, self._reactions, self._all_structures)
             self._self.append(structures)
         #assemble cross structures jobs
         self._cross = [None]*len(pair_index)
-        self.join_jobs(cross_jobs, 1, self._structure_assembler, 
-                        self._cross, self._reactions, self._all_structures)
+        self.get_result(cross_jobs, 1, self._structure_assembler, 
+                       self._cross, self._reactions, self._all_structures)
         #prepare primer concentrations dictionary
         for primer in self._primers:
             self._concentrations.update(dict().fromkeys((p for p in primer.str_sequences), 
@@ -127,20 +127,25 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
     #end def
     
     
-    def calculate_equilibrium(self):
+    def calculate_equilibrium(self, counter):
         if not self._reactions: return False
+        counter.set_subwork(3)
         #calculate equilibrium
         equilibrium = Equilibrium(self._abort_event, self._reactions, self._concentrations)
-        equilibrium.calculate()
+        equilibrium.calculate(counter[0])
         if equilibrium.solution is None: return False
         #calculate equilibrium primer concentrations
         self._equilibrium_concentrations = dict()
+        counter[1].set_work(self._concentrations)
         for primer in self._concentrations:
             _C = equilibrium.reactants_consumption(primer)[0]
             self._equilibrium_concentrations[primer] = self._concentrations[primer] - _C
+            counter[1].count()
         #set conversion degrees
+        counter[2].set_work(equilibrium.solution)
         for r_hash in equilibrium.solution:
             self._all_structures[r_hash].set_conversion_degree(r_hash, equilibrium.solution[r_hash])
+            counter[2].count()
     #end def
     
     
@@ -231,39 +236,45 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
 
 #tests
 if __name__ == '__main__':
+    import sys
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
     from Primer import Primer
     from multiprocessing import Event
+    from WorkCounter import WorkCounter
+    import cProfile
+    
     abort_event = Event()
-#    import cProfile
+    
     
     TD_Functions.PCR_P.PCR_T = 53
-    fwd_primer  = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATCC').reverse_complement(),id='primer1'), 0.9e-6)
-    fwd_primer.generate_components(); fwd_primer.calculate_Tms()
-    rev_primer  = Primer(SeqRecord(Seq('NAAGGYTTAGAKGCGGAAG').complement(),id='primer2'), 0.9e-6)
-    rev_primer.generate_components(); rev_primer.calculate_Tms()
+    fwd_primer  = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATCC').reverse_complement(),id='primer1'), 0.9e-6, True)
+    rev_primer  = Primer(SeqRecord(Seq('NAAGGYTTAGAKGCGGAAG').complement(),id='primer2'), 0.9e-6, True)
     print repr(fwd_primer)
     print repr(rev_primer)
     
-    ss = SecStructures(fwd_primer.seq_records[0])
-    sc = SecStructures(fwd_primer.seq_records[0], rev_primer.seq_records[0])
-    
-    print ss.formatShort()
+#    ss = SecStructures(fwd_primer.seq_records[0])
+#    sc = SecStructures(fwd_primer.seq_records[0], rev_primer.seq_records[0])
+#    
+#    print ss.formatShort()
 
     all_structs = AllSecStructures(abort_event, 'test', [fwd_primer, rev_primer])
-    all_structs.find_structures()
+#    all_structs.find_structures()
+    cProfile.run('all_structs.find_structures()', 'all_structs.profile')
+
 
     print all_structs.concentrations()
     print all_structs.reactions()
-    
+#    sys.exit()
 #    cProfile.run('''
 #for i in xrange(100):
 #    all_structs.calculate_equilibrium()
 #''',
 #'all_structs.profile')
 
-    all_structs.calculate_equilibrium()
+    c = WorkCounter()
+    all_structs.calculate_equilibrium(c)
+    print c.percent()
     
     print all_structs.equilibrium_concentrations()
     print ''

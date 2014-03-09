@@ -138,84 +138,11 @@ def format_PCR_conditions(primers, polymerase=None):
 #end_def
 
 
-def dimer_dG(dimer, seq1, seq2):
-    '''Calculate 'standard' dG at 37C of dimer annealing process.
-    dimer -- an instance of Dimer class which represents a dimer structure.
-    seq1, seq2 -- sequences constituting a dimer, given in 5'->3' orientation.'''
-    fwd_matches = dimer.fwd_matches
-    #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
-    rev_matches = dimer.rev_matches
-    #e.g. 3-'(13,14,15,19,20)-5'
-    seq_str = str(seq1)
-    seq_len = len(seq_str)
-    rev_str = str(seq2[::-1])
-    rev_len = len(rev_str)
-    #initial dG of annealing
-    dG = NN.pair_dG_37('ini', 'ini')
-    #check for 'left' dangling end
-    if   fwd_matches[0] == 0 and rev_matches[0] > 0: #3' dangling
-        pair    = rev_str[rev_matches[0]]+rev_str[rev_matches[0]-1]
-        reverse = seq_str[0]+'-' 
-        dG +=  NN.pair_dG_37(pair, reverse)
-    elif rev_matches[0] == 0 and fwd_matches[0] > 0: #5' dangling
-        pair    = seq_str[fwd_matches[0]-1]+seq_str[fwd_matches[0]]
-        reverse = '-'+rev_str[0] 
-        dG +=  NN.pair_dG_37(pair, reverse)
-    #check for 'left' terminal mismatch
-    elif fwd_matches[0] > 0 and rev_matches[0] > 0:
-        dG += NN.Terminal_mismatch_mean
-    #check for 'left' terminal AT
-    elif fwd_matches[0] == 0 and rev_matches[0] == 0:
-        if seq_str[0] == 'A' or seq_str[0] == 'T':
-            dG += NN.pair_dG_37('ter', 'ter')
-    #check for 'right' dangling end
-    if   fwd_matches[-1] == seq_len-1 and rev_matches[-1] < rev_len-1: #5' dangling
-        pair    = rev_str[rev_matches[-1]+1]+rev_str[rev_matches[-1]]
-        reverse = '-'+seq_str[-1] 
-        dG +=  NN.pair_dG_37(pair, reverse)
-    elif rev_matches[-1] == rev_len-1 and fwd_matches[-1] < seq_len-1: #3' dangling
-        pair    = seq_str[fwd_matches[-1]]+seq_str[fwd_matches[-1]+1]
-        reverse = rev_str[-1]+'-' 
-        dG +=  NN.pair_dG_37(pair, reverse)
-    #check for 'right' terminal mismatch
-    elif fwd_matches[-1]  < seq_len-1 and rev_matches[0] < rev_len-1:
-        dG += NN.Terminal_mismatch_mean
-    #check for 'right' terminal AT
-    elif fwd_matches[-1] == seq_len-1 and rev_matches[-1] == rev_len-1:
-        if seq_str[-1] == 'A' or seq_str[-1] == 'T':
-            dG += NN.pair_dG_37('ter', 'ter')
-    #stacking and mismatches
-    for i in xrange(len(fwd_matches)-1):
-        f_match = fwd_matches[i]
-        f_next  = fwd_matches[i+1]
-        r_match = rev_matches[i]
-        r_next  = rev_matches[i+1]
-        #if either || or |x| or |xx|
-        if f_next-f_match < 4:
-            pair    = seq_str[f_match:f_match+2]
-            reverse = rev_str[r_match:r_match+2]
-            #salt-corrected dG
-            dG += NN.pair_dG_37(pair, reverse)
-            #if ||
-            if f_next-f_match == 1: continue
-            #if |x| or |xx|
-            elif f_next-f_match < 4:
-                pair1    = rev_str[r_next-1:r_next+1][::-1]
-                reverse1 = seq_str[f_next-1:f_next+1][::-1]
-                dG += NN.pair_dG_37(pair1, reverse1)
-                continue
-        #loop
-        else:
-            dG += NN.internal_loop_dG_37(f_next-f_match-1)
-    #dG salt correction
-    dG_Na   = NN.dG_Na_coefficient_oligo * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
-    return dG + dG_Na
-#end def
-
-
 def dimer_dG_corrected(dimer, seq1, seq2):
     '''calculate dG of a dimer corrected to current PCR conditions including 
-    salt concentrations and temperature. Dummy for now'''
+    salt concentrations and temperature.
+    dimer -- an instance of Dimer class which represents a dimer structure.
+    seq1, seq2 -- sequences constituting a dimer, given in 5'->3' orientation.'''
     fwd_matches = dimer.fwd_matches
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
     rev_matches = dimer.rev_matches
@@ -298,68 +225,11 @@ def dimer_dG_corrected(dimer, seq1, seq2):
 #end def
 
 
-def hairpin_dG(hairpin, seq):
-    '''Calculate 'standard' dG at 37C of hairpin annealing process.
-    hairpin -- an instance of Hairpin class which represents a hairpin structure.
-    seq -- sequence which folds into the hairpin, given in 5'->3' orientation.'''
-    fwd_matches = hairpin.fwd_matches
-    #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
-    rev_matches = hairpin.rev_matches
-    #e.g  3'-(24,23,22,18,17)...-5'
-    seq_str = str(seq)
-    seq_len = len(seq_str)
-    #initial dG of annealing
-    dG = NN.pair_dG_37('ini', 'ini')
-    #check for 'left' dangling end
-    if   fwd_matches[0] == 0 and rev_matches[0] < seq_len-1: #3'-end
-        pair    = seq_str[rev_matches[0]]+seq_str[rev_matches[0]+1]
-        reverse = seq_str[0] + '-'
-        dG +=  NN.pair_dG_37(pair, reverse)
-    elif fwd_matches[0] > 0 and rev_matches[0] == seq_len-1: #5'-end
-        pair    = seq_str[fwd_matches[0]-1]+seq_str[fwd_matches[0]]
-        reverse = '-' + seq_str[-1]
-        dG +=  NN.pair_dG_37(pair, reverse)
-    #check for 'left' terminal mismatch
-    elif fwd_matches[0] > 0 and rev_matches[0] < seq_len-1:
-        dG += NN.Terminal_mismatch_mean
-    #check for 'left' terminal AT
-    elif fwd_matches[0] == 0 and rev_matches[0] == seq_len-1:
-        if seq_str[0] == 'A' or seq_str[0] == 'T':
-            dG += NN.pair_dG_37('ter', 'ter')
-    #stacking and mismatches
-    for i in xrange(len(fwd_matches)-1):
-        f_match = fwd_matches[i]
-        f_next  = fwd_matches[i+1]
-        r_match = rev_matches[i]
-        r_next  = rev_matches[i+1]
-        #if either || or |x| or |xx|
-        if f_next-f_match < 4:
-            pair    = seq_str[f_match:f_match+2]
-            reverse = seq_str[r_match-1:r_match+1][::-1]
-            #salt-corrected dG
-            dG += NN.pair_dG_37(pair, reverse)
-            #if ||
-            if f_next-f_match == 1: continue
-            #if |x| or |xx|
-            elif f_next-f_match < 4:
-                pair1    = seq_str[r_next:r_next+2]
-                reverse1 = seq_str[f_next-1:f_next+1][::-1]
-                dG += NN.pair_dG_37(pair1, reverse1)
-        #internal loop
-        else:
-            dG += NN.internal_loop_dG_37(f_next-f_match-1)
-    #hairpin loop
-    hp_str = seq_str[fwd_matches[-1]:rev_matches[-1]+1]
-    dG += NN.hairpin_loop_dG_37(hp_str)
-    #dG salt correction
-    dG_Na   = NN.dG_Na_coefficient_oligo * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
-    return dG + dG_Na
-#end def
-
-
 def hairpin_dG_corrected(hairpin, seq):
     '''calculate dG of a hairpin corrected to current PCR conditions including 
-    salt concentrations and temperature.'''
+    salt concentrations and temperature.
+    hairpin -- an instance of Hairpin class which represents a hairpin structure.
+    seq -- sequence which folds into the hairpin, given in 5'->3' orientation.'''
     fwd_matches = hairpin.fwd_matches
     #e.g. 5'-(2 ,3 ,4 ,8 ,9 )...-3'
     rev_matches = hairpin.rev_matches
@@ -469,9 +339,7 @@ if __name__ == '__main__':
     print vars(PCR_P)
     
     print seq1, seq2
-    print dimer_dG(dimer12, seq1, seq2)
     print dimer_dG_corrected(dimer12, seq1, seq2)
     print ''
     print seq3, seq4
-    print dimer_dG(dimer34, seq3, seq4)
     print dimer_dG_corrected(dimer34, seq3, seq4)

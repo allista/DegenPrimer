@@ -37,9 +37,13 @@ class iPCR(iPCR_Base):
     #end def
     
     
-    def simulate_PCR(self, seq_files, seq_ids=None):
-        if self._find_products(self._PCR_Simulation, self._ProductsFinder, seq_files, seq_ids):
-            self._PCR_Simulation.run()
+    def simulate_PCR(self, counter, seq_files, seq_ids=None):
+        counter.set_subwork(2, (1, 1))
+        if self._find_products(counter[0], 
+                               self._PCR_Simulation, 
+                               self._ProductsFinder, 
+                               seq_files, seq_ids):
+            self._PCR_Simulation.run(counter[1])
             self._have_results = bool(self._PCR_Simulation)
             return self._have_results
         return False
@@ -104,21 +108,25 @@ class iPCR(iPCR_Base):
 
 #tests
 if __name__ == '__main__':
+    import sys, time
     from multiprocessing import Manager
     from Primer import Primer, load_sequence
+    from WorkCounter import WorkCounterManager
+    from WaitingThread import WaitingThread
+    from threading import Lock
     import TD_Functions
     
     mgr = Manager()
     abort_event = mgr.Event()
     
-    TD_Functions.PCR_P.PCR_T = 53
+    TD_Functions.PCR_P.PCR_T = 60
     TD_Functions.PCR_P.Mg    = 3e-3
     TD_Functions.PCR_P.dNTP  = 300e-6
     TD_Functions.PCR_P.DNA   = 1e-10
     fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'fwd_test', 'fwd_test'), 0.43e-6, True)
     rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'rev_test', 'rev_test'), 0.43e-6, True)
     ipcr = iPCR(abort_event,
-                max_mismatches=6,
+                max_mismatches=5,
                 job_id='test-job', 
                 primers=[fwd_primer,
                          rev_primer], 
@@ -130,14 +138,31 @@ if __name__ == '__main__':
                 side_reactions=None, 
                 side_concentrations=None,
                 include_side_annealings=True)
+    cmgr = WorkCounterManager()
+    cmgr.start()
+    counter = cmgr.WorkCounter()
     
-    ipcr.simulate_PCR(('../ThGa.fa', #single sequence
-                    '../Ch5_gnm.fa', '../ThDS1.fa', '../ThES1.fa', #long sequences 
-                    '../ThDS1-FC.fa', '../ThDS1-850b-product.fa', #short sequences
-                       ))
+    plock = Lock()
+        
+    job = WaitingThread(plock, 1, target=ipcr.simulate_PCR, 
+                        name='simulate_PCR',
+                        args=(counter, 
+                              ('../ThGa.fa', #single sequence
+#                              '../Ch5_gnm.fa', #'../ThDS1.fa', '../ThES1.fa', #long sequences 
+                              #'../ThDS1-FC.fa', '../ThDS1-850b-product.fa', #short sequences
+                              ),))
+    job.start(); print ''
+    while job.is_alive():
+        with plock: print counter
+        time.sleep(0.05)
+    job.join()
+    with plock: print counter
     
-    ipcr.write_products_report()
-    ipcr.write_report()
+    from WorkCounter import plot_history
+    plot_history(counter._getvalue())
+    
+#    ipcr.write_products_report()
+#    ipcr.write_report()
     
 ############################## statistics ######################################
 #TD_Functions.PCR_P.PCR_T = 53

@@ -26,6 +26,7 @@ from copy import deepcopy
 from Equilibrium import Equilibrium, Reaction
 from AbortableBase import AbortableBase
 from MultiprocessingBase import MultiprocessingBase
+from WorkCounter import WorkCounter
 import TD_Functions
 
 
@@ -99,22 +100,25 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
     def _reactions_assembler(index, result, reactions):
         reactions.update(result)
     
-    def _construct_annealing_reactions(self, pcr_mixture):
+    def _construct_annealing_reactions(self, pcr_mixture, counter):
+        counter.set_work(pcr_mixture.annealings)
         reactions = dict()
         jobs = self.prepare_jobs(self._construct_annealing_reaction, 
                                  pcr_mixture.annealings, None, 
                                  pcr_mixture.templates)
         self.start_jobs(jobs)
-        self.join_jobs(jobs, 1, self._reactions_assembler, reactions)
+        self.get_result(jobs, 1, self._reactions_assembler, 
+                       reactions, counter=counter)
         self.clean_jobs(jobs)
         if self._abort_event.is_set(): return None
         return reactions
     #end def
     
     
-    def _calculate_equilibrium(self, pcr_mixture):
+    def _calculate_equilibrium(self, pcr_mixture, counter):
+        counter.set_subwork(2, (1, 10))
         #assemble reactions and concentrations for this hit
-        reactions = self._construct_annealing_reactions(pcr_mixture)
+        reactions = self._construct_annealing_reactions(pcr_mixture, counter[0])
         if not reactions: return None
         reactions.update(self._side_reactions)
         concentrations = dict(self._primers_concentrations)
@@ -125,7 +129,7 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
         concentrations.update(self._side_concentrations)
         #calculate equilibrium
         equilibrium = Equilibrium(self._abort_event, reactions, concentrations)
-        equilibrium.calculate()
+        equilibrium.calculate(counter[1])
         return equilibrium
     #end def
     
@@ -149,13 +153,16 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
     #end def
     
     
-    def _calculate_quantities(self, pcr_mixture, equilibrium):
+    def _calculate_quantities(self, pcr_mixture, equilibrium, counter):
         if not equilibrium: return None, None
         cur_state = [TD_Functions.PCR_P.dNTP*4.0, #a matrix is considered to have equal quantities of each letter
                      dict(self._primers_concentrations), []]
         reaction_end = {'poly':[], 'cycles':3}
         cur_primers,cur_variants = cur_state[1],cur_state[2]
         products = pcr_mixture.products
+        counter.set_subwork(2, (2, self._num_cycles-2))
+        #first two cycles
+        counter[0].set_work(products)
         for product_id, product in products.iteritems():
             product_len = len(product)
             #forward primer annealing, first cycle
@@ -180,6 +187,7 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
                     #at this point concentrations of both strands of a product are equal
                     var = [f_id, r_id, fwd_strand_2, product_id] #a variant of *dimeric* product
                     cur_variants.append(var)
+            counter[0].count()
         if not cur_variants: return None, None
         #check if primers or dNTP were used in the first three cycles
         if cur_state[0] <= 0 or min(cur_state[1]) <= 0:
@@ -192,6 +200,7 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
             print 'Try to change reaction pcr_mixture.'
             return None, None 
         #all consequent PCR cycles
+        counter[1].set_work(self._num_cycles)
         cur_variants.sort(key=lambda(x): x[2])
         for cycle in xrange(3, self._num_cycles+1):
             if self._abort_event.is_set(): break
@@ -222,6 +231,7 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
             reaction_end['cycles'] = cycle
             #if no dNTP left, end the reaction
             if cur_state[0] <= 0: break
+            counter[1].count()
         #end cycles
         reaction_end['dNTP'] = cur_state[0]/4.0 if cur_state[0] >= 0 else 0
         #sum up all variants of each product
@@ -232,6 +242,7 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
         products = dict([prod for prod in products.items() 
                         if prod[1].quantity > max(TD_Functions.PCR_P.DNA, 
                                                   max_product_quantity*self._min_quantity_factor)])
+        counter[1].done()
         return products, reaction_end
     #end def
     
@@ -312,9 +323,12 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
     #end def
 
     
-    def __call__(self, pcr_mixture):
-        equilibrium = self._calculate_equilibrium(pcr_mixture)
-        products, reaction_end = self._calculate_quantities(pcr_mixture, equilibrium)
+    def __call__(self, pcr_mixture, counter=None):
+        if not counter: counter = WorkCounter() 
+        counter.set_subwork(2, (len(pcr_mixture.annealings), 
+                                len(pcr_mixture.products)*self._num_cycles/2.0))
+        equilibrium = self._calculate_equilibrium(pcr_mixture, counter[0])
+        products, reaction_end = self._calculate_quantities(pcr_mixture, equilibrium, counter[1])
         return pcr_mixture.reaction_id, equilibrium.objective_value, products, reaction_end
     #end def
 #end class

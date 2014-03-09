@@ -21,12 +21,12 @@ Created on Mar 15, 2013
 import TD_Functions
 from scipy.optimize import fmin_l_bfgs_b
 from StringTools import wrap_text
-from iPCR_Base import iPCR_Base
+from iPCR_Interface import iPCR_Interface
 from MultiprocessingBase import MultiprocessingBase
 from AllSecStructures import AllSecStructures
 
 
-class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
+class PCR_Optimizer(MultiprocessingBase, iPCR_Interface):
     '''
     Repeatedly perform PCR simulation varying parameters 
     to find optimal conditions
@@ -34,11 +34,14 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
 
     _PCR_report_suffix = 'PCR-optimization'
     
-    def __init__(self, abort_event, max_steps, purity, *args, **kwargs):
+    def __init__(self, 
+                  abort_event, max_steps, purity, max_mismatches,
+                  *args, **kwargs):
         MultiprocessingBase.__init__(self, abort_event)
-        iPCR_Base.__init__(self, *args, **kwargs)
+        iPCR_Interface.__init__(self, *args, **kwargs)
         #simulators
         self._sec_structures     = None
+        self._ProductsFinder     = self._new_PCR_ProductsFinder()
         self._PCR_Simulations    = []
         #target
         self._product_bounds     = None
@@ -150,7 +153,8 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
             self._iparams.append((par['ini']-self._iscales[-1]/2)/self._iscales[-1])
             self._ibounds.append(((par['min']-self._iscales[-1]/2)/self._iscales[-1], 
                                   (par['max']-self._iscales[-1]/2)/self._iscales[-1]))
-        #find possible products
+        #find match positions
+#        self._matches = 
         if not self._find_annealings((seq_file,), 
                                      (seq_id,) if seq_id else None): 
             return False

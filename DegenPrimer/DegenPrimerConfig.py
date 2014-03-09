@@ -682,7 +682,7 @@ class DegenPrimerConfig(object):
                        'inside the file were changed.\n'
                        'If you wish to play with configuration in a file and\n'
                        'avoid this warning, rename it to be a master file\n'
-                       '(e.g. from "file.cfg" to "file_master.cfg").\n') \
+                       '(e.g. from "file.cfg" to "file_master.cfg").') \
                        % (self_hash, saved_hash)
     #end def
     

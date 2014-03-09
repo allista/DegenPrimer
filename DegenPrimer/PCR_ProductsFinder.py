@@ -21,10 +21,14 @@ Created on Mar 1, 2014
 '''
 
 from PCR_Mixture import MixtureFactory
-import SearchEngine
+from SearchEngine import SearchEngine
 
 
 class PCR_ProductsFinder(MixtureFactory):
+    
+    def __init__(self, *args, **kwargs):
+        MixtureFactory.__init__(self, *args, **kwargs)
+        self._searcher = SearchEngine(self._abort_event)
     
     @staticmethod
     def _combine_annealings(*annealings_list):
@@ -37,31 +41,40 @@ class PCR_ProductsFinder(MixtureFactory):
     #end def
     
     
-    def find(self, t_name, template, mismatches):
+    def find(self, counter, t_name, template, mismatches):
         search_results  = []
-        for primer in self._primers:
+        n_primers = len(self._primers)
+        counter.set_subwork(n_primers+1, [1]*n_primers+[0.01*n_primers])
+        for i, primer in enumerate(self._primers):
             if self._abort_event.is_set(): return None
-            result = SearchEngine.find(template, primer, mismatches, self._abort_event)
+            result = self._searcher.find(counter[i], template, primer, mismatches)
             if result is None: return None
             search_results.append(result)
-        return self.create_PCR_mixture(t_name, *self._combine_annealings(*search_results))
+        mixture = self.create_PCR_mixture(counter[-1], t_name, 
+                                          *self._combine_annealings(*search_results))
+        counter.done()
+        return mixture
     #end def
     
     
-    def batch_find(self, t_names, templates, mismatches):
+    def batch_find(self, counter, t_names, templates, mismatches):
         results        = dict()
         search_results = dict()
-        for primer in self._primers:
+        counter.set_subwork(2)
+        counter[0].set_subwork(len(self._primers))
+        counter[1].set_subwork(len(templates))
+        for i, primer in enumerate(self._primers):
             if self._abort_event.is_set(): return None
-            result = SearchEngine.batch_find(templates, primer, mismatches, self._abort_event)
+            result = self._searcher.batch_find(counter[0][i], templates, primer, mismatches)
             if result is None: return None
             for t_id, annealings in result.iteritems():
                 if t_id in search_results:
                     search_results[t_id] = self._combine_annealings(search_results[t_id], annealings)
                 else: search_results[t_id] = annealings
-        for t_id, (fwd_annealings, rev_annealings) in search_results.items():
-            mixture = self.create_PCR_mixture(t_names[t_id], fwd_annealings, rev_annealings)
-            if mixture is not None: results[t_names[t_id]] = mixture 
+        for i, (t_id, (fwd_annealings, rev_annealings)) in enumerate(search_results.items()):
+            mixture = self.create_PCR_mixture(counter[1][i], t_names[t_id], 
+                                              fwd_annealings, rev_annealings)
+            if mixture is not None: results[t_names[t_id]] = mixture
         if not results: return None
         return results
     #end def
@@ -69,14 +82,14 @@ class PCR_ProductsFinder(MixtureFactory):
 
 
 #ProductsFnder wrapped in a Manager
-def _find(t_name, template, mismatches, products_finder):
-    mixture = products_finder.find(t_name, template, mismatches)
+def _find(counter, t_name, template, mismatches, products_finder):
+    mixture = products_finder.find(counter, t_name, template, mismatches)
     if mixture is None: return None
     return mixture.save()
 #end def
 
-def _batch_find(t_names, templates, mismatches, products_finder):
-    mixtures = products_finder.batch_find(t_names, templates, mismatches)
+def _batch_find(counter, t_names, templates, mismatches, products_finder):
+    mixtures = products_finder.batch_find(counter, t_names, templates, mismatches)
     if mixtures is None: return None
     return dict((k, m.save()) for k, m in mixtures.iteritems())
 #end def

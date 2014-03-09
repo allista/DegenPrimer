@@ -194,7 +194,7 @@ class SeqDB(AbortableBase):
             self._cursor.execute(sql_string, seq_ids)
         else:
             self._cursor.execute('''SELECT id, length from sequences''')
-        return list(self._cursor)
+        return dict(self._cursor)
     #end def
     
     

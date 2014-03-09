@@ -24,8 +24,44 @@ import errno
 import multiprocessing as mp
 from UMP import UProcess
 from Queue import Empty
+from collections import Sequence
+from threading import Thread
 from AbortableBase import AbortableBase
 
+
+class Work(Sequence):
+    def __init__(self, assembler, args=None, counter=None):
+        self._jobs      = None
+        self._counter   = counter
+        self._assembler = assembler
+        self._args      = args
+    #end defs
+        
+    def __len__(self): return len(self._jobs)
+    
+    def __getitem__(self, index): return self._jobs[index]
+        
+    def prepare_jobs(self, worker, work, num_jobs, *args):
+        #determine number of jobs to launch
+        if not num_jobs: num_jobs = self.cpu_count
+        chunks = self.even_chunks(work, num_jobs)
+        #prepare processes
+        self._jobs  = []; start = 0
+        for chunk in chunks:
+            end   = start+chunk
+            queue = self._Queue()
+            job   = self._Process(target=worker, args=(queue, self._abort_event, 
+                                                       start, end, 
+                                                       work, args))
+            job.daemon = self._daemonic
+            self._jobs.append((job,queue))
+            start = end
+    #end def
+    
+    def start(self): 
+        for j, _q in self._jobs: j.start()
+#end class        
+        
 
 class MultiprocessingBase(AbortableBase):
     '''Base class for classes that use job parallelization through multiprocessing'''
@@ -118,7 +154,9 @@ class MultiprocessingBase(AbortableBase):
     #end def
     
     
-    def join_jobs(self, jobs, timeout, parser, *args):
+    def get_result(self, jobs, timeout, parser, *args, **kwargs):
+        try: counter = kwargs['counter']
+        except KeyError: counter = None
         jobs = list(jobs)
         while jobs:
             finished_job = None
@@ -127,6 +165,7 @@ class MultiprocessingBase(AbortableBase):
                     out = job[1].get(True, timeout)
                     if out is not None:
                         parser(out, *args)
+                        if counter: counter.count()
                     else: 
                         job[0].join()
                         finished_job = i
@@ -170,11 +209,9 @@ class MultiprocessingBase(AbortableBase):
     #end def
 
 
-    def prepare_jobs(self, worker, work, num_jobs, *args):
-        #process work in chunks
+    @staticmethod
+    def even_chunks(work, num_jobs):
         work_len = len(work)
-        #determine number of jobs to launch
-        if not num_jobs: num_jobs = self.cpu_count
         if work_len <= num_jobs: 
             #if work size is less then number of requested jobs, run less jobs
             chunks = [1 for _n in xrange(work_len)]
@@ -186,6 +223,13 @@ class MultiprocessingBase(AbortableBase):
                 chunks   = [ch+1 for _r in xrange(rem)]
                 chunks  += [ch for _n in xrange(num_jobs-rem)]
             else: chunks = [ch for _n in xrange(num_jobs)]
+        return chunks
+    #end def
+
+    def prepare_jobs(self, worker, work, num_jobs, *args):
+        #determine number of jobs to launch
+        if not num_jobs: num_jobs = self.cpu_count
+        chunks = self.even_chunks(work, num_jobs)
         #prepare processes
         jobs  = []; start = 0
         for chunk in chunks:
@@ -212,31 +256,35 @@ class MultiprocessingBase(AbortableBase):
     def unordered_results_assembler(index, result, output):
         output.append(result)
     
-    def start_jobs(self, jobs):
-        for job, _queue in jobs: job.start()
+    def start_jobs(self, *jobs):
+        for job in jobs:
+            for j, _q in job: j.start()
+    #end def
     
-
-    def parallelize(self, timeout, worker, work, *args):
+    def parallelize(self, timeout, worker, work, *args, **kwargs):
+        #setup counter, if it is given
+        try: kwargs['counter'].set_work(len(work))
+        except: pass
         #prepare and start jobs
         jobs = self.prepare_jobs(worker, work, None, *args)
         self.start_jobs(jobs)
         #allocate results container
-        results = [None]*len(work)
+        result = [None]*len(work)
         #assemble results
-        self.join_jobs(jobs, timeout, self.ordered_results_assembler, results)
+        self.get_result(jobs, timeout, self.ordered_results_assembler, result, **kwargs)
         #if aborted, return None
         if self._abort_event.is_set(): return None
-        #else, cleanup and return results
+        #else, cleanup and return result
         self.clean_jobs(jobs)
-        return results
+        return result
     #end def
 
-    def parallelize_work(self, timeout, func, data, *args):
+    def parallelize_work(self, timeout, func, data, *args, **kwargs):
         mapper = MultiprocessingBase.data_mapper(func)
-        return self.parallelize(timeout, mapper, data, *args)
+        return self.parallelize(timeout, mapper, data, *args, **kwargs)
     #end def    
     
-    def parallelize_functions(self, timeout, func_list, *args):
+    def parallelize_functions(self, timeout, func_list, *args, **kwargs):
         @MultiprocessingBase.worker
         def worker(abort_event, start, end, _func_list, args):
             result = []
@@ -248,7 +296,7 @@ class MultiprocessingBase(AbortableBase):
                     result.append((start+fi, func()))
             return result
         #end def
-        return self.parallelize(timeout, worker, func_list, *args)
+        return self.parallelize(timeout, worker, func_list, *args, **kwargs)
     #end def
     
     
@@ -271,6 +319,10 @@ class MultiprocessingBase(AbortableBase):
     #end def
 #end class
 
+
+#aliases
+even_chunks = MultiprocessingBase.even_chunks
+cpu_count   = MultiprocessingBase.cpu_count
 
 #decorators and shortcuts
 from tmpStorage import tmpDict
@@ -297,13 +349,13 @@ def queue_result(queue, func, *args, **kwargs):
 
 
 #shortcut functions
-def parallelize_work(abort_event, daemonic, timeout, func, data, *args):
+def parallelize_work(abort_event, daemonic, timeout, func, data, *args, **kwargs):
     '''Parallel map implementation by MultiprocessingBase'''
-    return MultiprocessingBase(abort_event, daemonic).parallelize_work(timeout, func, data, *args)
+    return MultiprocessingBase(abort_event, daemonic).parallelize_work(timeout, func, data, *args, **kwargs)
 
-def parallelize_functions(abort_event, daemonic, timeout, func_list, *args):
+def parallelize_functions(abort_event, daemonic, timeout, func_list, *args, **kwargs):
     '''Execute functions from func_list in parallel using MultiprocessingBase.'''
-    return MultiprocessingBase(abort_event, daemonic).parallelize_functions(timeout, func_list, *args)
+    return MultiprocessingBase(abort_event, daemonic).parallelize_functions(timeout, func_list, *args, **kwargs)
 
 def FuncManager(funcs, names=None):
     '''Return a subclass of UManager with funcs registered by names (if given)

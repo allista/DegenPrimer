@@ -24,25 +24,25 @@ import os
 from StringTools import print_exception
 from iPCR_Interface import iPCR_Interface
 from SeqDB import SeqDB
-from SearchEngine import mp_better, cpu_count
+from MultiprocessingBase import FuncManager, cpu_count, even_chunks
+from SearchEngine import mp_better
 from PCR_ProductsFinder import PPFManager
-from MultiprocessingBase import FuncManager
 
 
 #manager to isolate forking point in a low-memory process
-def _find(t_name, template, mismatches, products_finder):
+def _find(counter, t_name, template, mismatches, products_finder):
     finder = PPFManager()
     finder.start()
-    result_path = finder.find(t_name, template, mismatches, products_finder)
+    result_path = finder.find(counter, t_name, template, mismatches, products_finder)
     result_path = result_path._getvalue()
     finder.shutdown()
     return result_path
 #end def
 
-def _batch_find(t_names, templates, mismatches, products_finder):
+def _batch_find(counter, t_names, templates, mismatches, products_finder):
     finder = PPFManager()
     finder.start()
-    result_paths = finder.batch_find(t_names, templates, mismatches, products_finder)
+    result_paths = finder.batch_find(counter, t_names, templates, mismatches, products_finder)
     result_paths = result_paths._getvalue()
     finder.shutdown()
     return result_paths
@@ -108,15 +108,15 @@ class iPCR_Base(iPCR_Interface):
     #end def
     
     
-    def _find_products_in_templates(self, t_ids, products_finder):
+    def _find_products_in_templates(self, counter, t_ids, products_finder):
         templates   = self._seq_db.get_seqs(t_ids)
         if len(t_ids) < 2:
-            result = self._searcher.find(self._seq_names[t_ids[0]],
+            result = self._searcher.find(counter, self._seq_names[t_ids[0]],
                                          templates[0][2], 
                                          self._max_mismatches, 
                                          products_finder)
         else:
-            result = self._searcher.batch_find(self._seq_names, 
+            result = self._searcher.batch_find(counter, self._seq_names, 
                                                templates,  
                                                self._max_mismatches, 
                                                products_finder)
@@ -124,34 +124,43 @@ class iPCR_Base(iPCR_Interface):
     #end def
     
     
-    def _find_products_in_db(self, PCR_Sim, P_Finder, seqs_info):
+    def _find_products_in_db(self, counter, PCR_Sim, P_Finder, seqs_info):
         print '\nPSR Simulation: searching for annealing sites in provided sequences...'
         #sort templates into short, suitable for plain search and long -- for mp
         short_templates = []
         long_templates  = []
-        for t_id, t_len in seqs_info:
+        for t_id, t_len in seqs_info.iteritems():
             if mp_better(t_len):
                 long_templates.append(t_id)
             else: short_templates.append(t_id)
+        #setup work counters
+        if short_templates and long_templates: 
+            counter.set_subwork(2, (sum(seqs_info[t_id] for t_id in short_templates),
+                                    sum(seqs_info[t_id] for t_id in long_templates)))
+            short_counter  = counter[0]
+            long_counter   = counter[1]
+        else: long_counter = short_counter = counter
+        if long_templates: long_counter.set_subwork(len(long_templates), [seqs_info[t_id] for t_id in long_templates])
         #If there's enough short templates, run a series of batch searches.
         #This is needed to lower memory usage pikes during search and to 
         #better utilize cpus.
-        while short_templates:
-            num_templates = len(short_templates)
-            if num_templates >= cpu_count*2:
-                front = cpu_count
-            else: front = num_templates
-            templates = short_templates[:front] 
-            short_templates = short_templates[front:]
-            results = self._find_products_in_templates(templates, P_Finder)
-            if results is None: 
-                if self._abort_event.is_set(): return False
-                else: continue
-            for t_name, m_path in results.iteritems():
-                PCR_Sim.add_mixture(t_name, m_path)
+        if short_templates:
+            chunks = even_chunks(short_templates, 
+                                 max(len(short_templates)/cpu_count, 1))
+            start  = 0; short_counter.set_subwork(len(chunks))
+            for i, chunk in enumerate(chunks):
+                end = start+chunk
+                results = self._find_products_in_templates(short_counter[i], 
+                                                           short_templates[start:end], 
+                                                           P_Finder)
+                if results is None: 
+                    if self._abort_event.is_set(): return False
+                    else: continue
+                for t_name, m_path in results.iteritems():
+                    PCR_Sim.add_mixture(t_name, m_path)
         #if there're long templates, search sequentially
-        for t_id in long_templates:
-            result = self._find_products_in_templates((t_id,), P_Finder)
+        for i, t_id in enumerate(long_templates):
+            result = self._find_products_in_templates(long_counter[i], (t_id,), P_Finder)
             if result is None:
                 if self._abort_event.is_set(): return False
                 else: continue
@@ -160,7 +169,7 @@ class iPCR_Base(iPCR_Interface):
     #end def
     
     
-    def _find_products(self, PCR_Sim, P_Finder, seq_files, seq_ids=None):
+    def _find_products(self, counter, PCR_Sim, P_Finder, seq_files, seq_ids=None):
         #try to connect to a database
         if not seq_files or not self._try_connect_db(seq_files): return False
         #get names and legths of sequences
@@ -170,7 +179,7 @@ class iPCR_Base(iPCR_Interface):
             return False
         seq_lengths = self._seq_db.get_lengths(seq_ids)
         #find primer annealing sites
-        result = self._find_products_in_db(PCR_Sim, P_Finder, seq_lengths)
+        result = self._find_products_in_db(counter, PCR_Sim, P_Finder, seq_lengths)
         self._seq_db.close()
         return result
     #end def

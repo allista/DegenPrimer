@@ -24,6 +24,7 @@ from scipy.fftpack import fft, ifft
 from SecStructures import Duplex
 from StringTools import print_exception
 from MultiprocessingBase import MultiprocessingBase
+from WorkCounter import WorkCounter
 
 
 class SearchEngine(MultiprocessingBase):
@@ -133,27 +134,31 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
 
-    def _compile_duplexes_mp(self, 
-                               fwd_seq, rev_seq, primer, 
-                               t_len, p_len,
-                               fwd_matches, rev_matches):
+    def compile_duplexes_mp(self,  
+                              fwd_seq, rev_seq, primer, 
+                              t_len, p_len,
+                              fwd_matches, rev_matches, counter=None):
         '''Compile duplexes for both strands of a template in parallel'''
+        if counter is None: counter = WorkCounter()
+        counter.set_subwork(2, map(len, (fwd_matches, rev_matches)))
+        counter[0].set_work(len(fwd_matches))
+        counter[1].set_work(len(rev_matches))
         #prepare and start two sets of jobs
         fwd_jobs = self.prepare_jobs(self._compile_duplexes_mapper, 
-                                      fwd_matches, None, 
-                                      fwd_seq, primer, t_len, p_len, False)
+                                     fwd_matches, None, 
+                                     fwd_seq, primer, t_len, p_len, False)
         rev_jobs = self.prepare_jobs(self._compile_duplexes_mapper, 
-                                      rev_matches, None,
-                                      rev_seq, primer, t_len, p_len, True)
-        self.start_jobs(fwd_jobs+rev_jobs)
+                                     rev_matches, None,
+                                     rev_seq, primer, t_len, p_len, True)
+        self.start_jobs(fwd_jobs,rev_jobs)
         #allocate containers for results
         fwd_results = []
         rev_results = []
         #assemble results
-        self.join_jobs(fwd_jobs, 1, 
-                        self._duplexes_assembler, fwd_results)
-        self.join_jobs(rev_jobs, 1, 
-                        self._duplexes_assembler, rev_results)
+        self.get_result(fwd_jobs, 0.1, 
+                       self._duplexes_assembler, fwd_results, counter=counter[0])
+        self.get_result(rev_jobs, 0.1, 
+                       self._duplexes_assembler, rev_results, counter=counter[1])
         #if aborted, return None
         if self._abort_event.is_set(): return None
         #else, cleanup
@@ -166,23 +171,27 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
     
-    def _compile_duplexes(self, 
-                            fwd_seq, rev_seq, primer, 
-                            t_len, p_len,
-                            fwd_matches, rev_matches):
+    def compile_duplexes(self,  
+                           fwd_seq, rev_seq, primer, 
+                           t_len, p_len,
+                           fwd_matches, rev_matches, counter=None):
         '''Compile duplexes for both strands of a template'''
+        if counter is None: counter = WorkCounter()
+        counter.set_work(len(fwd_matches)+len(rev_matches))
         fwd_results = []
         for pos in fwd_matches:
             if self._abort_event.is_set(): break
             duplexes = self._compile_duplexes_for_position(pos, fwd_seq, primer, 
                                                            t_len, p_len, reverse=False)
             if duplexes[1]: fwd_results.append(duplexes)
+            counter.count()
         rev_results = []
         for pos in rev_matches:
             if self._abort_event.is_set(): break
             duplexes = self._compile_duplexes_for_position(pos, rev_seq, primer, 
                                                            t_len, p_len, reverse=True)
             if duplexes[1]: rev_results.append(duplexes)
+            counter.count()
         #if aborted, return None
         if self._abort_event.is_set(): return None
         return fwd_results,rev_results
@@ -281,7 +290,6 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
 
-#    @profile
     def _find_mp(self, template, primer, t_len, p_len, mismatches):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
@@ -319,7 +327,7 @@ class SearchEngine(MultiprocessingBase):
         def assemble_scores(out, scores):
             scores[0][out[0]:out[0]+slice_stride] = out[1]
             scores[1][out[0]:out[0]+slice_stride] = out[2]
-        self.join_jobs(jobs, 1, assemble_scores, scores)
+        self.get_result(jobs, 1, assemble_scores, scores)
         #if search was aborted, return empty results
         if self._abort_event.is_set(): return None
         #else, cleanup
@@ -328,10 +336,7 @@ class SearchEngine(MultiprocessingBase):
         matches     = max(1, p_len - mismatches)-0.5
         fwd_matches = np.where(scores[0][:t_len-p_len+1] >= matches)[0]
         rev_matches = np.where(scores[1][:t_len-p_len+1] >= matches)[0] 
-        del scores
-        #construct and return duplexes
-        return self._compile_duplexes_mp(fwd_seq, rev_seq, primer, 
-                                         t_len, p_len, fwd_matches, rev_matches)
+        return fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches
     #end def
 
     
@@ -364,59 +369,62 @@ class SearchEngine(MultiprocessingBase):
         matches     = max(1, p_len - mismatches)-0.5
         fwd_matches = np.where(fwd_score[:t_len-p_len+1] >= matches)[0]; del fwd_score
         rev_matches = np.where(rev_score[:t_len-p_len+1] >= matches)[0]; del rev_score
-        #construct and return duplexes
-        return self._compile_duplexes(fwd_seq, rev_seq, primer, 
-                                      t_len, p_len, fwd_matches, rev_matches)
+        return fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches
     #end def
     
 
-    def find(self, template, primer, mismatches):
-        '''Find occurrences of a degenerate primer in a template sequence.
-        Return positions and Duplexes formed. This method uses 
+    def find_matches(self, template, primer, mismatches):
+        '''Find all occurrences of a primer sequence in both strands of a 
+        template sequence with at most k mismatches. This method uses 
         multiprocessing to speedup the search process. Use it to perform 
         search in a long sequence.''' 
         p_len,t_len = len(primer),len(template)
         self._check_length_inequality(t_len, p_len)
-        if self.mp_better(t_len):
-            return self._find_mp(template, primer, t_len, p_len, mismatches)
-        else:
-            return self._find(template, primer, t_len, p_len, mismatches)
+        if self.mp_better(t_len): find = self._find_mp
+        else: find = self._find
+        return find(template, primer, t_len, p_len, mismatches)
+    #end def
+    
+
+    def find(self, counter, template, primer, mismatches):
+        '''Find occurrences of a degenerate primer in a template sequence.
+        Return positions and Duplexes formed. This method uses 
+        multiprocessing to speedup the search process. Use it to perform 
+        search in a long sequence.''' 
+        matches = self.find_matches(template, primer, mismatches)
+        if matches is None: return None
+        return self.compile_duplexes_mp(*matches, counter=counter)
     #end def
     
     
-    @MultiprocessingBase.data_mapper_method
     def _batch_find(self, template, primer, p_len, mismatches):
         t_id, t_len, _template = template
-        result = self._find(_template, primer, t_len, p_len, mismatches)
-        return t_id, result
+        matches = self._find(_template, primer, t_len, p_len, mismatches)
+        if matches is None: return t_id, None
+        return t_id, self.compile_duplexes(*matches)
     #end def
     
-    
-    def batch_find(self, templates, primer, mismatches):
+    def batch_find(self, counter, templates, primer, mismatches):
         '''Find occurrences of a degenerate primer in each of the provided 
         templates. Return dictionary of results using template IDs as keys.
         It uses multiprocessing to parallelize searches, each of which does 
         not use parallelization. Use it to search in many short sequences.'''
-        p_len   = len(primer)
-        jobs    = self.prepare_jobs(self._batch_find, templates, None,
-                                    primer, p_len, mismatches)
-        self.start_jobs(jobs)
-        results = []
-        self.join_jobs(jobs, 1, self.unordered_results_assembler, results)
-        if self._abort_event.is_set(): return None
+        results = self.parallelize_work(0.1, self._batch_find,
+                                        templates, primer, len(primer), 
+                                        mismatches, counter=counter)
+        if results is None: return None
         return dict(results)
     #end def
 #end class
 
 #shortcut functions
 mp_better = SearchEngine.mp_better
-cpu_count = SearchEngine.cpu_count
 
-def find(template, primer, mismatches, abort_event):
-    return SearchEngine(abort_event).find(template, primer, mismatches)
+def find(counter, template, primer, mismatches, abort_event):
+    return SearchEngine(abort_event).find(counter, template, primer, mismatches)
 
-def batch_find(templates, primer, mismatches, abort_event):
-    return SearchEngine(abort_event).batch_find(templates, primer, mismatches)
+def batch_find(counter, templates, primer, mismatches, abort_event):
+    return SearchEngine(abort_event).batch_find(counter, templates, primer, mismatches)
 
 
 #tests
@@ -467,7 +475,6 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGQUIT, sig_handler)
 
-#    os.chdir('../')
     seq_file = '../ThGa.fa'
     try:
         record_file = open(seq_file, 'r')
@@ -478,20 +485,11 @@ if __name__ == '__main__':
     template = SeqIO.read(record_file, 'fasta', IUPAC.unambiguous_dna)
     record_file.close()
     
-#    query = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
-#    query = Seq('GACTAATGCTAACGGGGGATT', IUPAC.ambiguous_dna)
-#    query = Seq('AGGGTTAGAAGNACTCAAGGAAA', IUPAC.ambiguous_dna)
-#    
-#    ftgam = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
+    ftgam = Seq('ATATTCTACRACGGCTATCC', IUPAC.ambiguous_dna)
     rtgam = Seq('GAASGCRAAKATYGGGAAC', IUPAC.ambiguous_dna)
-    
-#    template = template+record+record+record
-#    query    = query+query+query+query+query
 
-#    
-#    primer   = Primer(SeqRecord(ftgam, id='ftgam'), 0.43e-6)
-    primer   = Primer(SeqRecord(rtgam, id='rtgam'), 0.43e-6) #48C, 9mism, results: 564.85Mb, 410.37Mb, 240.07Mb
-    primer.generate_components()
+#    primer   = Primer(SeqRecord(ftgam, id='ftgam'), 0.43e-6, True)
+    primer   = Primer(SeqRecord(rtgam, id='rtgam'), 0.43e-6, True) #48C, 9mism, results: 564.85Mb, 410.37Mb, 240.07Mb
     
     def print_out(out, name):
         print name
@@ -509,116 +507,52 @@ if __name__ == '__main__':
                     print '\n'
                 print '\n'
     #end def
-    
-    
-#    def gather_statistics1(start_len, end_len, delta, title=None):
-#        global ppid, data1, data2, T,P,mult
-#        ppid  = os.getpid()
-#        p_len = 20
-#        lens  = range(start_len, end_len+1, delta)
-#        if title:
-#            data2 = [('t_len', 'p_len', '_find time %s'%title, 
-#                      '_find_mp time %s'%title)]
-#        else: data2 = [('t_len', 'p_len', '_find time', '_find_mp time')]
-#        find_times    = dict([(l,[]) for l in lens])
-#        find_mp_times = dict([(l,[]) for l in lens])
-#        for i in xrange(20):
-#            print 'iteration', i
-#            for t_len in lens:
-#                print 't_len:',t_len
-#                T = template[:t_len]
-#                P = Primer(SeqRecord(query[:p_len], id='test'), 0.1e-6)
-#                et = timeit.timeit('searcher._find(T, P, 3)', 
-#                                   setup='from __main__ import T,P,searcher', 
-#                                   number=1)
-#                find_times[t_len].append(et)
-#                et = timeit.timeit('searcher._find_mp(T, P, 3)', 
-#                                   setup='from __main__ import T,P,searcher', 
-#                                   number=1)
-#                find_mp_times[t_len].append(et)
-#                print ''
-#        for t_len in lens:
-#            data2.append((t_len, p_len, 
-#                          min(find_times[t_len]), min(find_mp_times[t_len])))
-#        if title:
-#            filename = 'find_mp_vs_find-%s-%d.csv' % (title, time())
-#        else: filename = 'find_mp_vs_find-%d.csv' % time()
-#        out_file = open(filename, 'wb')
-#        csv_writer = csv.writer(out_file, delimiter='\t', quotechar='"')
-#        csv_writer.writerows(data2)
-#        out_file.close()
-#        data2 = []
-#        print 'Gather statistics 1: data was written to %s' % filename 
-#    #end def
 
     ppid = os.getpid()
-    
-#    from multiprocessing.managers import BaseManager
-#    class MyManager(BaseManager): pass
-#    MyManager.register('SearchEngine', SearchEngine)
-#    mgr = MyManager(); mgr.start()
-#    del searcher
-#    searcher = mgr.SearchEngine()
-    
-    from time import sleep
     import TD_Functions
-    TD_Functions.PCR_P.PCR_T = 48
-
-#    from pympler.asizeof import asizeof
-
+    TD_Functions.PCR_P.PCR_T = 60
+    
+    searcher = SearchEngine(abort_event)
+    
     def mem_test(num):
         for _n in xrange(num):
             t0 = time()
+            c = WorkCounter()
             searcher = SearchEngine(abort_event)
-            results = searcher.find(template, primer, 5)
+            results = searcher.find(c, template, primer, 4)
             t1 = (time()-t0)
 #            print 'results use: %fMb' % (asizeof(results)/1024.0/1024.0)
             print results
 #            print_out(results, '')
-            print 'elapsed %f seconds\n' % t1
+            print '[%6.2f%%] elapsed %f seconds\n' % (c.percent(), t1)
     #end def
     
     mem_test(1)
-        
-#    from tests.asizeof import mem_used, heappy
-#    t0 = time()
-#    profile = 'tests/results/SearchEngine_results.hpy'
-#    heappy.setref()
-#    results = searcher.find(template, primer, 4)
-#    mem_used(results)
-#    heappy.heap().stat.dump(profile)
-#    print heappy.heap()
-#    t1 = (time()-t0)
-#    sleep(5)
-#    heappy.pb(profile)
-#    print_out(results, 'test')
-#    print 'elapsed %f seconds\n' % t1 
-
-#    t0 = time()
-#    templates = [(1,23885,template[:23885]),
-#                 (2,23435,template[:23435]),
-#                 (3,23835,template[:23835]),
-#                 (4,2432,template[:2432]),
-#                 (5,538827,template[:538827])]
-#    results = searcher.batch_find(templates, Primer(SeqRecord(query[:23], id='test'), 0.1e-6), 7)
-#    for rid in results:
-#        print '\n'
-#        print_out(results[rid], rid)
-#    print 'elapsed %f seconds\n' % (time()-t0)
-#    gather_statistics1(5000, 500000, 5000)
-    
-#    for l in [2**10, 2**11, 2**12, 2**13, 2**14, 2**15, 2**16]:
-#        searcher.set_max_chunk(l)
-#        gather_statistics1(205000, 400000, 5000, str(l))
-        
-#    while True:
-#        gather_statistics(50000, 500000, 50000)
-#        gather_statistics(600000, 1000000, 100000)
-#        gather_statistics(1100000, 1500000, 100000)
-#        gather_statistics(1600000, 2000000, 100000)
-#        gather_statistics(1800000, 2600000, 200000)
-#        gather_statistics(2800000, 4000000, 400000)
-        #gather_statistics(5000000, 10000000, 1000000)
+    sys.exit()
         
     
-    print 'Done'
+    #compile duplexes serial vs parallel statistics
+    fwd_seq = template.seq
+    rev_seq = template.seq.reverse_complement()
+    t_len = len(template); p_len = len(primer)
+    x = []; s = []; p = []
+    for n in xrange(5,105,5):
+        for _i in xrange(10):
+            x.append(n)
+            fwd_matches = np.random.randint(0, t_len, n/2)
+            rev_matches = np.random.randint(0, t_len, n-n/2)
+            s.append(timeit.timeit('searcher.compile_duplexes(fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)', 
+                                   'from __main__ import searcher, fwd_seq, rev_seq, t_len, p_len, primer, fwd_matches, rev_matches', 
+                                   number=1))
+            p.append(timeit.timeit('searcher.compile_duplexes_mp(fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)', 
+                                   'from __main__ import searcher, fwd_seq, rev_seq, t_len, p_len, primer, fwd_matches, rev_matches', 
+                                   number=1))
+    
+    from matplotlib import pyplot as plt
+    from scipy.stats import linregress
+    x = np.fromiter(x, dtype=int)
+    slm = linregress(x, s)
+    plm = linregress(x, p)
+    plt.plot(x, s, 'b.', x, x*slm[0]+slm[1], 'b-', 
+             x, p, 'r.', x, x*plm[0]+plm[1], 'r-')
+    plt.show()

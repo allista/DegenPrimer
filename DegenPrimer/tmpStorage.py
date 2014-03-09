@@ -92,6 +92,7 @@ class tmpDict(DbfilenameShelf):
 
 class roDict(DbfilenameShelf):
     def __init__(self, filename):
+        self.filename = filename
         DbfilenameShelf.__init__(self, filename, flag='r', protocol=-1)
         
     def __enter__(self):

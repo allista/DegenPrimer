@@ -25,9 +25,9 @@ from Equilibrium import Reaction
 
 
 #default filtration parameters
-max_dimer_dG   = -3 #kcal/mol #corresponds to equilibrium constant ~100  and conversion degree ~1e-3
-max_hairpin_dG =  3 #kcal/mol #corresponds to equilibrium constant ~0.01 and conversion degree ~1e-2
-
+max_dimer_dG   = -3  #kcal/mol #corresponds to equilibrium constant ~100  and conversion degree ~1e-3
+max_hairpin_dG =  3  #kcal/mol #corresponds to equilibrium constant ~0.01 and conversion degree ~1e-2
+min_K          = 100 #minimum equilibrium constant: annealing reactions with EC less than this will not be taken into account 
 
 class Dimer(object):
     '''
@@ -274,6 +274,7 @@ class Duplex(object):
             if dimer.dG > max_dimer_dG: continue
             dimer.K  = equilibrium_constant(dimer.dG, 
                                             TD_Functions.PCR_P.PCR_T)
+            if dimer.K < min_K: continue
             #mismatch at 3' end of forward sequence
             dimer.fwd_mismatch = dimer.fwd_max < self.fwd_len-1
             filtered_dimers.append(dimer)
@@ -324,19 +325,7 @@ class Duplex(object):
     
     @property
     def have_3_matches(self): return bool(self._fwd_matches)
-    
 
-    def filter_dimers_by_K(self, min_K):
-        if len(self._dimers) < 2: return
-        new_dimers = [self._dimers[0]]
-        for i, dimer in enumerate(self._dimers[1:]):
-            if dimer.K >= min_K:
-                new_dimers.append(dimer)
-            else:
-                try: self._fwd_matches.remove(i+1)
-                except: self._fwd_mismatches.remove(i+1)
-        self._dimers = tuple(new_dimers)
-    #end def
     
     @classmethod
     def print_dimer(cls, fwd_sequence, rev_sequence, dimer):
