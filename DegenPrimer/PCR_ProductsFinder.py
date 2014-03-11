@@ -43,8 +43,9 @@ class PCR_ProductsFinder(MixtureFactory):
     
     def find(self, counter, t_name, template, mismatches):
         search_results  = []
-        n_primers = len(self._primers)
-        counter.set_subwork(n_primers+1, [1]*n_primers+[0.01*n_primers])
+        p_weights = [p.num_components for p in self._primers]
+        counter.set_subwork(len(self._primers)+1,
+                            p_weights+[0.01*sum(p_weights)])
         for i, primer in enumerate(self._primers):
             if self._abort_event.is_set(): return None
             result = self._searcher.find(counter[i], template, primer, mismatches)

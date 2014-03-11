@@ -80,45 +80,42 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
         return structures,reactions
     #end def
     
-    @staticmethod
-    @MultiprocessingBase.results_assembler
-    def _structure_assembler(index, result, 
-                                structures, reactions, all_structures):
+    @MultiprocessingBase.results_assembler_methd
+    def _structure_assembler(self, index, result, structures):
         structures[index] = result[0]
-        reactions.update(result[1])
-        all_structures.update(dict().fromkeys(result[1].keys(), result[0]))
+        self._reactions.update(result[1])
+        self._all_structures.update(dict().fromkeys(result[1].keys(), result[0]))
     #end def
     
     
     def find_structures(self):
         #self structures jobs
-        self_jobs  = []
+        self_works  = []
         for primer in self._primers:
             #list of all primers
             self._all_primers.extend(primer.seq_records)
-            #self structure jobs
-            self_jobs.append(self.prepare_jobs(self._self_structures, 
-                                               primer.seq_records, None))
+            #self structure work
+            work = self.Work()
+            work.prepare_jobs(self._self_structures, primer.seq_records, None)
+            self_works.append(work)
         #cross structures jobs
         num_primers = len(self._all_primers)
         pair_index  = []
         for i in xrange(num_primers):
             for j in xrange(i+1, num_primers):
                 pair_index.append((i,j))
-        cross_jobs = self.prepare_jobs(self._cross_structures, 
-                                       pair_index, None, self._all_primers)
+        cross_work = self.Work()
+        cross_work.prepare_jobs(self._cross_structures, 
+                               pair_index, None, self._all_primers)
         #run jobs
-        self.start_jobs(cross_jobs, *self_jobs)
-        #assemble self structures jobs
-        for i, jobs in enumerate(self_jobs):
-            structures = [None]*len(self._primers[i].seq_records)
-            self.get_result(jobs, 1, self._structure_assembler, 
-                           structures, self._reactions, self._all_structures)
-            self._self.append(structures)
-        #assemble cross structures jobs
+        self.start_work(cross_work, *self_works)
+        #allocate result containers, get results
+        for primer, work in zip(self._primers, self_works):
+            self._self.append([None]*len(primer.seq_records))
+            work.set_assembler(self._structure_assembler, self._self[-1])
         self._cross = [None]*len(pair_index)
-        self.get_result(cross_jobs, 1, self._structure_assembler, 
-                       self._cross, self._reactions, self._all_structures)
+        cross_work.set_assembler(self._structure_assembler, self._cross)
+        self.wait(cross_work, *self_works)
         #prepare primer concentrations dictionary
         for primer in self._primers:
             self._concentrations.update(dict().fromkeys((p for p in primer.str_sequences), 
@@ -136,13 +133,13 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
         if equilibrium.solution is None: return False
         #calculate equilibrium primer concentrations
         self._equilibrium_concentrations = dict()
-        counter[1].set_work(self._concentrations)
+        counter[1].set_work(len(self._concentrations))
         for primer in self._concentrations:
             _C = equilibrium.reactants_consumption(primer)[0]
             self._equilibrium_concentrations[primer] = self._concentrations[primer] - _C
             counter[1].count()
         #set conversion degrees
-        counter[2].set_work(equilibrium.solution)
+        counter[2].set_work(len(equilibrium.solution))
         for r_hash in equilibrium.solution:
             self._all_structures[r_hash].set_conversion_degree(r_hash, equilibrium.solution[r_hash])
             counter[2].count()

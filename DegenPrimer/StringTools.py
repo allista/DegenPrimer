@@ -55,7 +55,7 @@ def time_hr(symbol='#'):
 
 def wrap_text(text, width=None):
     #replace intermediate whitespaces with single spaces
-    text = ' '.join(text.split())
+#    text = ' '.join(text.split())
     #wrap text
     if width:
         old_width = wrapper.width
@@ -63,7 +63,7 @@ def wrap_text(text, width=None):
         wrapped_text  = wrapper.fill(text)
         wrapper.width = old_width
     else: wrapped_text = wrapper.fill(text)
-    return wrapped_text
+    return wrapped_text+'\n'
 #end def
 
 
@@ -165,4 +165,5 @@ if __name__ == '__main__':
     one of '"' or "'", followed by a space. One problem with this is algorithm 
     is that it is unable to detect the difference between “Dr.” in'''
     print wrap_text(txt)
+    print '='*80
     

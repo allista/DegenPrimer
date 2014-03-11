@@ -66,10 +66,26 @@ class WorkCounter(Sequence):
         progress = self.progress()
         percent  = progress/float(self._work)*100
         s += 'Progress: %f; %6.2f%%\n' % (progress, percent)
-        s += 'Elapsed: %s; ETA: %s' % (timedelta(seconds=self.elapsed()),
-                                       self.ETA())
+        s += 'Elapsed: %s' % timedelta(seconds=self.elapsed())
+        s += '; ETA: %s' % self.ETA()
         return s
     #end def
+    
+    def rstr(self, level=0):
+        '''String representation of a counter and all its' subcounters,
+        recursively.'''
+        s  = str(self)
+        if not self._subcounters: return s
+        s += '\n%3d %s' % (level+1, '-'*(80-4*(level+1)))
+        for i, c in enumerate(self._subcounters):
+            s += c.rstr(level+1).replace('\n', '\n%3d ' % (i+1))
+            s += '\n'
+        hl = ('.' if level else '=')*(80-4*level)
+        s = '\n%s%s%s' % (hl,s,hl) 
+        return s
+    #end def
+    
+    def __repr__(self): return self.rstr()
     
     
     def __nonzero__(self): return True
@@ -86,7 +102,8 @@ class WorkCounter(Sequence):
         self.reset(); self._subcounters = []; self._weights = []
         #check work size
         if isinstance(work, Sized): work = len(work)
-        assert work > 0, 'Work size should be grater than zero'
+        assert work > 0, \
+        ('Counter: %x: work size should be grater than zero' % id(self))
         #set work size
         if subwork: #create subcounters
             self._work     = 0
@@ -105,7 +122,7 @@ class WorkCounter(Sequence):
     def add_subwork(self, work=1, weights=None):
         if not weights: weights = [1]*work
         assert len(weights) == work, \
-        'A weight should be provided for every subwork.'
+        ('Counter: %x: a weight should be provided for every subwork.' % id(self))
         assert min(weights) > 0, 'Weights should be positive.'
         subwork = sum(weights)
         self._work    += subwork
@@ -124,8 +141,9 @@ class WorkCounter(Sequence):
     
     
     def count(self, num=1):
-        assert self._count+num <= self._work-self._subwork, \
-        'The work counted exceeds total work amount.'
+        assert self._count+num <= self._own_work, \
+        ('Counter: %x: the work counted exceeds total work amount: %.8f+%.8f>%.8f' %
+         (id(self), self._count, num, self._own_work))
         self._count += num
     #end def
     
@@ -179,23 +197,45 @@ class WorkCounter(Sequence):
 #    #end def
     
     
+#    def ETA(self):
+#        if not self._history or not self._history[-1][1]: return '-:--:--'
+#        progress = self._history[-1][1]
+#        if progress == self._work: return '0:00:00'
+#        v  = np.array([dp/float(ddt) for _dt, _p, ddt, dp in self._history if dp > 0])
+#        if len(v) > 1:
+#            with warnings.catch_warnings():
+#                warnings.simplefilter("ignore")
+#                v_mean, _var, _std = stats.bayes_mvs(v, 0.9)
+#            rtl = round((self._work-progress)/v_mean[1][1])
+#            rtu = round((self._work-progress)/v_mean[1][0])
+#        else: 
+#            rtl = round((self._work-progress)/v[0])
+#            rtu = -1
+#        if rtu > 0 and rtu-rtl > 1:
+#            return 'from %s to %s' % (str(timedelta(seconds=rtl)),
+#                                             str(timedelta(seconds=rtu)))
+#        else: return 'approximately %s' % str(timedelta(seconds=rtl))
+    #end def
+    
     def ETA(self):
         if not self._history or not self._history[-1][1]: return '-:--:--'
         progress = self._history[-1][1]
         if progress == self._work: return '0:00:00'
-        v  = np.array([dp/float(ddt) for _dt, _p, ddt, dp in self._history if dp > 0])
+        h  = np.array(self._history, dtype=float).transpose()
+        v  = h[3]/h[2]
+        m  = np.mean(v)
         if len(v) > 1:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                v_mean, _var, _std = stats.bayes_mvs(v, 0.9)
-            rtl = round((self._work-progress)/v_mean[1][1])
-            rtu = round((self._work-progress)/v_mean[1][0])
+                lm = linregress(h[0], h[1])
+            rtl = round((self._work-progress)/lm[0])
+            rtu = round((self._work-progress)/m)
         else: 
-            rtl = round((self._work-progress)/v[0])
+            rtl = round((self._work-progress)/m)
             rtu = -1
         if rtu > 0 and rtu-rtl > 1:
             return 'from %s to %s' % (str(timedelta(seconds=rtl)),
-                                             str(timedelta(seconds=rtu)))
+                                      str(timedelta(seconds=rtu)))
         else: return 'approximately %s' % str(timedelta(seconds=rtl))
     #end def
 #end class
@@ -219,7 +259,7 @@ class AutoProxyMeta(type):
         
 class WorkCounterProxy(BaseProxy):
     __metaclass__ = AutoProxyMeta
-    _exposed_ = ('__str__',
+    _exposed_ = ('__str__', 'rstr', '__repr__',
                  '__nonzero__', '__len__', '__getitem__',
                  'set_work', 'set_subwork', 'add_subwork',
                  'elapsed',  'last_checked', 'ETA', 'count', 'done',
@@ -232,6 +272,7 @@ class WorkCounterProxy(BaseProxy):
         _unpickle, (cls, token, serializer, kwds) = BaseProxy.__reduce__(self)
         kwds['manager'] = self._manager
         return _unpickle, (cls, token, serializer, kwds)
+    #end def
 #end class
 
 class WorkCounterManager(UManager):
@@ -250,9 +291,19 @@ def RebuildWorkCounterManager(address, authkey, serializer):
 
 #tests
 from matplotlib import pyplot as plt
+from scipy.stats import linregress, mode, hmean, gmean
 def plot_history(counter):
     h = np.array(counter._history, dtype=float).transpose()
-    plt.plot(h[0], h[1])
+    v = h[3]/h[2]
+    m = np.mean(v)#; gm = gmean(v)
+    lm = linregress(h[0], h[1])
+    plt.plot(h[0], h[1], 'b-', 
+             h[0], h[0]*lm[0]+lm[1], 'r-',
+             h[0], h[0]*lm[0], 'r--',
+             h[0], h[0]*m, 'g-',
+#             h[0], h[0]*hm, 'g--',
+#             h[0], h[0]*gm, 'g.-',
+             ) 
     plt.show()
 #end def
 

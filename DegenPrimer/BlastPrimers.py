@@ -274,10 +274,10 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         if not self._have_blast_results: return False
         print '\nSearching for possible PCR products in BLAST results...'
         P_Finder = self._new_PCR_ProductsFinder()
-        counter.set_subwork(self._blast_results)
+        counter.set_subwork(len(self._blast_results))
         for i, record in enumerate(self._blast_results):
             #setup counter
-            counter[i].set_subwork(2)
+            counter[i].set_subwork(2, (10,1))
             #find_products
             mixtures = self.parallelize_work(0.1, self._find_products_in_alignment, 
                                              record.alignments, P_Finder, 
@@ -531,11 +531,12 @@ if __name__ == '__main__':
                         name='load_and_analyze', kwargs=dict(counter=counter))
     job.start(); print ''
     while job.is_alive():
-        with plock: 
-            print counter
-        sleep(0.1)
+        with plock: print counter #.rstr()
+        sleep(0.05)
     job.join()
-    with plock: 
-        print counter
+    with plock: print counter #.rstr()
     
-    blastp.write_reports()
+    from WorkCounter import plot_history
+    plot_history(counter._getvalue())
+    
+#    blastp.write_reports()

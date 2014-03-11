@@ -101,15 +101,13 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
         reactions.update(result)
     
     def _construct_annealing_reactions(self, pcr_mixture, counter):
-        counter.set_work(pcr_mixture.annealings)
         reactions = dict()
-        jobs = self.prepare_jobs(self._construct_annealing_reaction, 
-                                 pcr_mixture.annealings, None, 
-                                 pcr_mixture.templates)
-        self.start_jobs(jobs)
-        self.get_result(jobs, 1, self._reactions_assembler, 
-                       reactions, counter=counter)
-        self.clean_jobs(jobs)
+        work = self.Work(timeout=0.1, counter=counter)
+        work.prepare_jobs(self._construct_annealing_reaction, 
+                          pcr_mixture.annealings, None, 
+                          pcr_mixture.templates)
+        work.set_assembler(self._reactions_assembler, reactions)
+        work.start(); work.join()
         if self._abort_event.is_set(): return None
         return reactions
     #end def
@@ -162,7 +160,7 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
         products = pcr_mixture.products
         counter.set_subwork(2, (2, self._num_cycles-2))
         #first two cycles
-        counter[0].set_work(products)
+        counter[0].set_work(len(products))
         for product_id, product in products.iteritems():
             product_len = len(product)
             #forward primer annealing, first cycle

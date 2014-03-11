@@ -177,7 +177,7 @@ class PCR_Simulation(PCR_Base):
               'and running the simulation...')
         pcr = self._new_PCR()
         if len(self._PCR_mixtures) > 1:
-            counter.set_subwork(2, (len(self._PCR_mixtures), 1))
+            counter.set_subwork(2, (len(self._PCR_mixtures), 0.01))
             results_path = self._pcrM.ParallelPCR(counter[0],
                                                   self._abort_event, pcr,
                                                   self._PCR_mixtures.values())

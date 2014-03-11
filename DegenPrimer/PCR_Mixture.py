@@ -240,7 +240,7 @@ class MixtureFactory(AbortableBase):
                 self._add_side_annealings(mixture, [ann for i, ann in enumerate(good_annealings[0])
                                                        if i not in added_positons[0]])
                 self._add_side_annealings(mixture, bad_annealings)
-            counter.count()
+                counter.count()
             print 'PCR Simulation: found some possible products in %s.' % hit
             return mixture
         print 'PCR Simulation: no products was found in %s.' % hit

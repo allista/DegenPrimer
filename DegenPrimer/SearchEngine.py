@@ -23,7 +23,7 @@ from array import array
 from scipy.fftpack import fft, ifft
 from SecStructures import Duplex
 from StringTools import print_exception
-from MultiprocessingBase import MultiprocessingBase
+from MultiprocessingBase import MultiprocessingBase, cpu_count
 from WorkCounter import WorkCounter
 
 
@@ -134,36 +134,32 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
 
-    def compile_duplexes_mp(self,  
+    def compile_duplexes_mp(self, counter,  
                               fwd_seq, rev_seq, primer, 
                               t_len, p_len,
-                              fwd_matches, rev_matches, counter=None):
+                              fwd_matches, rev_matches):
         '''Compile duplexes for both strands of a template in parallel'''
-        if counter is None: counter = WorkCounter()
+        if not len(fwd_matches)+len(rev_matches): return [],[]
         counter.set_subwork(2, map(len, (fwd_matches, rev_matches)))
         counter[0].set_work(len(fwd_matches))
         counter[1].set_work(len(rev_matches))
         #prepare and start two sets of jobs
-        fwd_jobs = self.prepare_jobs(self._compile_duplexes_mapper, 
-                                     fwd_matches, None, 
-                                     fwd_seq, primer, t_len, p_len, False)
-        rev_jobs = self.prepare_jobs(self._compile_duplexes_mapper, 
-                                     rev_matches, None,
-                                     rev_seq, primer, t_len, p_len, True)
-        self.start_jobs(fwd_jobs,rev_jobs)
-        #allocate containers for results
-        fwd_results = []
-        rev_results = []
-        #assemble results
-        self.get_result(fwd_jobs, 0.1, 
-                       self._duplexes_assembler, fwd_results, counter=counter[0])
-        self.get_result(rev_jobs, 0.1, 
-                       self._duplexes_assembler, rev_results, counter=counter[1])
+        fwd_work = self.Work(timeout=0.1, counter=counter[0])
+        rev_work = self.Work(timeout=0.1, counter=counter[1])
+        fwd_work.prepare_jobs(self._compile_duplexes_mapper, 
+                              fwd_matches, None, 
+                              fwd_seq, primer, t_len, p_len, False)
+        rev_work.prepare_jobs(self._compile_duplexes_mapper, 
+                              rev_matches, None, 
+                              rev_seq, primer, t_len, p_len, True)
+        self.start_work(fwd_work, rev_work)
+        #allocate results containers and get results
+        fwd_results = []; rev_results = []
+        fwd_work.set_assembler(self._duplexes_assembler, fwd_results)
+        rev_work.set_assembler(self._duplexes_assembler, rev_results)
+        self.wait(fwd_work, rev_work)
         #if aborted, return None
         if self._abort_event.is_set(): return None
-        #else, cleanup
-        self.clean_jobs(fwd_jobs+rev_jobs)
-        del fwd_jobs; del rev_jobs 
         #sort duplexes by position and return them
         fwd_results.sort(key=lambda x: x[0])
         rev_results.sort(key=lambda x: x[0])
@@ -171,12 +167,12 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
     
-    def compile_duplexes(self,  
+    def compile_duplexes(self, counter,
                            fwd_seq, rev_seq, primer, 
                            t_len, p_len,
-                           fwd_matches, rev_matches, counter=None):
+                           fwd_matches, rev_matches):
         '''Compile duplexes for both strands of a template'''
-        if counter is None: counter = WorkCounter()
+        if not len(fwd_matches)+len(rev_matches): return [],[]
         counter.set_work(len(fwd_matches)+len(rev_matches))
         fwd_results = []
         for pos in fwd_matches:
@@ -250,18 +246,18 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
     
-    @classmethod
-    def mp_better(cls, t_len):
+    @staticmethod
+    def mp_better(t_len):
         #based on computation time statistics
-        return cls.cpu_count > 1 and t_len > 25000
+        return cpu_count > 1 and t_len > 25000
     #end def
     
     
-    @classmethod
-    def _optimal_slices(cls, t_len, p_len):
+    @staticmethod
+    def _optimal_slices(t_len, p_len):
         #linear regression of measured computing time with respect to 
         #number of slices and template length
-        linear = max(cls.cpu_count, int(t_len*1.75e-5 + 1.75)) 
+        linear = max(cpu_count, int(t_len*1.75e-5 + 1.75)) 
         return min(60, linear, t_len/p_len)
     #end def
     
@@ -290,7 +286,7 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
 
-    def _find_mp(self, template, primer, t_len, p_len, mismatches):
+    def _find_mp(self, counter, template, primer, t_len, p_len, mismatches):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. Multiprocessing version.'''
         slice_size   = t_len/self._optimal_slices(t_len, p_len)+p_len+1
@@ -302,36 +298,34 @@ class SearchEngine(MultiprocessingBase):
         fwd_seq      = template.seq
         rev_seq      = template.seq.reverse_complement()
         correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
-        jobs         = []
         #start find_in_slice jobs
-        pos = 0
+        counter.set_work(t_len/slice_stride+1)
+        pos = 0; work = self.Work(counter=counter)
         while pos < t_len and not self._abort_event.is_set():
             front = min(t_len, pos+slice_size)
             queue = self._Queue()
             job = self._Process(target=self._find_in_slice, 
                                 args=(queue, self._abort_event, 
-                                      len(jobs), 
+                                      len(work), 
                                       pos, front, 
                                       fwd_seq, rev_seq, 
                                       p_fft, correction,  
                                       slice_stride, chunk_size, chunk_stride))
             job.daemon = 1
             job.start()
-            jobs.append((job,queue))
-            self.register_job(jobs[-1])
-            pos  += slice_stride
-        #join all jobs; if scores arrays are allocated beforehand, the memory
+            work.add_job(job, queue)
+            pos += slice_stride
+        #if scores arrays are allocated beforehand, the memory
         #is returned upon deletion
-        scores_len = slice_stride*len(jobs)
+        scores_len = slice_stride*len(work)
         scores = [np.zeros(scores_len), np.zeros(scores_len)]
         def assemble_scores(out, scores):
             scores[0][out[0]:out[0]+slice_stride] = out[1]
             scores[1][out[0]:out[0]+slice_stride] = out[2]
-        self.get_result(jobs, 1, assemble_scores, scores)
+        work.set_assembler(assemble_scores, scores)
+        work.get_result()
         #if search was aborted, return empty results
         if self._abort_event.is_set(): return None
-        #else, cleanup
-        self.clean_jobs(jobs); del jobs
         #compute match indices
         matches     = max(1, p_len - mismatches)-0.5
         fwd_matches = np.where(scores[0][:t_len-p_len+1] >= matches)[0]
@@ -340,7 +334,7 @@ class SearchEngine(MultiprocessingBase):
     #end def
 
     
-    def _find(self, template, primer, t_len, p_len, mismatches):
+    def _find(self, counter, template, primer, t_len, p_len, mismatches):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches.'''
         chunk_size   = self._calculate_chunk_size(t_len, p_len)
@@ -353,7 +347,7 @@ class SearchEngine(MultiprocessingBase):
         fwd_score    = np.zeros(t_len+chunk_stride)
         rev_score    = np.zeros(t_len+chunk_stride)
         #_find in chunks of a template, which is faster due to lower cost of memory allocation
-        pos = 0
+        pos = 0; counter.set_work(chunk_stride*(t_len/chunk_stride+1))
         while pos < t_len and not self._abort_event.is_set():
             front = min(t_len, pos+chunk_size)
             fwd_score[pos:pos+chunk_stride] = self._find_in_chunk(fwd_seq[pos:front], 
@@ -362,6 +356,7 @@ class SearchEngine(MultiprocessingBase):
             rev_score[pos:pos+chunk_stride] = self._find_in_chunk(rev_seq[pos:front], 
                                                                   p_fft, correction, 
                                                                   chunk_size, chunk_stride)
+            counter.count(chunk_stride)
             pos += chunk_stride
         #if search was aborted, return empty results
         if self._abort_event.is_set(): return None
@@ -373,7 +368,7 @@ class SearchEngine(MultiprocessingBase):
     #end def
     
 
-    def find_matches(self, template, primer, mismatches):
+    def find_matches(self, counter, template, primer, mismatches):
         '''Find all occurrences of a primer sequence in both strands of a 
         template sequence with at most k mismatches. This method uses 
         multiprocessing to speedup the search process. Use it to perform 
@@ -382,7 +377,7 @@ class SearchEngine(MultiprocessingBase):
         self._check_length_inequality(t_len, p_len)
         if self.mp_better(t_len): find = self._find_mp
         else: find = self._find
-        return find(template, primer, t_len, p_len, mismatches)
+        return find(counter, template, primer, t_len, p_len, mismatches)
     #end def
     
 
@@ -390,18 +385,20 @@ class SearchEngine(MultiprocessingBase):
         '''Find occurrences of a degenerate primer in a template sequence.
         Return positions and Duplexes formed. This method uses 
         multiprocessing to speedup the search process. Use it to perform 
-        search in a long sequence.''' 
-        matches = self.find_matches(template, primer, mismatches)
+        search in a long sequence.'''
+        t_len = len(template)
+        counter.set_subwork(2, (t_len, t_len*primer.num_components))
+        matches = self.find_matches(counter[0], template, primer, mismatches)
         if matches is None: return None
-        return self.compile_duplexes_mp(*matches, counter=counter)
+        return self.compile_duplexes_mp(counter[1], *matches)
     #end def
     
     
     def _batch_find(self, template, primer, p_len, mismatches):
         t_id, t_len, _template = template
-        matches = self._find(_template, primer, t_len, p_len, mismatches)
+        matches = self._find(WorkCounter(), _template, primer, t_len, p_len, mismatches)
         if matches is None: return t_id, None
-        return t_id, self.compile_duplexes(*matches)
+        return t_id, self.compile_duplexes(WorkCounter(), *matches)
     #end def
     
     def batch_find(self, counter, templates, primer, mismatches):
@@ -519,7 +516,7 @@ if __name__ == '__main__':
             t0 = time()
             c = WorkCounter()
             searcher = SearchEngine(abort_event)
-            results = searcher.find(c, template, primer, 4)
+            results = searcher.find(c, template, primer, 6)
             t1 = (time()-t0)
 #            print 'results use: %fMb' % (asizeof(results)/1024.0/1024.0)
             print results

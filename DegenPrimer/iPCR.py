@@ -119,7 +119,7 @@ if __name__ == '__main__':
     mgr = Manager()
     abort_event = mgr.Event()
     
-    TD_Functions.PCR_P.PCR_T = 60
+    TD_Functions.PCR_P.PCR_T = 53
     TD_Functions.PCR_P.Mg    = 3e-3
     TD_Functions.PCR_P.dNTP  = 300e-6
     TD_Functions.PCR_P.DNA   = 1e-10
@@ -148,21 +148,22 @@ if __name__ == '__main__':
                         name='simulate_PCR',
                         args=(counter, 
                               ('../ThGa.fa', #single sequence
-#                              '../Ch5_gnm.fa', #'../ThDS1.fa', '../ThES1.fa', #long sequences 
-                              #'../ThDS1-FC.fa', '../ThDS1-850b-product.fa', #short sequences
+                               '../Ch5_gnm.fa', '../ThDS1.fa', '../ThES1.fa', #long sequences 
+                               '../ThDS1-FC.fa', '../ThDS1-850b-product.fa', #short sequences
                               ),))
     job.start(); print ''
     while job.is_alive():
-        with plock: print counter
-        time.sleep(0.05)
+        if counter.changed_percent():
+            with plock: print counter
+        time.sleep(1)
     job.join()
     with plock: print counter
     
-    from WorkCounter import plot_history
-    plot_history(counter._getvalue())
+#    from WorkCounter import plot_history
+#    plot_history(counter._getvalue())
     
 #    ipcr.write_products_report()
-#    ipcr.write_report()
+    ipcr.write_report()
     
 ############################## statistics ######################################
 #TD_Functions.PCR_P.PCR_T = 53

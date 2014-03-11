@@ -51,7 +51,7 @@ class AnalysisTask(PrimerTaskBase):
     
     #file format for saving primers
     _fmt = 'fasta'
-    _counter_threshold = 1
+    _counter_threshold = 60
 
     def __init__(self, abort_event):
         PrimerTaskBase.__init__(self, abort_event)
@@ -237,9 +237,8 @@ class AnalysisTask(PrimerTaskBase):
                 if p_entry['counter'].last_checked() < self._counter_threshold: continue
                 percent = p_entry['counter'].changed_percent()
                 if percent is None: continue
-                eta = p_entry['counter'].ETA()
-                counters += ('[%d] [%6.2f%%] elapsed: %s; ETA: %s\n' % 
-                             (p_entry['id'], percent, self._elapsed(), eta))
+                counters += ('[%d] [%6.2f%%] elapsed: %s\n' % 
+                             (p_entry['id'], percent, self._elapsed()))
             if counters: self._print('\n'+counters)
     #end def
     
