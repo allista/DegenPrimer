@@ -157,9 +157,7 @@ class SearchEngine(MultiprocessingBase):
         fwd_results = []; rev_results = []
         fwd_work.set_assembler(self._duplexes_assembler, fwd_results)
         rev_work.set_assembler(self._duplexes_assembler, rev_results)
-        self.wait(fwd_work, rev_work)
-        #if aborted, return None
-        if self._abort_event.is_set(): return None
+        if not self.wait(fwd_work, rev_work): return None
         #sort duplexes by position and return them
         fwd_results.sort(key=lambda x: x[0])
         rev_results.sort(key=lambda x: x[0])

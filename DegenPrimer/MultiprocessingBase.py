@@ -217,6 +217,10 @@ class Work(Sequence, Thread, AbortableBase):
             if e.errno == errno.EINTR: return
             raise
     #end def
+    
+    def wait(self):
+        if self.is_alive(): self.join()
+        return not self._abort_event.is_set()
 #end class        
         
 
@@ -252,7 +256,9 @@ class MultiprocessingBase(AbortableBase):
         
     def wait(self, *work):
         for w in work: w.get_nowait()
-        for w in work: w.join()
+        ret = True
+        for w in work: ret &= w.wait()
+        return ret
     #end def
         
         
@@ -264,9 +270,9 @@ class MultiprocessingBase(AbortableBase):
         #allocate result container, get result
         result = [None]*len(work)
         w.set_assembler(ordered_results_assembler, result)
-        w.get_nowait(); w.join()
+        w.get_nowait()
         #if aborted, return None
-        if self._abort_event.is_set(): return None
+        if not w.wait(): return None
         return result
     #end def
 

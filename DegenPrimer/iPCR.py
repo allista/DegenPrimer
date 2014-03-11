@@ -38,7 +38,7 @@ class iPCR(iPCR_Base):
     
     
     def simulate_PCR(self, counter, seq_files, seq_ids=None):
-        counter.set_subwork(2, (1, 1))
+        counter.set_subwork(2, (10, 1+5*self._include_side_annealings))
         if self._find_products(counter[0], 
                                self._PCR_Simulation, 
                                self._ProductsFinder, 
@@ -158,9 +158,6 @@ if __name__ == '__main__':
         time.sleep(1)
     job.join()
     with plock: print counter
-    
-#    from WorkCounter import plot_history
-#    plot_history(counter._getvalue())
     
 #    ipcr.write_products_report()
     ipcr.write_report()

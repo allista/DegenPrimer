@@ -277,7 +277,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         counter.set_subwork(len(self._blast_results))
         for i, record in enumerate(self._blast_results):
             #setup counter
-            counter[i].set_subwork(2, (10,1))
+            counter[i].set_subwork(2, (10,1+5*self._include_side_annealings))
             #find_products
             mixtures = self.parallelize_work(0.1, self._find_products_in_alignment, 
                                              record.alignments, P_Finder, 
@@ -531,12 +531,10 @@ if __name__ == '__main__':
                         name='load_and_analyze', kwargs=dict(counter=counter))
     job.start(); print ''
     while job.is_alive():
-        with plock: print counter #.rstr()
-        sleep(0.05)
+        if counter.changed_percent():
+            with plock: print counter #.rstr()
+        sleep(0.1)
     job.join()
     with plock: print counter #.rstr()
-    
-    from WorkCounter import plot_history
-    plot_history(counter._getvalue())
     
 #    blastp.write_reports()

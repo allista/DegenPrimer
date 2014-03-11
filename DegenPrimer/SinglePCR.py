@@ -107,8 +107,8 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
                           pcr_mixture.annealings, None, 
                           pcr_mixture.templates)
         work.set_assembler(self._reactions_assembler, reactions)
-        work.start(); work.join()
-        if self._abort_event.is_set(): return None
+        work.start()
+        if not work.wait(): return None
         return reactions
     #end def
     

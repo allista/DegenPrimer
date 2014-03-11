@@ -115,12 +115,13 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
             work.set_assembler(self._structure_assembler, self._self[-1])
         self._cross = [None]*len(pair_index)
         cross_work.set_assembler(self._structure_assembler, self._cross)
-        self.wait(cross_work, *self_works)
+        if not self.wait(cross_work, *self_works): return False
         #prepare primer concentrations dictionary
         for primer in self._primers:
             self._concentrations.update(dict().fromkeys((p for p in primer.str_sequences), 
                                                         primer.concentration))
         self._have_results = True
+        return True
     #end def
     
     
