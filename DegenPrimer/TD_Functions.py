@@ -34,10 +34,18 @@ comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-6
 
 from math import sqrt, log, exp
 from UnifiedNN import UnifiedNN
+from UMP import UManager
+from multiprocessing.managers import BaseProxy
 import StringTools
 ###############################################################################
 
 
+#Unified Nearest Neighbour model initialization
+NN = UnifiedNN()
+if not NN: raise Exception('TD_Functions: Unable to initialize UnifiedNN.')
+
+
+#PCR conditions
 class PCR_Parameters(object):
     def __init__(self):
         #standard PCR conditions
@@ -53,17 +61,63 @@ class PCR_Parameters(object):
         for name in vars(self).keys():
             if name in params:
                 setattr(self, name, params[name])
-#end class    
+    #end def
+    
+    def __str__(self):
+        s  = '\n'
+        s += 'Mg:    %fM\n'  % self.Mg
+        s += 'Na:    %fM\n'  % self.Na
+        s += 'dNTP:  %fM\n'  % self.dNTP
+        s += 'DNA:   %fM\n'  % self.DNA
+        s += 'DMSO:  %f%%\n' % self.DMSO
+        s += 'PCR_T: %fC\n'  % self.PCR_T
+        return s
+    #end def
+#end class
 
+class PCR_ParametersProxy(BaseProxy):
+    #from multiprocessing.managers.NamespaceProxy
+    _exposed_ = ('__getattribute__', '__setattr__', '__delattr__', 
+                 '__str__', 'set')
+    
+    def set(self, params):
+        callmethod = object.__getattribute__(self, '_callmethod')
+        return callmethod('set', (params,))
+    #end def
+    
+    def __str__(self):
+        callmethod = object.__getattribute__(self, '_callmethod')
+        return callmethod('__str__')
+    #end def
+    
+    def __getattr__(self, key):
+        if key[0] == '_':
+            return object.__getattribute__(self, key)
+        callmethod = object.__getattribute__(self, '_callmethod')
+        return callmethod('__getattribute__', (key,))
+    #end def
+    
+    def __setattr__(self, key, value):
+        if key[0] == '_':
+            return object.__setattr__(self, key, value)
+        callmethod = object.__getattribute__(self, '_callmethod')
+        return callmethod('__setattr__', (key, value))
+    #end def
+    
+    def __delattr__(self, key):
+        if key[0] == '_':
+            return object.__delattr__(self, key)
+        callmethod = object.__getattribute__(self, '_callmethod')
+        return callmethod('__delattr__', (key,))
+    #end def
+#end class
 
-#Unified Nearest Neighbour model initialization
-NN = UnifiedNN()
-if not NN:
-    raise Exception('TD_Functions: Unable to initialize UnifiedNN.')
+class _PCR_P_Manager(UManager): pass
+_PCR_P_Manager.register('PCR_Parameters', PCR_Parameters, PCR_ParametersProxy)
+_pcr_p_manager = _PCR_P_Manager()
+_pcr_p_manager.start()
 
-#PCR conditions
-PCR_P = PCR_Parameters()
-
+PCR_P = _pcr_p_manager.PCR_Parameters()
 
 #pseudo-concentration of Na equivalent to current concentration of Mg2+
 def C_Na_eq():
@@ -318,28 +372,23 @@ def primer_DNA_conversion_degree(primer_concentration, K):
 
 #tests
 if __name__ == '__main__':
-    from Bio.Seq import Seq
-    from SecStructures import Dimer
-    seq1 = Seq('ATATTCTACGACGGCTATCC')
-    seq2 = Seq('ATATTCTACGACGGCTATCC').reverse_complement()
-    seq3 = Seq('GAACGCAAAGATTGGGAAC')
-    seq4 = Seq('GAACGCAAAGATTCTGAAC').reverse_complement()
-    dimer12 = Dimer.from_sequences(seq1, seq2)
-    dimer34 = Dimer.from_sequences(seq3, seq4)
-    
+    from copy import deepcopy
     PCR_P.Na     = 50.0e-3
     PCR_P.Mg     = 3.0e-3 
     PCR_P.dNTP   = 0.1e-3
     PCR_P.DNA    = 1.0e-9
     PCR_P.Primer = 0.43e-6
-    PCR_P.PCR_T    = 65
+    PCR_P.PCR_T  = 65
     
-    print vars(PCR_P)
+    print PCR_P
     PCR_P.set({'PCR_T': 30})
-    print vars(PCR_P)
+    print PCR_P
+
+    pcrp = deepcopy(PCR_P)
+    print type(PCR_P), type(pcrp)
+    PCR_P.set({'PCR_T': 60})
+    print PCR_P
+    print pcrp
     
-    print seq1, seq2
-    print dimer_dG_corrected(dimer12, seq1, seq2)
-    print ''
-    print seq3, seq4
-    print dimer_dG_corrected(dimer34, seq3, seq4)
+    print vars(PCR_P)
+    print vars(pcrp)
