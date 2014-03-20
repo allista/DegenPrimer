@@ -42,7 +42,7 @@ class ReporterInterface(object):
     
     
     def _add_report(self, name, filename):
-        self._reports.append({'report_name': name, 'report_file': filename})
+        self._reports.append((name, filename))
     
     
     def _open_report(self, name, filename):

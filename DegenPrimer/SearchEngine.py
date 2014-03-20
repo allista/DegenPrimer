@@ -21,10 +21,11 @@ Created on Jan 1, 2013
 import numpy as np
 from array import array
 from scipy.fftpack import fft, ifft
-from SecStructures import Duplex
+from SecStructures import Duplex, reverse_complement
 from StringTools import print_exception
 from MultiprocessingBase import MultiprocessingBase, cpu_count
 from WorkCounter import WorkCounter
+import TD_Functions as tdf
 
 
 class SearchEngine(MultiprocessingBase):
@@ -116,13 +117,10 @@ class SearchEngine(MultiprocessingBase):
         unambiguous components of the primer'''
         duplexes = []
         for var in primer.seq_records:
-            dup = Duplex(str(var.seq), str(template[position:position+p_len].complement())[::-1])
-            if not dup: continue
-            duplexes.append((dup, var.id))
-        if not reverse:
-            return position+p_len, tuple(duplexes)
-        else:
-            return t_len+1-(position+p_len), tuple(duplexes)
+            dup = Duplex(str(var.seq), str(template[position:position+p_len]), revcomp=True)
+            if dup: duplexes.append((dup, var.id))
+        if reverse: return t_len+1-(position+p_len), tuple(duplexes)
+        else: return position+p_len, tuple(duplexes)
     #end def
     _compile_duplexes_mapper = staticmethod(MultiprocessingBase.data_mapper(_compile_duplexes_for_position.__func__)) 
     
@@ -137,27 +135,30 @@ class SearchEngine(MultiprocessingBase):
     def compile_duplexes_mp(self, counter,  
                               fwd_seq, rev_seq, primer, 
                               t_len, p_len,
-                              fwd_matches, rev_matches):
+                              fwd_matches, rev_matches, num_jobs=None):
         '''Compile duplexes for both strands of a template in parallel'''
         if not len(fwd_matches)+len(rev_matches): return [],[]
         counter.set_subwork(2, map(len, (fwd_matches, rev_matches)))
-        counter[0].set_work(len(fwd_matches))
-        counter[1].set_work(len(rev_matches))
+        if len(fwd_matches): counter[0].set_work(len(fwd_matches))
+        if len(rev_matches): counter[1].set_work(len(rev_matches))
         #prepare and start two sets of jobs
+        tdf.aquire_parameters()
         fwd_work = self.Work(timeout=0.1, counter=counter[0])
         rev_work = self.Work(timeout=0.1, counter=counter[1])
         fwd_work.prepare_jobs(self._compile_duplexes_mapper, 
-                              fwd_matches, None, 
+                              fwd_matches, num_jobs, 
                               fwd_seq, primer, t_len, p_len, False)
         rev_work.prepare_jobs(self._compile_duplexes_mapper, 
-                              rev_matches, None, 
+                              rev_matches, num_jobs, 
                               rev_seq, primer, t_len, p_len, True)
         self.start_work(fwd_work, rev_work)
         #allocate results containers and get results
         fwd_results = []; rev_results = []
         fwd_work.set_assembler(self._duplexes_assembler, fwd_results)
         rev_work.set_assembler(self._duplexes_assembler, rev_results)
-        if not self.wait(fwd_work, rev_work): return None
+        res = self.wait(fwd_work, rev_work)
+        tdf.release_parameters() 
+        if not res: return None
         #sort duplexes by position and return them
         fwd_results.sort(key=lambda x: x[0])
         rev_results.sort(key=lambda x: x[0])
@@ -173,21 +174,23 @@ class SearchEngine(MultiprocessingBase):
         if not len(fwd_matches)+len(rev_matches): return [],[]
         counter.set_work(len(fwd_matches)+len(rev_matches))
         fwd_results = []
+        tdf.aquire_parameters()
         for pos in fwd_matches:
-            if self._abort_event.is_set(): break
+            if self.aborted(): break
             duplexes = self._compile_duplexes_for_position(pos, fwd_seq, primer, 
                                                            t_len, p_len, reverse=False)
             if duplexes[1]: fwd_results.append(duplexes)
             counter.count()
         rev_results = []
         for pos in rev_matches:
-            if self._abort_event.is_set(): break
+            if self.aborted(): break
             duplexes = self._compile_duplexes_for_position(pos, rev_seq, primer, 
                                                            t_len, p_len, reverse=True)
             if duplexes[1]: rev_results.append(duplexes)
             counter.count()
+        tdf.release_parameters()
         #if aborted, return None
-        if self._abort_event.is_set(): return None
+        if self.aborted(): return None
         return fwd_results,rev_results
     #end def
         
@@ -202,7 +205,7 @@ class SearchEngine(MultiprocessingBase):
         of unity chunk to build. It's a power of 2 integer for fft to work fast.
         c_stride -- a part of chunk for which matches are calculated 
         (it is less than map_len, so chunks overlap each other)'''
-        t_AT_map = np.fromiter(array('b',str(t_chunk)), dtype=complex) 
+        t_AT_map = np.fromiter(array('b',t_chunk), dtype=complex) 
         t_AT_map.resize(c_size)
         t_GC_map = t_AT_map.copy()
         for k,v in cls._T_AT_mapping.iteritems():
@@ -266,8 +269,10 @@ class SearchEngine(MultiprocessingBase):
                          p_fft, correction, s_stride, c_size, c_stride):
         fwd_score = []
         rev_score = []
-        pos = start
-        while pos < end and not abort_e.is_set():
+        pos       = start
+        aborted   = False
+        while pos < end and not aborted:
+            aborted = abort_e.is_set()
             front = min(end, pos+c_size)
             fwd_score.append(SearchEngine._find_in_chunk(fwd_seq[pos:front], 
                                                          p_fft, correction,
@@ -276,11 +281,10 @@ class SearchEngine(MultiprocessingBase):
                                                          p_fft, correction,
                                                          c_size, c_stride))
             pos += c_stride
-        fwd_score = np.concatenate(fwd_score)
-        rev_score = np.concatenate(rev_score)
+        if aborted: return None
         return (start, 
-                fwd_score[:s_stride], 
-                rev_score[:s_stride])
+                np.concatenate(fwd_score)[:s_stride], 
+                np.concatenate(rev_score)[:s_stride])
     #end def
     
 
@@ -293,13 +297,13 @@ class SearchEngine(MultiprocessingBase):
         chunk_stride = chunk_size-p_len
         p_maps       = self._map_pattern(str(primer.master_sequence.seq), chunk_size)
         p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
-        fwd_seq      = template.seq
-        rev_seq      = template.seq.reverse_complement()
+        fwd_seq      = str(template.seq)
+        rev_seq      = reverse_complement(fwd_seq)
         correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
         #start find_in_slice jobs
         counter.set_work(t_len/slice_stride+1)
         pos = 0; work = self.Work(counter=counter)
-        while pos < t_len and not self._abort_event.is_set():
+        while pos < t_len and not self.aborted():
             front = min(t_len, pos+slice_size)
             queue = self._Queue()
             job = self._Process(target=self._find_in_slice, 
@@ -323,7 +327,7 @@ class SearchEngine(MultiprocessingBase):
         work.set_assembler(assemble_scores, scores)
         work.get_result()
         #if search was aborted, return empty results
-        if self._abort_event.is_set(): return None
+        if self.aborted(): return None
         #compute match indices
         matches     = max(1, p_len - mismatches)-0.5
         fwd_matches = np.where(scores[0][:t_len-p_len+1] >= matches)[0]
@@ -339,14 +343,14 @@ class SearchEngine(MultiprocessingBase):
         chunk_stride = chunk_size-p_len
         p_maps       = self._map_pattern(str(primer.master_sequence.seq), chunk_size)
         p_fft        = (fft(p_maps[0]),fft(p_maps[1]))
-        fwd_seq      = template.seq
-        rev_seq      = template.seq.reverse_complement()
+        fwd_seq      = str(template.seq)
+        rev_seq      = reverse_complement(fwd_seq)
         correction   = np.ndarray(chunk_stride); correction.fill(p_len/3.0)
         fwd_score    = np.zeros(t_len+chunk_stride)
         rev_score    = np.zeros(t_len+chunk_stride)
         #_find in chunks of a template, which is faster due to lower cost of memory allocation
         pos = 0; counter.set_work(chunk_stride*(t_len/chunk_stride+1))
-        while pos < t_len and not self._abort_event.is_set():
+        while pos < t_len and not self.aborted():
             front = min(t_len, pos+chunk_size)
             fwd_score[pos:pos+chunk_stride] = self._find_in_chunk(fwd_seq[pos:front], 
                                                                   p_fft, correction, 
@@ -357,7 +361,7 @@ class SearchEngine(MultiprocessingBase):
             counter.count(chunk_stride)
             pos += chunk_stride
         #if search was aborted, return empty results
-        if self._abort_event.is_set(): return None
+        if self.aborted(): return None
         #match indexes
         matches     = max(1, p_len - mismatches)-0.5
         fwd_matches = np.where(fwd_score[:t_len-p_len+1] >= matches)[0]; del fwd_score
@@ -504,8 +508,8 @@ if __name__ == '__main__':
     #end def
 
     ppid = os.getpid()
-    import TD_Functions
-    TD_Functions.PCR_P.PCR_T = 60
+    import TD_Functions as tdf
+    tdf.PCR_P.PCR_T = 60
     
     searcher = SearchEngine(abort_event)
     
@@ -522,32 +526,39 @@ if __name__ == '__main__':
             print '[%6.2f%%] elapsed %f seconds\n' % (c.percent(), t1)
     #end def
     
-    mem_test(1)
-    sys.exit()
+#    mem_test(1)
+#    sys.exit()
         
     
     #compile duplexes serial vs parallel statistics
     fwd_seq = template.seq
     rev_seq = template.seq.reverse_complement()
     t_len = len(template); p_len = len(primer)
-    x = []; s = []; p = []
-    for n in xrange(5,105,5):
-        for _i in xrange(10):
-            x.append(n)
-            fwd_matches = np.random.randint(0, t_len, n/2)
-            rev_matches = np.random.randint(0, t_len, n-n/2)
-            s.append(timeit.timeit('searcher.compile_duplexes(fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)', 
-                                   'from __main__ import searcher, fwd_seq, rev_seq, t_len, p_len, primer, fwd_matches, rev_matches', 
-                                   number=1))
-            p.append(timeit.timeit('searcher.compile_duplexes_mp(fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)', 
-                                   'from __main__ import searcher, fwd_seq, rev_seq, t_len, p_len, primer, fwd_matches, rev_matches', 
-                                   number=1))
-    
-    from matplotlib import pyplot as plt
-    from scipy.stats import linregress
-    x = np.fromiter(x, dtype=int)
-    slm = linregress(x, s)
-    plm = linregress(x, p)
-    plt.plot(x, s, 'b.', x, x*slm[0]+slm[1], 'b-', 
-             x, p, 'r.', x, x*plm[0]+plm[1], 'r-')
-    plt.show()
+    n = 1000; j = []; s = []; p = []
+    jobs = (4,32,4); tries = 1
+    c = WorkCounter(len(xrange(*jobs))*tries)
+    np.random.seed(42)
+    fwd_matches = np.random.randint(0, t_len, n/2)
+    rev_matches = np.random.randint(0, t_len, n-n/2)
+    dups = None
+#    dups = searcher.compile_duplexes_mp(WorkCounter(), fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)
+    cProfile.run('dups = searcher.compile_duplexes(WorkCounter(), fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)', 'compile_duplexes.profile')
+    print dups
+#    for ji in xrange(*jobs):
+#        for _i in xrange(tries):
+#            j.append(ji)
+#            p.append(timeit.timeit('searcher.compile_duplexes_mp(WorkCounter(), fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches, ji)', 
+#                                   'from __main__ import searcher, fwd_seq, rev_seq, t_len, p_len, primer, fwd_matches, rev_matches, ji\n'
+#                                   'from WorkCounter import WorkCounter', 
+#                                   number=1))
+#            c.count()
+#            print c.percent()
+#    
+#    from matplotlib import pyplot as plt
+#    from scipy.stats import linregress
+#    j = np.fromiter(j, dtype=int)
+#    lm = linregress(j, p)
+#    plt.plot(j, p, 'b.', j, j*lm[0]+lm[1], 'r-') 
+#    plt.show()
+
+    print 'Done.'

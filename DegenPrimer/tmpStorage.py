@@ -125,8 +125,24 @@ class tupleView(Sequence):
 
 def _unpickle_tupleView(keys, db_path):
     return tupleView(keys, roDict(db_path))
-    
-    
+
+
+def shelf_result(func, *args, **kwargs):
+    '''Decorator that saves result of func(*args) into a temporary shelf 
+    under "result" key and returns the path to it's database'''
+    def s_func(*args, **kwargs):
+        result = func(*args, **kwargs)
+        if result is None: return None
+        d = tmpDict(persistent=True)
+        d['result'] = result 
+        d.close()
+        return d.filename
+    s_func.__name__ = func.__name__+'_to_shelf'
+    return s_func
+#end def
+
+
+
 #tests
 if __name__ == '__main__':
     from time import sleep

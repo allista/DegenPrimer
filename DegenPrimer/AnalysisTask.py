@@ -24,18 +24,18 @@ from datetime import timedelta
 from Queue import Empty
 from threading import Lock
 from Bio import SeqIO
-import TD_Functions
-from OutQueue import OutQueue
+from Output import OutQueue
 from EchoLogger import EchoLogger
 from PrimerTaskBase import PrimerTaskBase
 from BlastPrimers import BlastPrimers
 from AllSecStructures import AllSecStructures
-from MultiprocessingBase import UManager
 from WaitingThread import WaitingThread
 from WorkCounter import WorkCounterManager
 from StringTools import print_exception
+from UMP import UManager
 from SeqDB import SeqDB
 from iPCR import iPCR
+import TD_Functions as tdf
 
 
 class SubroutineManager(UManager): pass
@@ -109,24 +109,17 @@ class AnalysisTask(PrimerTaskBase):
     
     def _run_analysis(self, args):
         analysis_routines = []
-        #-------------generate components and calculate primers' Tm------------#
-        self._print('\nCalculating unambiguous components and melting temperatures '
-               'of the primers...')
-        for primer in args.primers:
-            if self._abort_event.is_set(): return None
-            primer.generate_components()
-            primer.calculate_Tms(self._abort_event)
-        self._print('Done.')
-        #save primers 
-        if not self._save_primers(args.primers): return None
+        #--------generate components calculate Tms and save the primers--------#
+        if not self._prepare_primers(args): return None
+        if not self._save_primers(): return None
         #----------------------------------------------------------------------#
         #following computations are CPU intensive, so they need parallelization#
         #check primers for hairpins, dimers and cross-dimers                   #
         self._print('\nSearching for stable secondary structures of the primers...')
         p_entry = self._generate_subroutine_entry()
-        all_sec_structures  = p_entry['manager'].AllSecStructures(self._abort_event, args.job_id, args.primers)
+        all_sec_structures  = p_entry['manager'].AllSecStructures(self._abort_event, args.job_id, self._primers)
         all_sec_structures.find_structures()
-        if self._abort_event.is_set(): return None
+        if self.aborted(): return None
         analysis_routines.append(all_sec_structures)
         side_reactions      = all_sec_structures.reactions()
         side_concentrations = all_sec_structures.concentrations()
@@ -141,7 +134,7 @@ class AnalysisTask(PrimerTaskBase):
             ipcr = p_entry['manager'].iPCR(self._abort_event,
                                            args.max_mismatches,
                                            args.job_id, 
-                                           args.primers, 
+                                           self._primers, 
                                            args.min_amplicon, 
                                            args.max_amplicon, 
                                            args.polymerase, 
@@ -163,7 +156,7 @@ class AnalysisTask(PrimerTaskBase):
         p_entry = self._generate_subroutine_entry()
         blast_primers = p_entry['manager'].BlastPrimers(self._abort_event,
                                                         args.job_id, 
-                                                        args.primers, 
+                                                        self._primers, 
                                                         args.min_amplicon, 
                                                         args.max_amplicon, 
                                                         args.polymerase, 
@@ -197,9 +190,9 @@ class AnalysisTask(PrimerTaskBase):
     #end def
 
 
-    def _save_primers(self, primers):
-        for primer in primers:
-            if self._abort_event.is_set(): return False
+    def _save_primers(self):
+        for primer in self._primers:
+            if self.aborted(): return False
             if not primer: continue
             filename = primer.id+'.'+self._fmt
             try:
@@ -242,16 +235,6 @@ class AnalysisTask(PrimerTaskBase):
             if counters: self._print('\n'+counters)
     #end def
     
-    def _print(self, text=''):
-        if self._newline_last:
-            if not text: return
-            text = text.lstrip('\n')
-        if text == '' or text.endswith('\n'):
-            self._newline_last = True
-        else: self._newline_last = False
-        print text
-    #end def
-    
     def _listen_subroutines(self):
         processes_alive = True
         prev_id         = None
@@ -292,7 +275,7 @@ class AnalysisTask(PrimerTaskBase):
     
     def _print_out_queue(self):
         output = []
-        while not self._abort_event.is_set():
+        while not self.aborted():
             try: output.append(self._out_queue.get_nowait())
             except Empty:
                 if output: 
@@ -309,17 +292,18 @@ class AnalysisTask(PrimerTaskBase):
             #zero time, used to calculate elapsed time
             self._time0 = time()
             #set PCR parameters
-            TD_Functions.PCR_P.set(args.options)
+            tdf.PCR_P.set(args.options)
             #run analysis routines and wait for them to finish
             analysis_routines = self._run_analysis(args)
             self._listen_subroutines()
             #if subroutines have been terminated, abort pipeline
-            if self._abort_event.is_set():
+            if not analysis_routines or self.aborted():
                 self._clean_subroutines()
                 with self._print_lock: 
-                    self._print('\nAnalysisTask aborted.')
+                    self._print('\nAnalysis Task aborted%s' 
+                                % (' by user.' if analysis_routines else ' due to an error.'))
                     self._print('\nTotal elapsed time: %s' % self._elapsed())
-                return False
+                return 1 if analysis_routines else -1
             #write reports
             with self._print_lock: self._print('\nWriting analysis reports...')
             for routine in analysis_routines:

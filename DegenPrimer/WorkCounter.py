@@ -121,7 +121,7 @@ class WorkCounter(Sequence):
         if not weights: weights = [1]*work
         assert len(weights) == work, \
         ('Counter: %x: a weight should be provided for every subwork.' % id(self))
-        assert min(weights) > 0, 'Weights should be positive.'
+        assert min(weights) >= 0, 'Weights should be grater than zero.'
         subwork = sum(weights)
         self._work    += subwork
         self._subwork += subwork
@@ -184,20 +184,9 @@ class WorkCounter(Sequence):
 
 
 #proxy for WorkerCounter
-from UMP import UManager
+from UMP import UManager, AutoProxyMeta
 from multiprocessing.managers import BaseProxy
 
-class AutoProxyMeta(type):
-    '''Metaclass that replicates multiprocessing.managers.MakeProxyType
-    functionality, but allows proxy classes that use it to be pickable'''
-    def __new__(cls, name, bases, attrs):
-        dic = {}
-        for meth in attrs.get('_exposed_', ()):
-            exec '''def %s(self, *args, **kwds):
-            return self._callmethod(%r, args, kwds)''' % (meth, meth) in dic
-        dic.update(attrs)
-        return super(AutoProxyMeta, cls).__new__(cls, name, bases, dic)
-#end metaclass
         
 class WorkCounterProxy(BaseProxy):
     __metaclass__ = AutoProxyMeta

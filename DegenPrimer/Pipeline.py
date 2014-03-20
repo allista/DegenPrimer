@@ -19,6 +19,7 @@ Created on Mar 28, 2013
 '''
 
 import  errno
+import traceback as tb
 from AbortableBase import AbortableBase
 from PipelineTaskBase import PipelineTaskBase
 
@@ -43,7 +44,8 @@ class Pipeline(AbortableBase):
     def run(self, args):
         result = 0
         for task, _priority in self._tasks:
-            if self._abort_event.is_set(): break
+            result = 0 #reset result
+            if self.aborted(): break
             if not task.check_options(args): continue
             args.save_configuration()
             print ''
@@ -52,13 +54,17 @@ class Pipeline(AbortableBase):
             except KeyboardInterrupt: break
             except IOError, e: 
                 if e.errno == errno.EINTR: break
-                else: raise
-            except: raise
+                else: 
+                    tb.print_exc()
+                    return 1
+            except: 
+                tb.print_exc()
+                return 1
             if result == 2: continue #task successful, try next task
             if result == 1: break    #task successful, stop here
             if result <  0:
                 print ('\nPipeline: error in %s. '
                        '\nExit code %d') % (task.__class__.__name__, result)
                 break
-        return result
+        return result < 0 #return 1 if error occurred, 0 otherwise
 #end class        

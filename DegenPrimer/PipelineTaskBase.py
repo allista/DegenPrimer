@@ -28,4 +28,19 @@ class PipelineTaskBase(AbortableBase):
     @staticmethod
     @abstractmethod
     def check_options(args): pass
+    
+    def __init__(self, abort_event):
+        AbortableBase.__init__(self, abort_event)
+        self._newline_last = False
+    #end def
+    
+    def _print(self, text=''):
+        if self._newline_last:
+            if not text: return
+            text = text.lstrip('\n')
+        if text == '' or text.endswith('\n'):
+            self._newline_last = True
+        else: self._newline_last = False
+        print text
+    #end def
 #end class

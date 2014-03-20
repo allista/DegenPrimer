@@ -100,13 +100,13 @@ class UnifiedNN(object):
     
     
     #constants
-    R                       =  1.9872 #Universal gas constant cal/(K*mol)
-    K0                      = -273.15 #Absolute temperature zero in degree Celsius
-    K37                     = 37 - K0 #37C
-    dG_Na_coefficient_oligo = -0.114 #kcal/mol for oligomers with length =< 16
-    dG_Na_coefficient_poly  = -0.175 #kcal/mol for longer polymers
-    dS_Na_coefficient       = +0.368 #e.u.
-    T_DMSP_coefficient      = 0.75
+    R                       =  1.9872  #Universal gas constant cal/(K*mol)
+    K0                      = -273.15  #Absolute temperature zero in degree Celsius
+    K37                     =  37 - K0 #37C
+    dG_Na_coefficient_oligo = -0.114   #kcal/mol for oligomers with length =< 16
+    dG_Na_coefficient_poly  = -0.175   #kcal/mol for longer polymers
+    dS_Na_coefficient       =  0.368   #e.u.
+    T_DMSO_coefficient      =  0.75
     Loop_coefficient        =  2.44
     #The NN stabilities at 37◦ C range from −1.23 to −0.21 kcal/mol 
     #for CG/GA and AC/TC, respectively
@@ -135,33 +135,33 @@ class UnifiedNN(object):
     @classmethod    
     def load_tables(cls):
         '''load thermodynamic tables'''
+        cls.tri_tetra_hairpin_loops = _load_csv(cls._tri_tetra_hairpin_loops_paths)
+        cls.loops         = dict((int(k), v) for k, v 
+                                 in _load_csv(cls._loops_paths).iteritems())
         cls.internal_NN   = _load_csv(cls._internal_NN_paths)
         cls.dangling_ends = _load_csv(cls._dangling_ends_paths)
-        cls.loops         = _load_csv(cls._loops_paths)
-        cls.tri_tetra_hairpin_loops = _load_csv(cls._tri_tetra_hairpin_loops_paths)
         cls._inited       = True
     #end def
     
-    
+
     #'standard' enthalpy, enthropy and Gibbs energy
     @classmethod
-    def pair_dPar_37(cls, seq, rev, parameter):
-        '''return 'standard' parameter (henthalpy, enthropy or Gibbs energy) 
+    def pair_dPar_37(cls, seq, rev):
+        '''return 'standard' parameter (enthalpy, enthropy and Gibbs energy) 
         for the given dinucleotide duplex'''
-        fwd_key = seq+'/'+rev
-        rev_key = rev[::-1]+'/'+seq[::-1]
-        if not '-' in fwd_key: #if it's not a dangling end
-            if   fwd_key in cls.internal_NN:
-                return cls.internal_NN[fwd_key][parameter]
-            elif rev_key in cls.internal_NN:
-                return cls.internal_NN[rev_key][parameter]
-        else:
-            if   fwd_key in cls.dangling_ends:
-                return cls.dangling_ends[fwd_key][parameter]
+        fwd_key = '%s/%s' % (seq, rev)
+        if '-' in fwd_key:
+            try: return cls.dangling_ends[fwd_key]
+            except: pass 
+        else: #if it's not a dangling end
+            try: return cls.internal_NN[fwd_key] 
+            except KeyError:
+                try: return cls.internal_NN[fwd_key[::-1]]
+                except: pass
         #if not found anywhere
         raise ValueError('UnifiedNN._delta_par: sequence is not in the database: %s' % fwd_key)
     #end def
-
+    
     
     @classmethod
     def pair_dH_37(cls, seq, rev):
@@ -180,9 +180,9 @@ class UnifiedNN(object):
     def _extrapolate_loop_dG_37(cls, length, loop_type):
         if length < 30:
             exp_len = length
-            while str(exp_len) not in cls.loops: exp_len += 1
+            while exp_len not in cls.loops: exp_len += 1
         else: exp_len = 30
-        return cls.loops[str(exp_len)][loop_type] + cls.Loop_coefficient * cls.R * cls.K37/1000 * log(float(length)/exp_len)
+        return cls.loops[exp_len][loop_type] + cls.Loop_coefficient * cls.R * cls.K37/1000 * log(float(length)/exp_len)
     #end def
     
     
@@ -193,9 +193,8 @@ class UnifiedNN(object):
             print 'Warning: thermodynamic parameters for loops of length 30 and \
             more are extrapolated from experimental data and may be erroneous.'
         #if loop length is in the table
-        if str(length) in cls.loops:
-            loop_dG = cls.loops[str(length)]['internal']
-        else: #interpolate loop dG
+        try: loop_dG = cls.loops[length]['internal'] 
+        except KeyError: #interpolate loop dG
             loop_dG = cls._extrapolate_loop_dG_37(length, 'internal')
         loop_dG += 2*cls.Terminal_mismatch_mean
         return loop_dG
@@ -210,13 +209,13 @@ class UnifiedNN(object):
             print 'Warning: thermodynamic parameters for loops of length 30 and \
             more are extrapolated from experimental data and may be erroneous.'
         #if loop length is in the table
-        if str(length) in cls.loops:
-            loop_dG = cls.loops[str(length)]['hairpin']
+        if length in cls.loops:
+            loop_dG = cls.loops[length]['hairpin']
             if   length == 3:
                 if seq in cls.tri_tetra_hairpin_loops:
                     #special tri-loop correction
                     loop_dG += cls.tri_tetra_hairpin_loops[seq]['dG']
-                if seq[0] == 'A' or seq[0] == 'T':
+                if seq[0] in 'AT':
                     loop_dG += 0.5 #kcal/mol; AT-closing penalty
             elif length == 4:
                 if seq in cls.tri_tetra_hairpin_loops:
@@ -233,37 +232,29 @@ class UnifiedNN(object):
     
     
     @classmethod
-    def loop_dH_37(cls, seq, loop_type):
-        if loop_type == 'internal': 
+    def hairpin_loop_dH_37(cls, seq):
+        if len(seq)-2 > 4: #two boundary nucleotides are not included 
             return 0 # All loop dH◦ parameters are assumed to equal zero. [1]
-        length = len(seq) - 2 #two boundary nucleotides are not included
-        if length > 4: 
-            return 0 # All loop dH◦ parameters are assumed to equal zero. [1] 
-        elif seq in cls.tri_tetra_hairpin_loops:
-            return cls.tri_tetra_hairpin_loops[seq]['dH']
-        return 0
+        try: return cls.tri_tetra_hairpin_loops[seq]['dH']
+        except KeyError: return 0
     #end def
     
+    @classmethod
+    def internal_loop_dS_37(cls, seq):
+        return cls.internal_loop_dG_37(len(seq)-2)*-1000.0/cls.K37
     
     @classmethod
-    def loop_dS_37(cls, seq, loop_type):
-        if loop_type == 'internal':
-            loop_dG = cls.internal_loop_dG_37(len(seq) - 2)
-        else:
-            loop_dG = cls.hairpin_loop_dG_37(seq)
-        loop_dH = cls.loop_dH_37(seq, loop_type)
-        return (loop_dG - loop_dH)*-1000.0/cls.K37
+    def hairpin_loop_dS_37(cls, seq):
+        loop_dG = cls.hairpin_loop_dG_37(seq)
+        loop_dH = cls.hairpin_loop_dH_37(seq)
+        return (loop_dG-loop_dH)*-1000.0/cls.K37
     #end def
     
     
     #Gibbs energy at specified temperature
     @classmethod
-    def temp_K(cls, temperature):
-        return temperature - cls.K0
-    
-    @classmethod
     def dG_T(cls, dH, dS, temperature):
-        return dH - cls.temp_K(temperature)*dS/1000.0
+        return dH - (temperature-cls.K0)*dS/1000.0
 #end class
     
 

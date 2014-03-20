@@ -34,9 +34,9 @@ from MultiprocessingBase import MultiprocessingBase
 from iPCR_Interface import iPCR_Interface
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception
-from SecStructures import Dimer, Duplex
+from SecStructures import Dimer, Duplex, max_dimer_dG
 from WorkCounter import WorkCounter
-import TD_Functions, SecStructures
+import TD_Functions as tdf
 
 
 class BlastPrimers(iPCR_Interface, MultiprocessingBase):
@@ -70,7 +70,8 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         self._results_filename = self._query_id+'-blast.xml'
         self._query_filename   = self._query_id+'-blast.cfg'
         #reports
-        self._hits_report_filename = self._job_id+'-blast-hits-report.txt'
+        self._hits_report_filename = '%s-%s-hits.txt' % (self._job_id, 
+                                                         self._PCR_report_suffix.rstrip('-PCR'))
         #flags
         self._have_blast_results = False
         self._have_saved_results = False
@@ -128,9 +129,8 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
                 continue
             for i in xrange(len(hsp.match)):
                 if hsp.match[i] == '|':
-                    template = str(Seq(hsp.sbjct, IUPAC.unambiguous_dna).reverse_complement())
-                    dimer = Dimer.from_sequences(primer, template, (query_start-bounds[0]+i, i))
-                    return Duplex(primer, template, dimer)
+                    dimer = Dimer.from_sequences(primer, hsp.sbjct, query_start-bounds[0])
+                    return Duplex(primer, hsp.sbjct, dimer, revcomp=True)
         return None
     #end def
     
@@ -240,7 +240,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         rev_annealings = []
         #check and sort all hsps
         for hsp in alignment.hsps:
-            if self._abort_event.is_set(): return None
+            if self.aborted(): return None
             #construct annealing duplex and check if it's stable
             hsp_duplex = self._duplex_from_hsp(hsp)
             if not hsp_duplex: continue
@@ -384,7 +384,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         if self._with_exonuclease:
             blast_report.write("DNA polymerase HAS 3'-5'-exonuclease activity\n")
         else: blast_report.write("DNA polymerase doesn't have 3'-5'-exonuclease activity\n")
-        blast_report.write('Maximum dG of an alignment: %.2f kcal/mol\n' % SecStructures.max_dimer_dG)
+        blast_report.write('Maximum dG of an alignment: %.2f kcal/mol\n' % max_dimer_dG)
         blast_report.write('\n')
         blast_report.write(hr(''))
         blast_report.write('\n\n')
@@ -416,7 +416,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
                                  % (hsp.score, hsp.bits, hsp.expect))
                     hsp_text += hsp_duplex.print_most_stable(include_fwd_3_mismatch=self._with_exonuclease)
                     hsp_text += 'Conversion degree = %.2f%%\n\n' \
-                    % (TD_Functions.primer_DNA_conversion_degree(hsp_primer_concentration, hsp_duplex.K)*100)
+                    % (tdf.primer_DNA_conversion_degree(hsp_primer_concentration, hsp_duplex.K)*100)
                     hsp_text += 'Template strand: '
                     if hsp.frame[1] == 1:    
                         hsp_text += 'antisense\n'
@@ -492,6 +492,7 @@ if __name__ == '__main__':
     from Primer import Primer, load_sequence
     from WorkCounter import WorkCounterManager
     from WaitingThread import WaitingThread
+    from TD_Functions import PCR_P
     from threading import Lock
     
     os.chdir('../')
@@ -499,10 +500,10 @@ if __name__ == '__main__':
     mgr = Manager()
     abort_event = mgr.Event()
     
-    TD_Functions.PCR_P.PCR_T = 53
-    TD_Functions.PCR_P.Mg    = 3e-3
-    TD_Functions.PCR_P.dNTP  = 300e-6
-    TD_Functions.PCR_P.DNA   = 1e-10
+    PCR_P.PCR_T = 53
+    PCR_P.Mg    = 3e-3
+    PCR_P.dNTP  = 300e-6
+    PCR_P.DNA   = 1e-10
     
     fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'F-TGAM_0057-268_d1', 'F-TGAM_0057-268_d1'), 0.43e-6, True)
     rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'R-TGAM_0055-624-d4', 'R-TGAM_0055-624-d4'), 0.43e-6, True)

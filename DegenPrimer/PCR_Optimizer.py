@@ -28,7 +28,9 @@ from PCR_ProductsFinder import PPFManager
 from SinglePCR import SinglePCR
 from Product import Region
 from WorkCounter import WorkCounter
-import iPCR_Base
+from Output import OutIntercepter
+from tmpStorage import register_tmp_file, cleanup_file
+from iPCR_Base import iPCR_Base
 import TD_Functions as tdf
 
 
@@ -78,12 +80,13 @@ def _parallel_OV(abort_event, OVCs, mixture_paths):
     return parallelize(abort_event, False, 0.1, OVCs, mixture_paths)
 #end def
 
-OVC_Manager = FuncManager('OVC_Manager', (_parallel_OV,))
-iPCR_Base.SearchManager.add_functions((at_manager(PPFManager, 'matches_to_mixture'),
-                                       at_manager(PPFManager, 'find_matches')))
+OVC_Manager   = FuncManager('OVC_Manager', (_parallel_OV,))
+SearchManager = FuncManager('SearchManager', 
+                            (at_manager(PPFManager, 'matches_to_mixture'), 
+                             at_manager(PPFManager, 'find_matches')))
 
 
-class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
+class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
     '''
     Repeatedly perform PCR simulation varying parameters 
     to find optimal conditions
@@ -96,9 +99,12 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
                   abort_event, max_steps, purity, 
                   *args, **kwargs):
         MultiprocessingBase.__init__(self, abort_event)
-        iPCR_Base.iPCR_Base.__init__(self, abort_event, *args, **kwargs)
+        iPCR_Base.__init__(self, abort_event, *args, **kwargs)
         #PCR simulations
         self._PCR_ProductsFinder = self._new_PCR_ProductsFinder()
+        with OutIntercepter(): #to suppress output from SearchManager
+            self._searcher       = SearchManager()
+            self._searcher.start()
         self._ovcM               = OVC_Manager()
         self._ovcM.start()
         self._last_OV            = None
@@ -163,6 +169,7 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
                                                     self._matches_list,
                                                     self._PCR_ProductsFinder)
         if mixture is None: return None, None
+        register_tmp_file(mixture)
         self._update_side_reactions(parameters)
         pcr = SinglePCR(self._abort_event, 
                         self._primers_concentrations, 
@@ -179,6 +186,7 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
         self._last_parameters = parameters
         ovc, mixture = self._prepare_simulation(parameters)
         if ovc is None: return -1e32 #FIXME: end search process if aborted
+        if self._last_mixture: cleanup_file(self._last_mixture)
         self._last_mixture = mixture
         self._last_OV = ovc(mixture)
         return self._last_OV
@@ -201,6 +209,7 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
             ei[p] = 0.0
         fi = self._ovcM.parallel_OV(self._abort_event, ovcs, mixtures)
         if fi is None: return grad #FIXME: need to handle aborts somehow
+        map(cleanup_file, mixtures)
         fi = np.asarray(fi, float)
         dx = np.fromfunction(lambda x: self._epsilon, (self._num_params,))
         return (fi-f0)/dx
@@ -250,12 +259,14 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
         if not self._find_matches(seq_file, seq_id): return False
         self._prepare_parameters(product_bounds, parameters)
         #optimize parameters
+        print ''
         optimum, _unused, info = fmin_l_bfgs_b(self._objective_function, 
                                                self._iparams,
                                                self._objective_function_grad, 
                                                approx_grad=False, 
                                                bounds=self._ibounds, factr=1e12,
                                                maxfun=self._max_steps, disp=1)
+        if self._last_mixture: cleanup_file(self._last_mixture)
         #parse results
         if info['warnflag'] == 2:
             self._exit_status = info['task']
@@ -266,13 +277,11 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
         #save results
         self._optimum       = optimum
         self._named_optimum = self._name_parameters(self._optimum)
-        assert (self._optimum == self._last_parameters).all(), \
-        'optimum differs from last_parameters'
         #simulate PCR at optimum
-        self._set_parameters(self._optimum)
-        self._update_side_reactions(self._optimum)
+        ovc, mixture = self._prepare_simulation(self._optimum)
+        if ovc is None: return False
         self._PCR_Simulation = self._new_PCR_Simulation()
-        self._PCR_Simulation.add_mixture(self._seq_name, self._last_mixture)
+        self._PCR_Simulation.add_mixture(self._seq_name, mixture)
         self._PCR_Simulation.run(WorkCounter())
         self._have_results = bool(self._PCR_Simulation)
         return self._have_results
@@ -284,16 +293,15 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base.iPCR_Base):
         header = ''
         if self._optimized:
             header += 'Optimization was successful.\n'
-            header += ('Results of PCR simulation with optimized values of the parameters '
-                       'are given below.\n\n')
+            header += wrap_text('Results of PCR simulation with optimized values of the parameters '
+                                'are given below.\n\n')
         else:
             header += 'Optimization was unsuccessful: %s\n' % self._exit_status
-            header += ('Results of PCR simulation with the values of the parameters '
-                       'from the last iteration of the optimization are given below. These '
-                       'values, nevertheless, usually give better simulation results than '
-                       'the initial ones.\n\n')
-        header  = wrap_text(header)
-        header += iPCR_Base.iPCR_Base._format_header(self)
+            header += wrap_text('Results of PCR simulation with the values of the parameters '
+                                'from the last iteration of the optimization are given below. These '
+                                'values, nevertheless, usually give better simulation results than '
+                                'the initial ones.\n\n')
+        header += iPCR_Base._format_header(self)
         header += self._PCR_Simulation.format_report_header()
         return header
     #end def
@@ -356,8 +364,8 @@ if __name__ == '__main__':
                               (
                                {'name':'PCR_T',
                                 'min':50, 'ini':60, 'max':72},
-                               {'name':'dNTP',
-                                'min':100e-6, 'ini':200e-6, 'max':900e-6},
+#                               {'name':'dNTP',
+#                                'min':100e-6, 'ini':200e-6, 'max':900e-6},
                                ),
                              ))
     job.start(); print ''

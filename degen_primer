@@ -42,6 +42,8 @@ _pid = -1
 abort_event = None
 def sig_handler(signal, frame):
     if _pid != os.getpid(): return
+    print('\nAborting. This may take some time '
+          'as not all operations could be stopped immediately.\n')
     abort_event.set(); sleep(0.1)
     tmpStorage.clean_tmp_files()
 #end def
@@ -82,7 +84,7 @@ if __name__ == '__main__':
         #batch analysis mode
         print wrap_text('Batch mode enabled. All command-line arguments '
                         'except "--do-blast" are discarded.\n')
-        exit_code = False
+        exit_code = 0
         for config_file in args.config_files:
             if abort_event.is_set(): break
             config = DegenPrimerConfig()
@@ -96,4 +98,4 @@ if __name__ == '__main__':
             print hr(' Repeating analysis for %s ' % config_file)
             exit_code |= pipeline.run(config)
             print hr('')
-        sys.exit(not exit_code)
+        sys.exit(exit_code)

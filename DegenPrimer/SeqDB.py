@@ -23,10 +23,9 @@ import sqlite3
 from Bio import SeqIO
 from Bio.Alphabet import IUPAC
 from StringIO import StringIO
-from AbortableBase import AbortableBase
 
 
-class SeqDB(AbortableBase):
+class SeqDB(object):
     '''Create and manage a database of sequences with fast approximate match 
     searching.'''
     
@@ -38,8 +37,7 @@ class SeqDB(AbortableBase):
            "length"     INTEGER UNSIGNED NOT NULL)'''
   
     
-    def __init__(self, abort_event):
-        AbortableBase.__init__(self, abort_event)
+    def __init__(self):
         self._db_name  = None
         self._db       = None
         self._cursor   = None

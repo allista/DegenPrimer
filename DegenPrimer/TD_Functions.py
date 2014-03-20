@@ -1,5 +1,4 @@
 # coding=utf-8
-
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
 # 
 # degen_primer is free software: you can redistribute it and/or modify it
@@ -32,100 +31,32 @@ deoxynucleotide triphosphate, and dimethyl sulfoxide concentrations with
 comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-61.
 '''
 
+from copy import deepcopy
 from math import sqrt, log, exp
 from UnifiedNN import UnifiedNN
-from UMP import UManager
-from multiprocessing.managers import BaseProxy
+from PCR_Parameters import PCR_Parameters
 import StringTools
 ###############################################################################
 
 
-#Unified Nearest Neighbour model initialization
+#Unified Nearest Neighbour model and PCR parameters initialization
 NN = UnifiedNN()
-if not NN: raise Exception('TD_Functions: Unable to initialize UnifiedNN.')
+if not NN: raise RuntimeError('TD_Functions: Unable to initialize UnifiedNN.')
+PCR_P  = PCR_Parameters()
+_PCR_P = None
 
 
-#PCR conditions
-class PCR_Parameters(object):
-    def __init__(self):
-        #standard PCR conditions
-        self.Mg    = 1.5e-3 #M
-        self.Na    = 50e-3  #M
-        self.dNTP  = 0.1e-3 #M
-        self.DNA   = 5e-9   #M; DNA template concentration
-        self.DMSO  = 0.0    #%; v/v-percent concentration of DMSO
-        self.PCR_T = 60.0   #C; temperature at which PCR is conducted
-    #end def
-    
-    def set(self, params):
-        for name in vars(self).keys():
-            if name in params:
-                setattr(self, name, params[name])
-    #end def
-    
-    def __str__(self):
-        s  = '\n'
-        s += 'Mg:    %fM\n'  % self.Mg
-        s += 'Na:    %fM\n'  % self.Na
-        s += 'dNTP:  %fM\n'  % self.dNTP
-        s += 'DNA:   %fM\n'  % self.DNA
-        s += 'DMSO:  %f%%\n' % self.DMSO
-        s += 'PCR_T: %fC\n'  % self.PCR_T
-        return s
-    #end def
-#end class
-
-class PCR_ParametersProxy(BaseProxy):
-    #from multiprocessing.managers.NamespaceProxy
-    _exposed_ = ('__getattribute__', '__setattr__', '__delattr__', 
-                 '__str__', 'set')
-    
-    def set(self, params):
-        callmethod = object.__getattribute__(self, '_callmethod')
-        return callmethod('set', (params,))
-    #end def
-    
-    def __str__(self):
-        callmethod = object.__getattribute__(self, '_callmethod')
-        return callmethod('__str__')
-    #end def
-    
-    def __getattr__(self, key):
-        if key[0] == '_':
-            return object.__getattribute__(self, key)
-        callmethod = object.__getattribute__(self, '_callmethod')
-        return callmethod('__getattribute__', (key,))
-    #end def
-    
-    def __setattr__(self, key, value):
-        if key[0] == '_':
-            return object.__setattr__(self, key, value)
-        callmethod = object.__getattribute__(self, '_callmethod')
-        return callmethod('__setattr__', (key, value))
-    #end def
-    
-    def __delattr__(self, key):
-        if key[0] == '_':
-            return object.__delattr__(self, key)
-        callmethod = object.__getattribute__(self, '_callmethod')
-        return callmethod('__delattr__', (key,))
-    #end def
-#end class
-
-class _PCR_P_Manager(UManager): pass
-_PCR_P_Manager.register('PCR_Parameters', PCR_Parameters, PCR_ParametersProxy)
-_pcr_p_manager = _PCR_P_Manager()
-_pcr_p_manager.start()
-
-PCR_P = _pcr_p_manager.PCR_Parameters()
-
-#pseudo-concentration of Na equivalent to current concentration of Mg2+
-def C_Na_eq():
-    ''''divalent cation correction:
-    all concentrations should be in mM (Ahsen et al., 2001)'''
-    return (PCR_P.Na*1e3 + 120*sqrt((PCR_P.Mg - PCR_P.dNTP)*1e3))*1e-3
+def aquire_parameters():
+    global _PCR_P, PCR_P
+    assert _PCR_P is None, 'TD_Functions: PCR parameters are already aquired.'
+    _PCR_P, PCR_P = PCR_P, deepcopy(PCR_P)
 #end def
 
+def release_parameters():
+    global _PCR_P, PCR_P
+    assert isinstance(_PCR_P, PCR_Parameters), 'TD_Functions: PCR parameters were not aquired. %s'
+    PCR_P, _PCR_P = _PCR_P, None
+#end def
 
 def primer_template_Tr(sequence, concentration, conversion_degree):
     '''Calculate temperature for primer-template annealing equilibrium 
@@ -139,7 +70,6 @@ def primer_template_Tr(sequence, concentration, conversion_degree):
     #definitions
     seq_str = str(sequence)
     rev_str = str(sequence.complement())
-    dH, dS = 0, 0
     #concentrations
     P   = concentration
     D   = PCR_P.DNA
@@ -147,25 +77,25 @@ def primer_template_Tr(sequence, concentration, conversion_degree):
     #equilibrium constant 
     K   = DUP/((P-DUP)*(D-DUP))
     #initial corrections
-    dH += NN.pair_dPar_37('ini', 'ini', 'dH')
-    dS += NN.pair_dPar_37('ini', 'ini', 'dS')
+    dP = NN.pair_dPar_37('ini', 'ini')
+    dH = dP['dH']; dS = dP['dS']
     #test for AT terminals
-    if seq_str[0] == 'A' or seq_str[0] == 'T':
-        dH += NN.pair_dPar_37('ter', 'ter', 'dH')
-        dS += NN.pair_dPar_37('ter', 'ter', 'dS')
-    if seq_str[-1] == 'A' or seq_str[-1] == 'T':
-        dH += NN.pair_dPar_37('ter', 'ter', 'dH')
-        dS += NN.pair_dPar_37('ter', 'ter', 'dS')
+    if seq_str[0]  in 'AT':
+        dP  = NN.pair_dPar_37('ter', 'ter')
+        dH += dP['dH']; dS +=  dP['dS']
+    if seq_str[-1] in 'AT':
+        dP  = NN.pair_dPar_37('ter', 'ter')
+        dH += dP['dH']; dS +=  dP['dS']
     #stacking interactions
     for n in xrange(len(seq_str)-1):
         pair    = seq_str[n:n+2]
         reverse = rev_str[n:n+2]
-        dH += NN.pair_dPar_37(pair, reverse, 'dH')
-        dS += NN.pair_dPar_37(pair, reverse, 'dS')
+        dP  = NN.pair_dPar_37(pair, reverse)
+        dH += dP['dH']; dS +=  dP['dS']
     #salt concentration correction
-    dS = dS + NN.dS_Na_coefficient * len(seq_str) * log(C_Na_eq()) #C_Na qM
+    dS = dS + NN.dS_Na_coefficient * len(seq_str) * log(PCR_P.Na_eq) #C_Na qM
     #final temperature calculation
-    return NN.K0 + dH * 1000/(dS - NN.R * log(K)) - NN.T_DMSP_coefficient * PCR_P.DMSO #DMSO correction from [2]
+    return NN.K0 + dH * 1000/(dS - NN.R * log(K)) - NN.T_DMSO_coefficient * PCR_P.DMSO #DMSO correction from [2]
 #end def
 
 def primer_template_Tm(sequence, concentration): 
@@ -197,85 +127,88 @@ def dimer_dG_corrected(dimer, seq1, seq2):
     salt concentrations and temperature.
     dimer -- an instance of Dimer class which represents a dimer structure.
     seq1, seq2 -- sequences constituting a dimer, given in 5'->3' orientation.'''
-    fwd_matches = dimer.fwd_matches
-    #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
-    rev_matches = dimer.rev_matches
-    #e.g. 3-'(13,14,15,19,20)-5'
+    fwd_matches = dimer.fwd_matches #e.g. 5'-(2 ,3 ,4 ,8 ,9 )-3'
+    offset  = dimer.offset
     seq_str = str(seq1)
     seq_len = len(seq_str)
     rev_str = str(seq2)[::-1]
     rev_len = len(rev_str)
     #initial dG of annealing
     dG = 0
-    dH = NN.pair_dPar_37('ini', 'ini', 'dH')
-    dS = NN.pair_dPar_37('ini', 'ini', 'dS')
+    dP = NN.pair_dPar_37('ini', 'ini')
+    dH = dP['dH']
+    dS = dP['dS']
     #check for 'left' dangling end
-    if   fwd_matches[0] == 0 and rev_matches[0] > 0: #3' dangling
-        pair    = rev_str[rev_matches[0]]+rev_str[rev_matches[0]-1]
+    fwd0 = fwd_matches[0] 
+    if fwd0 == 0 and offset < 0: #3' dangling
+        rev0    = fwd0-offset
+        pair    = rev_str[rev0]+rev_str[rev0-1]
         reverse = seq_str[0]+'-' 
-        dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-        dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
-    elif rev_matches[0] == 0 and fwd_matches[0] > 0: #5' dangling
-        pair    = seq_str[fwd_matches[0]-1]+seq_str[fwd_matches[0]]
-        reverse = '-'+rev_str[0] 
-        dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-        dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
-    #check for 'left' terminal mismatch
-    elif fwd_matches[0] > 0 and rev_matches[0] > 0:
-        dG += NN.Terminal_mismatch_mean
+        dP  = NN.pair_dPar_37(pair, reverse)
+        dH += dP['dH']; dS +=  dP['dS']
     #check for 'left' terminal AT
-    elif fwd_matches[0] == 0 and rev_matches[0] == 0:
-        if seq_str[0] == 'A' or seq_str[0] == 'T':
-            dH += NN.pair_dPar_37('ter', 'ter', 'dH')
-            dS += NN.pair_dPar_37('ter', 'ter', 'dS')
+    elif fwd0 == 0 and offset == 0:
+        if seq_str[0] in 'AT':
+            dP  = NN.pair_dPar_37('ter', 'ter')
+            dH += dP['dH']; dS +=  dP['dS']
+    elif fwd0 == offset: #5' dangling
+        pair    = seq_str[fwd0-1]+seq_str[fwd0]
+        reverse = '-'+rev_str[0]
+        dP  = NN.pair_dPar_37(pair, reverse)
+        dH += dP['dH']; dS +=  dP['dS'] 
+    #check for 'left' terminal mismatch
+    elif fwd0 > offset:
+        dG += NN.Terminal_mismatch_mean
     #check for 'right' dangling end
-    if   fwd_matches[-1] == seq_len-1 and rev_matches[-1] < rev_len-1: #5' dangling
-        pair    = rev_str[rev_matches[-1]+1]+rev_str[rev_matches[-1]]
+    fwd_1 = fwd_matches[-1]
+    rev_1 = fwd_1-offset
+    if fwd_1 == seq_len-1 and rev_1 < rev_len-1: #5' dangling
+        pair    = rev_str[rev_1+1]+rev_str[rev_1]
         reverse = '-'+seq_str[-1] 
-        dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-        dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
-    elif rev_matches[-1] == rev_len-1 and fwd_matches[-1] < seq_len-1: #3' dangling
-        pair    = seq_str[fwd_matches[-1]]+seq_str[fwd_matches[-1]+1]
+        dP  = NN.pair_dPar_37(pair, reverse)
+        dH += dP['dH']; dS +=  dP['dS']
+    elif rev_1 == rev_len-1 and fwd_1 < seq_len-1: #3' dangling
+        pair    = seq_str[fwd_1]+seq_str[fwd_1+1]
         reverse = rev_str[-1]+'-' 
-        dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-        dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
+        dP  = NN.pair_dPar_37(pair, reverse)
+        dH += dP['dH']; dS +=  dP['dS']
     #check for 'right' terminal mismatch
-    elif fwd_matches[-1]  < seq_len-1 and rev_matches[0] < rev_len-1:
+    elif fwd_1 < seq_len-1 and rev_1 < rev_len-1:
         dG += NN.Terminal_mismatch_mean
     #check for 'right' terminal AT
-    elif fwd_matches[-1] == seq_len-1 and rev_matches[-1] == rev_len-1:
-        if seq_str[-1] == 'A' or seq_str[-1] == 'T':
-            dH += NN.pair_dPar_37('ter', 'ter', 'dH')
-            dS += NN.pair_dPar_37('ter', 'ter', 'dS')
+    elif fwd_1 == seq_len-1 and rev_1 == rev_len-1:
+        if seq_str[-1] in 'AT':
+            dP  = NN.pair_dPar_37('ter', 'ter')
+            dH += dP['dH']; dS +=  dP['dS']
     #stacking and mismatches
     for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
         f_next  = fwd_matches[i+1]
-        r_match = rev_matches[i]
-        r_next  = rev_matches[i+1]
+        r_match = f_match-offset
+        r_next  = f_next-offset
         #if either || or |x| or |xx|
         if f_next-f_match < 4:
             pair    = seq_str[f_match:f_match+2]
             reverse = rev_str[r_match:r_match+2]
             #dH and salt-corrected dS
-            dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-            dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
+            dP  = NN.pair_dPar_37(pair, reverse)
+            dH += dP['dH']; dS +=  dP['dS']
             #if ||
             if f_next-f_match == 1: continue
             #if |x| or |xx|
             elif f_next-f_match < 4:
                 pair1    = rev_str[r_next-1:r_next+1][::-1]
                 reverse1 = seq_str[f_next-1:f_next+1][::-1]
-                dH +=  NN.pair_dPar_37(pair1, reverse1, 'dH')
-                dS +=  NN.pair_dPar_37(pair1, reverse1, 'dS')
+                dP  = NN.pair_dPar_37(pair1, reverse1)
+                dH += dP['dH']; dS +=  dP['dS']
                 continue
         #loop
         else:
             loop_seq = seq_str[f_match:f_next+1]
-            dS += NN.loop_dS_37(loop_seq, 'internal')
+            dS += NN.internal_loop_dS_37(loop_seq)
     #dS salt correction
-    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
-    return dG + dH - NN.temp_K(PCR_P.PCR_T)*dS/1000.0
+    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(PCR_P.Na_eq)
+    return dG + dH - (PCR_P.PCR_T-NN.K0)*dS/1000.0
 #end def
 
 
@@ -292,27 +225,28 @@ def hairpin_dG_corrected(hairpin, seq):
     seq_len = len(seq_str)
     #initial dG of annealing
     dG = 0
-    dH = NN.pair_dPar_37('ini', 'ini', 'dH')
-    dS = NN.pair_dPar_37('ini', 'ini', 'dS')
+    dP = NN.pair_dPar_37('ini', 'ini')
+    dH = dP['dH']
+    dS = dP['dS']
     #check for 'left' dangling end
     if   fwd_matches[0] == 0 and rev_matches[0] < seq_len-1: #3'-end
         pair    = seq_str[rev_matches[0]]+seq_str[rev_matches[0]+1]
         reverse = seq_str[0] + '-'
-        dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-        dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
+        dP  = NN.pair_dPar_37(pair, reverse)
+        dH += dP['dH']; dS +=  dP['dS']
     elif fwd_matches[0] > 0 and rev_matches[0] == seq_len-1: #5'-end
         pair    = seq_str[fwd_matches[0]-1]+seq_str[fwd_matches[0]]
         reverse = '-' + seq_str[-1]
-        dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-        dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
+        dP  = NN.pair_dPar_37(pair, reverse)
+        dH += dP['dH']; dS +=  dP['dS']
     #check for 'left' terminal mismatch
     elif fwd_matches[0] > 0 and rev_matches[0] < seq_len-1:
         dG += NN.Terminal_mismatch_mean
     #check for 'left' terminal AT
     elif fwd_matches[0] == 0 and rev_matches[0] == seq_len-1:
-        if seq_str[0] == 'A' or seq_str[0] == 'T':
-            dH += NN.pair_dPar_37('ter', 'ter', 'dH')
-            dS += NN.pair_dPar_37('ter', 'ter', 'dS')
+        if seq_str[0] in 'AT':
+            dP  = NN.pair_dPar_37('ter', 'ter')
+            dH += dP['dH']; dS +=  dP['dS']
     #stacking and mismatches
     for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
@@ -324,35 +258,35 @@ def hairpin_dG_corrected(hairpin, seq):
             pair    = seq_str[f_match:f_match+2]
             reverse = seq_str[r_match-1:r_match+1][::-1]
             #dH and salt-corrected dS
-            dH +=  NN.pair_dPar_37(pair, reverse, 'dH')
-            dS +=  NN.pair_dPar_37(pair, reverse, 'dS')
+            dP  = NN.pair_dPar_37(pair, reverse)
+            dH += dP['dH']; dS +=  dP['dS']
             #if ||
             if f_next-f_match == 1: continue
             #if |x| or |xx|
             elif f_next-f_match < 4:
                 pair1    = seq_str[r_next:r_next+2]
                 reverse1 = seq_str[f_next-1:f_next+1][::-1]
-                dH +=  NN.pair_dPar_37(pair1, reverse1, 'dH')
-                dS +=  NN.pair_dPar_37(pair1, reverse1, 'dS')
+                dP  = NN.pair_dPar_37(pair1, reverse1)
+                dH += dP['dH']; dS +=  dP['dS']
                 continue
         #loop
         else:
             loop_seq = seq_str[f_match:f_next+1]
-            dS += NN.loop_dS_37(loop_seq, 'internal')
+            dS += NN.internal_loop_dS_37(loop_seq)
     #hairpin loop
     hp_str = seq_str[fwd_matches[-1]:rev_matches[-1]+1]
-    dH += NN.loop_dH_37(hp_str, 'hairpin')
-    dS += NN.loop_dS_37(hp_str, 'hairpin')
+    dH += NN.hairpin_loop_dH_37(hp_str)
+    dS += NN.hairpin_loop_dS_37(hp_str)
     #dS salt correction
-    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(C_Na_eq())
-    return dG + dH - NN.temp_K(PCR_P.PCR_T)*dS/1000.0
+    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(PCR_P.Na_eq)
+    return dG + dH - (PCR_P.PCR_T-NN.K0)*dS/1000.0
 #end def
 
 
 def equilibrium_constant(dG_T, T):
     '''calculate equilibrium constant of annealing at a given temperature, 
     given standard dG at this temperature'''
-    return exp(-1000*dG_T/(NN.R*NN.temp_K(T))) #annealing equilibrium constant
+    return exp(-1000*dG_T/(NN.R*(T-NN.K0))) #annealing equilibrium constant
 #end def
 
 
@@ -373,13 +307,6 @@ def primer_DNA_conversion_degree(primer_concentration, K):
 #tests
 if __name__ == '__main__':
     from copy import deepcopy
-    PCR_P.Na     = 50.0e-3
-    PCR_P.Mg     = 3.0e-3 
-    PCR_P.dNTP   = 0.1e-3
-    PCR_P.DNA    = 1.0e-9
-    PCR_P.Primer = 0.43e-6
-    PCR_P.PCR_T  = 65
-    
     print PCR_P
     PCR_P.set({'PCR_T': 30})
     print PCR_P
@@ -389,6 +316,3 @@ if __name__ == '__main__':
     PCR_P.set({'PCR_T': 60})
     print PCR_P
     print pcrp
-    
-    print vars(PCR_P)
-    print vars(pcrp)

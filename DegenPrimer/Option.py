@@ -28,23 +28,25 @@ from StringTools import wrap_text
 
 class OptionBase(object):
     def __init__(self, name, desc):
-        self.name      = name
+        self._name     = name
         self._desc     = desc
         self._parent   = None
         self.options   = []
     #end def
     
     
-    def _fill_optional_fields(self, **kwargs):
+    def fill_optional_attributes(self, **kwargs):
         for _name, _value in kwargs.items():
             if hasattr(self, _name): setattr(self, _name, _value)
     #end def
     
+    @property
+    def name(self): return self._name
     
     @property
     def full_name(self):
-        if self._parent is None: return self.name
-        return self._parent.full_name + '/' + self.name
+        if self._parent is None: return self._name
+        return self._parent.full_name + '/' + self._name
     #end def
     
     
@@ -56,7 +58,7 @@ class OptionBase(object):
         return wrap_text(self.desc.replace('%%', '%')).strip()
     
     @property
-    def group(self): return self.name
+    def group(self): return self._name
     
     @property
     def is_compound(self): return bool(self.options)
@@ -66,10 +68,17 @@ class OptionBase(object):
 class OptionGroup(OptionBase):
     def __init__(self, name, desc, **kwargs):
         OptionBase.__init__(self, name, desc)
-        self.is_mutex  = False
-        self._fill_optional_fields(**kwargs)
-        #set parent for options
-        for opt in self.options: opt.set_parent(self)
+        self.is_mutex = False
+        #get options
+        self.options = kwargs.pop('options', None)
+        if not self.options: 
+            raise ValueError('OptionGroup should be provided with options.')
+        #fill optional attributes
+        self.fill_optional_attributes(**kwargs)
+        #set parent for options and force keyword attributes
+        for opt in self.options: 
+            opt.set_parent(self)
+            opt.fill_optional_attributes(**kwargs)
     #end def
     
     @property
@@ -99,8 +108,9 @@ class Option(OptionBase):
         self.args       = ('--%s' % name.replace('_', '-'),)
         self.metavar    = self.field_type        
         self.required   = False
+        self.value_required = True
         #fill optional fields_list
-        self._fill_optional_fields(**kwargs)
+        self.fill_optional_attributes(**kwargs)
         #set proper nargs and metavar
         if self.options:
             self.metavar = 'val'
@@ -129,27 +139,20 @@ class Option(OptionBase):
         if self.options:
             for opt in self.options:
                 fields_list.extend(opt.fields_list)
-        else: fields_list.append((self.name, self.py_type))
+        else: fields_list.append((self._name, self.py_type))
         return fields_list
     #end def
     
     
     @property
-    def value_required(self):
-        return (self._nargs == '+' 
-                or type(self._nargs) is int and self._nargs >= 1)
-    #end def
-    
-    
-    @property
     def dest(self):
-        if self.is_poly: return self.name+'_list'
-        else: return self.name
+        if self.is_poly: return self._name+'_list'
+        else: return self._name
     
     
     @property
     def group(self):
-        if self._parent is None: return self.name
+        if self._parent is None: return self._name
         return self._parent.group
             
     
@@ -256,7 +259,7 @@ class Option(OptionBase):
             #end def
         #end class
         
-        OptionAction.__name__    = self.name+'_action'
+        OptionAction.__name__    = self._name+'_action'
         OptionAction.poly        = self.is_poly
         OptionAction.fields_list = self.fields_list
         
@@ -301,5 +304,4 @@ if __name__ == '__main__':
                                    py_type=str,
                                    ),
                             ))
-    opt.add_attr('test')
     print vars(opt)

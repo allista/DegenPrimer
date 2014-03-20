@@ -18,19 +18,17 @@ Created on Mar 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-
+from EchoLogger import EchoLogger
 from PrimerTaskBase import PrimerTaskBase
 from PCR_Optimizer import PCR_Optimizer
-import TD_Functions
+import TD_Functions as tdf
 
 
 class OptimizationTask(PrimerTaskBase):
     
     def __init__(self, abort_event):
         PrimerTaskBase.__init__(self, abort_event)
-        self._optimizer          = None
-        self._primers            = []
-        self._valid_parameters   = []
+        self._valid_parameters = []
     #end def
 
 
@@ -58,47 +56,48 @@ class OptimizationTask(PrimerTaskBase):
         
     
     def run(self, args):
-        self._primers = args.primers
-        self._define_valid_parameters()
-        #set PCR parameters
-        TD_Functions.PCR_P.set(args.options)
-        #parse optimization parameters
-        parameters = args.optimization_parameter_list
-        parameters = [par for par in parameters 
-                      if par['enabled'] and 
-                      self._parse_parameter_name(par)]
-        for par in parameters: self._scale_parameter(par, args)
-        #perform optimization
-        self._optimizer = PCR_Optimizer(args.max_simulations,
-                                        args.product_purity,
-                                        args.max_mismatches,
-                                        args.job_id, 
-                                        self._primers, 
-                                        args.min_amplicon, 
-                                        args.max_amplicon, 
-                                        args.polymerase, 
-                                        args.with_exonuclease, 
-                                        args.cycles,
-                                        None, 
-                                        None,
-                                        args.analyse_all_annealings)
-        seq_file = args.sequence_db or args.fasta_files[0]
-        seq_id   = args.use_sequences[0] if args.use_sequences else None
-        if self._optimizer.optimize_PCR_parameters(seq_file, 
-                                                   args.target_product_list,
-                                                   parameters,
-                                                   seq_id):
-            self._optimizer.write_report()
-            args.register_reports(self._optimizer.reports())
-        del self._optimizer
-        self._optimizer = None
-        return 1
+        with EchoLogger(args.job_id):
+            if not self._prepare_primers(args): return -1
+            self._define_valid_parameters()
+            #set PCR parameters
+            tdf.PCR_P.set(args.options)
+            #parse optimization parameters
+            parameters = args.optimization_parameter_list
+            parameters = [par for par in parameters 
+                          if par['enabled'] and 
+                          self._parse_parameter_name(par)]
+            for par in parameters: self._scale_parameter(par, args)
+            #perform optimization
+            optimizer = PCR_Optimizer(self._abort_event,
+                                      args.max_simulations,
+                                      args.product_purity,
+                                      args.max_mismatches,
+                                      args.job_id, 
+                                      self._primers, 
+                                      args.min_amplicon, 
+                                      args.max_amplicon, 
+                                      args.polymerase, 
+                                      args.with_exonuclease, 
+                                      args.cycles,
+                                      None, 
+                                      None,
+                                      args.analyse_all_annealings)
+            seq_file = args.sequence_db or args.fasta_files[0]
+            seq_id   = args.use_sequences[0] if args.use_sequences else None
+            if optimizer.optimize_PCR_parameters(seq_file, 
+                                                       args.target_product_list,
+                                                       parameters,
+                                                       seq_id):
+                if optimizer.have_results():
+                    optimizer.write_reports()
+                    args.register_reports(optimizer.reports())
+            return 1
     #end def
 
 
     def _define_valid_parameters(self):
         self._valid_parameters.extend(primer.id for primer in self._primers)
-        self._valid_parameters.extend(vars(TD_Functions.PCR_P))
+        self._valid_parameters.extend(tdf.PCR_P.parameters)
         self._valid_parameters.extend(['polymerase'])
     #end def
         
@@ -115,7 +114,7 @@ class OptimizationTask(PrimerTaskBase):
         if _name in self._valid_parameters: 
             parameter['name'] = _name
             return True
-        print '\nOptimizationTask: invalid optimization parameter name: %s' % name
+        self._print('\nOptimizationTask: invalid optimization parameter name: %s' % name)
         return False
     #end def
         

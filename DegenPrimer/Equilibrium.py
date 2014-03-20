@@ -186,7 +186,7 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         while r0_obj > self._precision \
         or    min(sol) < 0 \
         or    max(sol) > 1:
-            if self._abort_event.is_set(): return None
+            if self.aborted(): return None
             sol = solver(sys_func, r0 + (random(r0.shape)-r0)*0.3, self._precision)
             if  min(sol) >= 0 and max(sol) <= 1: 
                 r0 = sol

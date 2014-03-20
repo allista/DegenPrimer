@@ -23,22 +23,58 @@ Created on Nov 16, 2012
 
 from datetime import timedelta
 from math import log, exp
-import StringTools
-import TD_Functions
-from TD_Functions import format_PCR_conditions
-from StringTools import wrap_text, line_by_line, hr
-from Product import Region
-from MultiprocessingBase import Parallelizer, FuncManager
+from collections import Iterable
 from SecStructures import min_K
 from SinglePCR import PCR_Base, SinglePCR
-from PCR_Mixture import ShelvedMixture
 from tmpStorage import roDict, cleanup_file, register_tmp_file
+from StringTools import wrap_text, line_by_line, hr
+import TD_Functions as tdf
+import StringTools
+
+
+class PCR_Simulation_Interface(PCR_Base):
+    def __init__(self,
+                  abort_event,
+                  primers,       #all primers (generally degenerate) that may be present in the system 
+                  min_amplicon,  #minimum amplicon length 
+                  max_amplicon,  #maximum amplicon length 
+                  polymerase,    #polymerase concentration in Units per liter
+                  with_exonuclease=False, #if polymerase does have have 3' exonuclease activity, products of primers with 3'-mismatches will also be included
+                  num_cycles=20, #number of PCR cycles
+                  side_reactions=None,
+                  side_concentrations=None,
+                  include_side_annealings=False #if True, include annealings which do not give any products into equilibrium system as side reactions
+                  ):
+        assert isinstance(primers, Iterable), \
+        ('PCR_Simulation_Interface: primers should be an iterable. '
+         'Given %s instead') % str(primers)
+        assert len(primers), 'PCR_Simulation_Interface: no primers given.'
+
+        PCR_Base.__init__(self, abort_event, polymerase, with_exonuclease, num_cycles)
+        self._primers                 = primers
+        self._min_amplicon            = min_amplicon
+        self._max_amplicon            = max_amplicon
+        self._include_side_annealings = include_side_annealings
+   
+        self._elongation_time         = max_amplicon/1000.0 #minutes
+        self._primers_concentrations  = dict()
+        for primer in self._primers:
+            self._primers_concentrations.update(dict.fromkeys(primer.str_sequences, 
+                                                              primer.concentration))
+
+        self._side_reactions          = side_reactions if side_reactions else dict()
+        self._side_concentrations     = side_concentrations if side_concentrations else dict()
+#end class
 
 
 #manager to isolate forking point in a low-memory process
+from PCR_Mixture import ShelvedMixture
+from MultiprocessingBase import Parallelizer
+from UMP import FuncManager, at_manager
+
 class run_pcr_from_file(object):
     def __init__(self, pcr, counter=None):
-        self._pcr = pcr
+        self._pcr     = pcr
         self._counter = counter
     #end def
         
@@ -48,20 +84,15 @@ class run_pcr_from_file(object):
 
 #manager to isolate forking point in a low-memory process
 def _ParallelPCR(counter, abort_event, pcr, mixture_paths):
-    p = Parallelizer()
-    p.start()
-    result_path = p.parallelize_work(abort_event, False, 0.1, 
-                                     run_pcr_from_file(pcr), 
-                                     mixture_paths, counter=counter)
-    result_path = result_path._getvalue()
-    p.shutdown()
-    return result_path
+    parallelize = at_manager(Parallelizer, 'parallelize_work_to_shelf')
+    return parallelize(abort_event, False, 0.1, run_pcr_from_file(pcr), 
+                       mixture_paths, counter=counter)
 #end def
 
-PCR_Manager = FuncManager((_ParallelPCR,))
+PCR_Manager = FuncManager('PCR_Manager', (_ParallelPCR,))
 
 
-class PCR_Simulation(PCR_Base):
+class PCR_Simulation(PCR_Simulation_Interface):
     '''Parallel simulation of multiple PCRs. Visualization of the results.'''
     
     #histogram
@@ -76,31 +107,11 @@ class PCR_Simulation(PCR_Base):
     #separate bands on the electrophoresis.
     _precision           = 1e6
 
-    def __init__(self, 
-                  abort_event,
-                  primers,                #all primers (generally degenerate) that may be present in the system
-                  min_amplicon,           #minimum amplicon length 
-                  max_amplicon,           #maximum amplicon length
-                  polymerase,             #polymerase concentration in Units per liter
-                  with_exonuclease=False, #if polymerase does have have 3' exonuclease activity, products of primers with 3'-mismatches will also be icluded
-                  num_cycles=20,          #number of PCR cycles
-                  include_side_annealings=False, #if True, include annealings which do not give any products into equilibrium system as side reactions
-                  ):
-        PCR_Base.__init__(self, abort_event, polymerase, with_exonuclease, num_cycles)
-        self._primers                 = primers
-        self._min_amplicon            = min_amplicon
-        self._max_amplicon            = max_amplicon
-        self._include_side_annealings = include_side_annealings
-        self._elongation_time         = max_amplicon/1000.0 #minutes
+    def __init__(self, *args, **kwargs): 
+        PCR_Simulation_Interface.__init__(self, *args, **kwargs)
         #conditions
         self._reactions_ids           = set()
         self._PCR_mixtures            = dict()
-        self._side_reactions          = dict()
-        self._side_concentrations     = dict()
-        self._primers_concentrations  = dict()
-        for primer in self._primers:
-            self._primers_concentrations.update(dict.fromkeys(primer.str_sequences, 
-                                                             primer.concentration))
         #results
         self._max_objective_value     = -1 #objective value of the worst solution
         self._reaction_ends           = dict()
@@ -124,22 +135,6 @@ class PCR_Simulation(PCR_Base):
 
     def hits(self): return list(self._reactions_ids)
 
-
-    def product_concentration(self, hit_id, bounds):
-        if self._nonzero and hit_id in self._products:
-            lookup_region = Region(hit_id, *bounds, forward=True)
-            total_concentration   = 0
-            product_concentration = -1
-            for _unused, product in self._products[hit_id].items():
-                total_concentration += product.quantity
-                if product == lookup_region:
-                    product_concentration = product.quantity
-            if total_concentration == 0 or product_concentration < 0: return 0, 0
-            return (product_concentration, 
-                    product_concentration/total_concentration)
-        return 0, 0
-    #end def
-    
     
     def add_side_concentrations(self, concentrations):
         if concentrations: self._side_concentrations.update(concentrations)
@@ -167,7 +162,8 @@ class PCR_Simulation(PCR_Base):
                    self._polymerase, 
                    self._with_exonuclease, 
                    self._num_cycles, 
-                   self._side_reactions, self._side_concentrations)
+                   self._side_reactions, 
+                   self._side_concentrations)
     #end def
     
 
@@ -181,14 +177,13 @@ class PCR_Simulation(PCR_Base):
             results_path = self._pcrM.ParallelPCR(counter[0],
                                                   self._abort_event, pcr,
                                                   self._PCR_mixtures.values())
-            results_path = results_path._getvalue()
             results = roDict(results_path)['result']
             cleanup_file(results_path)
             counter[1].done()
         else:
             pcr = run_pcr_from_file(pcr, counter)
             results = (pcr(self._PCR_mixtures.itervalues().next()),)
-        if results is None or self._abort_event.is_set(): return
+        if results is None or self.aborted(): return
         for hit_id, obj_val, products, reaction_end in results:
             self._max_objective_value   = max(self._max_objective_value, obj_val)
             self._products[hit_id]      = products
@@ -257,7 +252,7 @@ class PCR_Simulation(PCR_Base):
             hist_value = int(round((cls._hist_width*col[1])/max_value))
             col_spacer = cls._hist_width - hist_value
             #value figure
-            value_str  = TD_Functions.format_concentration(col[1])
+            value_str  = tdf.format_concentration(col[1])
             hist_bar  = ''
             if len(value_str) < col_spacer:
                 _spacer = col_spacer-len(value_str)
@@ -328,7 +323,7 @@ class PCR_Simulation(PCR_Base):
         header_string += 'Reaction ended in: %d cycles.\n' \
             % self._reaction_ends[hit]['cycles']
         header_string += 'C(dNTP) after reaction: ~%s\n' \
-            % TD_Functions.format_concentration(self._reaction_ends[hit]['dNTP'])
+            % tdf.format_concentration(self._reaction_ends[hit]['dNTP'])
         if self._reaction_ends[hit]['cycles'] < self._num_cycles:
             if self._reaction_ends[hit]['dNTP'] == 0:
                 header_string += 'dNTP have been depleted.\n'
@@ -410,7 +405,7 @@ class PCR_Simulation(PCR_Base):
         header_string += 'Elongation time:       %s\n' % timedelta(minutes=self._elongation_time)
         header_string += 'Maximum cycles:        %d\n' % self._num_cycles
         header_string += '\n'
-        header_string += format_PCR_conditions(self._primers, self._polymerase)+'\n'
+        header_string += tdf.format_PCR_conditions(self._primers, self._polymerase)+'\n'
         header_string += hr(' primers and their melting temperatures ')
         for primer in self._primers:
             header_string += repr(primer) + '\n'

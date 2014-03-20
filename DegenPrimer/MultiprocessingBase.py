@@ -55,11 +55,10 @@ def worker_method(func):
 #end def
     
 def data_mapper(func):
-    def mapper(queue, abort_event, start, end, data, args):
+    def mapper(queue, abort_event, start, end, data, *args):
         for i, item in enumerate(data[start:end]):
             if abort_event.is_set(): break
-            if args: result = func(item, *args)
-            else: result = func(item)
+            result = func(item, *args)
             queue.put((start+i, result))
         if abort_event.is_set(): queue.cancel_join_thread()
         queue.put(None)
@@ -68,11 +67,10 @@ def data_mapper(func):
 #end def
     
 def data_mapper_method(func):
-    def mapper_method(self, queue, abort_event, start, end, data, args):
+    def mapper_method(self, queue, abort_event, start, end, data, *args):
         for i, item in enumerate(data[start:end]):
             if abort_event.is_set(): break
-            if args: result = func(self, item, *args)
-            else: result = func(self, item)
+            result = func(self, item, *args)
             queue.put((start+i, result))
         if abort_event.is_set(): queue.cancel_join_thread()
         queue.put(None)
@@ -148,6 +146,7 @@ class Work(Sequence, Thread, AbortableBase):
     def set_jobs(self, jobs): self._jobs = jobs
         
     def prepare_jobs(self, worker, work, num_jobs, *args):
+        if not len(work): return
         if self._counter is not None: self._counter.set_work(len(work))
         #determine number of jobs to launch
         if not num_jobs: num_jobs = cpu_count
@@ -158,7 +157,7 @@ class Work(Sequence, Thread, AbortableBase):
             end   = start+chunk
             queue = mp.Queue()
             job   = UProcess(target=worker, args=(queue, self._abort_event, 
-                                                  start, end, work, args))
+                                                  start, end, work)+args)
             job.daemon = self._daemonic
             self._jobs.append((job,queue))
             start = end
@@ -220,7 +219,7 @@ class Work(Sequence, Thread, AbortableBase):
     
     def wait(self):
         if self.is_alive(): self.join()
-        return not self._abort_event.is_set()
+        return not self.aborted()
 #end class        
         
 
@@ -281,72 +280,48 @@ class MultiprocessingBase(AbortableBase):
         return self.parallelize(timeout, mapper, data, *args, **kwargs)
     #end def    
     
-    def parallelize_functions(self, timeout, func_list, *args, **kwargs):
-        @MultiprocessingBase.worker
-        def worker(abort_event, start, end, _func_list, args):
-            result = []
-            for fi, func in enumerate(_func_list[start:end]):
-                if abort_event.is_set(): break
-                if args:
-                    result.append((start+fi, func(*args)))
-                else:
-                    result.append((start+fi, func()))
-            return result
-        #end def
-        return self.parallelize(timeout, worker, func_list, *args, **kwargs)
+    def parallelize_functions(self, timeout, funcs, *args, **kwargs):
+        @MultiprocessingBase.data_mapper
+        def worker(func, *args):
+            return func(*args)
+        return self.parallelize(timeout, worker, funcs, *args, **kwargs)
+    #end def
+    
+    def parallelize_both(self, timeout, funcs, data, *args, **kwargs):
+        @MultiprocessingBase.data_mapper
+        def worker(func_and_data, *args):
+            func, item = func_and_data
+            return func(item, *args)
+        return self.parallelize(timeout, worker, zip(funcs,data), *args, **kwargs)
     #end def
 #end class
 
 
-#decorators and shortcuts
-from tmpStorage import tmpDict
-from UMP import UManager
-
-def shelf_result(func, *args, **kwargs):
-    '''Decorator that saves result of func(*args) into a temporary shelf 
-    under "result" key and returns the path to it's database'''
-    def s_func(*args, **kwargs):
-        result = func(*args, **kwargs)
-        if result is None: return None
-        d = tmpDict(persistent=True)
-        d['result'] = result 
-        d.close()
-        return d.filename
-    return s_func
-#end def 
-
-def queue_result(queue, func, *args, **kwargs):
-    '''Decorator that puts result of func(*args) into a queue'''
-    def q_func(*args, **kwargs): queue.put(func(*args, **kwargs))
-    return q_func
-#end def
-
-
-#shortcut functions
+#shortcuts
 def parallelize_work(abort_event, daemonic, timeout, func, data, *args, **kwargs):
-    '''Parallel map implementation by MultiprocessingBase'''
+    '''Parallel map implementation with MultiprocessingBase'''
     return MultiprocessingBase(abort_event, daemonic).parallelize_work(timeout, func, data, *args, **kwargs)
 
-def parallelize_functions(abort_event, daemonic, timeout, func_list, *args, **kwargs):
-    '''Execute functions from func_list in parallel using MultiprocessingBase.'''
-    return MultiprocessingBase(abort_event, daemonic).parallelize_functions(timeout, func_list, *args, **kwargs)
+def parallelize_functions(abort_event, daemonic, timeout, funcs, *args, **kwargs):
+    '''Execute functions from funcs list in parallel using MultiprocessingBase.'''
+    return MultiprocessingBase(abort_event, daemonic).parallelize_functions(timeout, funcs, *args, **kwargs)
 
-def FuncManager(funcs, names=None):
-    '''Return a subclass of UManager with funcs registered by names (if given)
-    or by (func.__name__).lstrip('_') for func in funcs''' 
-    class _FuncManager(UManager): pass
-    for i, func in enumerate(funcs):
-        try: name = names[i]
-        except: name = (func.__name__).lstrip('_')
-        _FuncManager.register(name, func)
-    return _FuncManager
-#end def
+def parallelize_both(abort_event, daemonic, timeout, funcs, data, *args, **kwargs):
+    '''Execute func_i(data_i, *args) for func_i, data_i in zip(funcs, data) in parallel using MultiprocessingBase.'''
+    return MultiprocessingBase(abort_event, daemonic).parallelize_both(timeout, funcs, data, *args, **kwargs)
 
-Parallelizer = FuncManager((shelf_result(parallelize_work),
-                            shelf_result(parallelize_functions)), 
-                           ('parallelize_work',
-                            'parallelize_functions'))
 
+#decorators and managers
+from tmpStorage import shelf_result
+from UMP import FuncManager
+
+Parallelizer = FuncManager('Parallelizer', 
+                           (parallelize_work,
+                            parallelize_functions,
+                            parallelize_both,
+                            shelf_result(parallelize_work),
+                            shelf_result(parallelize_functions),
+                            shelf_result(parallelize_both)))
 
 
 #tests
@@ -362,8 +337,16 @@ if __name__ == '__main__':
         def _method(self, i):
             return self._a+abs(i)
         
-        def method(self, data):
+        def map_data(self, data):
             return self.parallelize_work(1, self._method, data)
+        
+        def map_functions(self, funcs, *args):
+            return self.parallelize_functions(1, funcs, *args)
+        
+        def map_both(self, funcs, data):
+            return self.parallelize_both(1, funcs, data)
     
     t = Test(abort_event)
-    print t.method([-1, -2, -3, -4, -5, -6, -7, -8])
+    print t.map_data([-1, -2, -3, -4, -5, -6, -7, -8])
+    print t.map_functions((abs, lambda x: x**2), -2)
+    print t.map_both((abs, lambda x: x**2), (-2, 4))

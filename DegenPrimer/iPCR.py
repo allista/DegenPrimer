@@ -21,8 +21,18 @@ Created on Feb 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from StringTools import wrap_text, time_hr, hr
+from StringTools import wrap_text, hr
 from iPCR_Base import iPCR_Base
+from MultiprocessingBase import cpu_count, even_chunks
+from SearchEngine import mp_better
+from UMP import FuncManager, at_manager
+from PCR_ProductsFinder import PPFManager
+
+
+#manager to isolate forking point in a low-memory process
+SearchManager = FuncManager('SearchManager', 
+                            (at_manager(PPFManager, 'find'), 
+                             at_manager(PPFManager, 'batch_find')))
 
 class iPCR(iPCR_Base):
     '''
@@ -34,6 +44,84 @@ class iPCR(iPCR_Base):
         iPCR_Base.__init__(self, *args, **kwargs)
         self._PCR_Simulation = self._new_PCR_Simulation()
         self._ProductsFinder = self._new_PCR_ProductsFinder()
+        self._searcher       = SearchManager()
+        self._searcher.start()
+    #end def
+    
+    
+    def _find_products_in_templates(self, counter, t_ids, products_finder):
+        templates   = self._seq_db.get_seqs(t_ids)
+        if len(t_ids) < 2:
+            return self._searcher.find(counter, self._seq_names[t_ids[0]],
+                                       templates[0][2], 
+                                       self._max_mismatches, 
+                                       products_finder)
+        else:
+            return self._searcher.batch_find(counter, self._seq_names, 
+                                             templates,  
+                                             self._max_mismatches, 
+                                             products_finder)
+    #end def
+    
+    
+    def _find_products_in_db(self, counter, PCR_Sim, P_Finder, seqs_info):
+        print '\nPSR Simulation: searching for annealing sites in provided sequences...'
+        #sort templates into short, suitable for plain search and long -- for mp
+        short_templates = []
+        long_templates  = []
+        for t_id, t_len in seqs_info.iteritems():
+            if mp_better(t_len):
+                long_templates.append(t_id)
+            else: short_templates.append(t_id)
+        #setup work counters
+        if short_templates and long_templates: 
+            counter.set_subwork(2, (sum(seqs_info[t_id] for t_id in short_templates),
+                                    sum(seqs_info[t_id] for t_id in long_templates)))
+            short_counter  = counter[0]
+            long_counter   = counter[1]
+        else: long_counter = short_counter = counter
+        if long_templates: long_counter.set_subwork(len(long_templates), [seqs_info[t_id] for t_id in long_templates])
+        #If there's enough short templates, run a series of batch searches.
+        #This is needed to lower memory usage pikes during search and to 
+        #better utilize cpus.
+        if short_templates:
+            chunks = even_chunks(short_templates, 
+                                 max(len(short_templates)/cpu_count, 1))
+            start  = 0; short_counter.set_subwork(len(chunks))
+            for i, chunk in enumerate(chunks):
+                end = start+chunk
+                results = self._find_products_in_templates(short_counter[i], 
+                                                           short_templates[start:end], 
+                                                           P_Finder)
+                if results is None: 
+                    if self.aborted(): return False
+                    else: continue
+                for t_name, m_path in results.iteritems():
+                    PCR_Sim.add_mixture(t_name, m_path)
+        #if there're long templates, search sequentially
+        for i, t_id in enumerate(long_templates):
+            result = self._find_products_in_templates(long_counter[i], (t_id,), P_Finder)
+            if result is None:
+                if self.aborted(): return False
+                else: continue
+            PCR_Sim.add_mixture(self._seq_names[t_id], result)
+        return PCR_Sim.not_empty()
+    #end def
+    
+    
+    def _find_products(self, counter, PCR_Sim, P_Finder, seq_files, seq_ids=None):
+        #try to connect to a database
+        if not seq_files or not self._try_connect_db(seq_files): return False
+        #get names and legths of sequences
+        self._seq_names = self._get_names(seq_ids)
+        if not self._seq_names:
+            self._seq_db.close() 
+            return False
+        seq_lengths = self._seq_db.get_lengths(seq_ids)
+        #find primer annealing sites
+        result = self._find_products_in_db(counter, PCR_Sim, P_Finder, seq_lengths)
+        self._seq_db.close()
+        return result
     #end def
     
     
@@ -47,20 +135,6 @@ class iPCR(iPCR_Base):
             self._have_results = bool(self._PCR_Simulation)
             return self._have_results
         return False
-    #end def
-    
-    
-    def write_products_report(self):
-        if not self._have_results: return
-        #open report file
-        ipcr_products = self._open_report('iPCR products', self._PCR_products_filename)
-        ipcr_products.write(time_hr())
-        if self._PCR_Simulation:
-            ipcr_products.write(self._PCR_Simulation.format_products_report())
-        else: ipcr_products.write(hr(' No PCR products have been found ', symbol='!')) 
-        ipcr_products.close()
-        print '\nThe list of PCR products was written to:\n   %s' % self._PCR_products_filename
-        self._add_report('iPCR products', self._PCR_products_filename)
     #end def
     
     
@@ -81,7 +155,8 @@ class iPCR(iPCR_Base):
     
     
     def _format_report_body(self):
-        body = ''
+        body  = ''
+        body += self._PCR_Simulation.format_quantity_explanation()
         #PCR products by hit 
         if len(self._PCR_Simulation.hits()) == 1:
             #all products histogram
@@ -114,15 +189,15 @@ if __name__ == '__main__':
     from WorkCounter import WorkCounterManager
     from WaitingThread import WaitingThread
     from threading import Lock
-    import TD_Functions
+    import TD_Functions as tdf
     
     mgr = Manager()
     abort_event = mgr.Event()
     
-    TD_Functions.PCR_P.PCR_T = 53
-    TD_Functions.PCR_P.Mg    = 3e-3
-    TD_Functions.PCR_P.dNTP  = 300e-6
-    TD_Functions.PCR_P.DNA   = 1e-10
+    tdf.PCR_P.PCR_T = 53
+    tdf.PCR_P.Mg    = 3e-3
+    tdf.PCR_P.dNTP  = 300e-6
+    tdf.PCR_P.DNA   = 1e-10
     fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'fwd_test', 'fwd_test'), 0.43e-6, True)
     rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'rev_test', 'rev_test'), 0.43e-6, True)
     ipcr = iPCR(abort_event,

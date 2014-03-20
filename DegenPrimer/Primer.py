@@ -33,9 +33,9 @@ try:
 except ImportError:
     print'The BioPython must be installed in your system.'
     raise
-import TD_Functions
 from StringTools import print_exception
 from MultiprocessingBase import parallelize_work
+import TD_Functions as tdf
 
 
 class Primer(object):
@@ -58,8 +58,9 @@ class Primer(object):
     def __init__(self, seq_rec, concentration, generate_components=False):
         self._seq_record    = seq_rec
         self._concentration = concentration
-        self._n_components  = 1
-        self._unambiguous   = None 
+        self._n_components  = None
+        self._unambiguous   = None
+        self._initialized   = False 
         #components and annealing temperatures
         self._Tm_max  = None
         self._Tm_mean = None
@@ -68,6 +69,16 @@ class Primer(object):
             self.generate_components()
             self.calculate_Tms()
     #end def
+    
+    
+    def _check_initialized(self):
+        assert self._initialized, ('%s primer was not initialized' 
+                                   % self._seq_record.id)
+        
+    def _check_components(self):
+        assert self._n_components, ('%s primer was not initialized' 
+                                    % self._seq_record.id)
+
 
     def __len__(self): return len(self._seq_record)
 
@@ -81,6 +92,7 @@ class Primer(object):
         return str(self._seq_record.seq)
     
     def __repr__(self):
+        self._check_initialized()
         rep  = '%(id)s:    %(len)db    5\'-%(seq)s-3\'\n'
         if self._unambiguous:
             rep += '   Tm max  = %(Tm_max).1f\n'
@@ -98,11 +110,14 @@ class Primer(object):
                       'Tm_max':  self._Tm_max,
                       'Tm_mean': self._Tm_mean,
                       'Tm_min':  self._Tm_min,
-                      'cons':    TD_Functions.format_concentration(self.concentration)}
+                      'cons':    tdf.format_concentration(self.concentration)}
     #end def
     
     def __hash__(self): return hash(str(self._seq_record.seq))
 
+    
+    @property
+    def id(self): return self._seq_record.id
     
     @property
     def num_components(self): return self._n_components
@@ -113,75 +128,33 @@ class Primer(object):
         self._n_components = len(self._unambiguous)
     #end def
         
-        
     def calculate_Tms(self, abort_event=None):
+        self._check_components()
         if self.self_complement: return
         #iterative algorithm is faster or no abort event is given to control parallelization
         if self._n_components < 256 or abort_event is None:
             temperatures  = []
             concentration = self.concentration
             for seq in (sequence.seq for sequence in self.seq_records):
-                temperatures.append(TD_Functions.primer_template_Tm(seq, concentration))
+                temperatures.append(tdf.primer_template_Tm(seq, concentration))
         else: #parallel algorithm is faster
             temperatures  = parallelize_work(abort_event, 
-                                             1, TD_Functions.primer_template_Tm, 
+                                             1, tdf.primer_template_Tm, 
                                              self.sequences, self.concentration)
         if not temperatures: return
         self._Tm_max  = max(temperatures)
         self._Tm_min  = min(temperatures)
         self._Tm_mean = (self._Tm_max + self._Tm_min)/2.0
+        self._initialized = True
     #end def
     
-
-    @classmethod
-    def from_sequences(cls, seq_records, concentration):
-        '''Generate new Primer object from a list of unambiguous sequences. 
-        If no sequences are provided, or provided sequences deffer in length, 
-        return None.'''
-        if not seq_records: return None
-        #check length equality and alphabeth
-        seq_len = len(seq_records[0].seq)
-        for seq_rec in seq_records:
-            if len(seq_rec.seq) != seq_len:
-                return None
-            if seq_rec.seq.alphabet != IUPAC.unambiguous_dna:
-                return None
-        #compose degenerate sequence
-        master_sequence = [set() for i in xrange(seq_len)]
-        for seq_rec in seq_records:
-            for i in xrange(seq_len):
-                master_sequence[i].add(seq_rec.seq[i])
-        for i in xrange(seq_len):
-            if len(master_sequence[i]) == 1:
-                master_sequence[i] = master_sequence[i].pop()
-                continue
-            for letter in cls.IUPAC_ambiguous:
-                if master_sequence[i] == set(cls.IUPAC_ambiguous[letter]):
-                    master_sequence[i] = letter
-                    break
-        master_record = SeqRecord(Seq(''.join(l for l in master_sequence), IUPAC.ambiguous_dna),
-                                  description=seq_records[0].description,
-                                  id=seq_records[0].id)
-        return cls(master_record, concentration)
-    #end def
-    
-    @property
-    def id(self): return self._seq_record.id
 
     @property
     def master_sequence(self): return self._seq_record
 
     @property
-    def total_concentration(self): return self._concentration
-    
-    @total_concentration.setter
-    def total_concentration(self, C): 
-        self._concentration = C
-        self.calculate_Tms()
-    #end def
-
-    @property
     def all_seq_records(self):
+        self._check_components() 
         if self._unambiguous:
             return [self._seq_record,] + self._unambiguous
         else: return [self._seq_record,]
@@ -189,6 +162,7 @@ class Primer(object):
 
     @property
     def seq_records(self):
+        self._check_components()
         if self._unambiguous:
             return self._unambiguous
         else: return [self._seq_record,]
@@ -202,9 +176,19 @@ class Primer(object):
     def str_sequences(self):
         return [str(sequence) for sequence in self.sequences]
     
-
+    
+    @property
+    def total_concentration(self): return self._concentration
+    
+    @total_concentration.setter
+    def total_concentration(self, C): 
+        self._concentration = C
+        self.calculate_Tms()
+    #end def
+    
     @property
     def concentration(self):
+        self._check_components()
         if self._unambiguous:
             return self._concentration/float(len(self._unambiguous))
         return self._concentration
@@ -293,6 +277,39 @@ class Primer(object):
             unambiguous_seq_list.append(SeqRecord(un_seq, description=seq_rec.description, 
                                                   id=(id_template % (seq_rec.id, s+1))))
         return unambiguous_seq_list
+    #end def
+    
+    
+    @classmethod
+    def from_sequences(cls, seq_records, concentration):
+        '''Generate new Primer object from a list of unambiguous sequences. 
+        If no sequences are provided, or provided sequences deffer in length, 
+        return None.'''
+        if not seq_records: return None
+        #check length equality and alphabeth
+        seq_len = len(seq_records[0].seq)
+        for seq_rec in seq_records:
+            if len(seq_rec.seq) != seq_len:
+                return None
+            if seq_rec.seq.alphabet != IUPAC.unambiguous_dna:
+                return None
+        #compose degenerate sequence
+        master_sequence = [set() for i in xrange(seq_len)]
+        for seq_rec in seq_records:
+            for i in xrange(seq_len):
+                master_sequence[i].add(seq_rec.seq[i])
+        for i in xrange(seq_len):
+            if len(master_sequence[i]) == 1:
+                master_sequence[i] = master_sequence[i].pop()
+                continue
+            for letter in cls.IUPAC_ambiguous:
+                if master_sequence[i] == set(cls.IUPAC_ambiguous[letter]):
+                    master_sequence[i] = letter
+                    break
+        master_record = SeqRecord(Seq(''.join(l for l in master_sequence), IUPAC.ambiguous_dna),
+                                  description=seq_records[0].description,
+                                  id=seq_records[0].id)
+        return cls(master_record, concentration)
     #end def
 #end class
 

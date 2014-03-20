@@ -31,6 +31,7 @@ class DBManagmentTask(PipelineTaskBase):
 
     @staticmethod
     def check_options(args):
+        if not args.sequence_db: return False
         if args.list_db: return True
         if (args.sequence_db and 
             (args.add_sequences and (len(args.add_sequences) > 1 or args.add_sequences[0] != '') 
@@ -43,15 +44,15 @@ class DBManagmentTask(PipelineTaskBase):
 
     def __init__(self, abort_event):
         PipelineTaskBase.__init__(self, abort_event)
-        self._seq_db = SeqDB(self._abort_event)
+        self._seq_db = SeqDB()
     #end def
     
     
     def _print_db_content(self):
         if not self._seq_db: return
         seq_names = self._seq_db.get_names()
-        print '\nContent of the database %s:' % self._seq_db.name
-        print '\n', print_dict(seq_names, header=('ID', 'Sequence name'))
+        self._print('Content of the database %s:\n' % self._seq_db.name)
+        self._print(print_dict(seq_names, header=('ID', 'Sequence name')))
     #end def
     
     
@@ -59,14 +60,15 @@ class DBManagmentTask(PipelineTaskBase):
         '''Run database managment tasks as specified in the args.'''
         if args.list_db:
             if not self._seq_db.connect(args.list_db): 
-                print 'DBManagmentTask: unable to connect to a database %s' % args.list_db
+                self._print('DBManagmentTask: unable to connect to a database %s' 
+                            % args.list_db)
                 return -1
             self._print_db_content()
             self._seq_db.close()
             return 1
         elif args.add_sequences:
             if not self._seq_db.connect(args.sequence_db):
-                print '\nCreating new database: %s' % args.sequence_db
+                self._print('\nCreating new database: %s' % args.sequence_db)
                 self._seq_db.create_db_from_files(args.sequence_db, args.add_sequences) 
             else: self._seq_db.add_files_to_db(args.add_sequences)
             self._print_db_content()
@@ -74,13 +76,15 @@ class DBManagmentTask(PipelineTaskBase):
             return 1
         elif args.del_sequences:
             if not self._seq_db.connect(args.sequence_db): 
-                print 'DBManagmentTask: unable to connect to a database %s' % args.sequence_db
-                return -1
-            print '\nDeleting sequences %s from database %s' % (', '.join(args.del_sequences), args.sequence_db)
+                self._print('DBManagmentTask: unable to connect to a database %s' 
+                            % args.sequence_db)
+                return -2
+            self._print('\nDeleting sequences %s from database %s' 
+                        % (', '.join(args.del_sequences), args.sequence_db))
             self._seq_db.del_from_db(args.del_sequences)
             self._print_db_content()
             self._seq_db.close()
             return 1
-        return 0
+        return -3
     #end def
 #end class

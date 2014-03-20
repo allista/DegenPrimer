@@ -22,8 +22,8 @@ Created on Mar 15, 2013
 '''
 
 from copy import deepcopy
-import TD_Functions
 from StringTools import hr
+import TD_Functions as tdf
 
 
 class Region(object):
@@ -121,7 +121,7 @@ class Product(Region):
     def pretty_print(self, with_name=True, include_fwd_3_mismatch=True):
         rep  = Region.pretty_print(self, with_name=with_name)
         rep += '\n'
-        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self.quantity)
+        rep += 'concentration:    %s\n' % tdf.format_concentration(self.quantity)
         rep += 'number of cycles: %d\n' % self.cycles
         rep += '\n'
         rep += hr(' forward annealing site ')
@@ -147,7 +147,7 @@ class Product(Region):
     
     def __str__(self):
         rep  = Region.pretty_print(self)
-        rep += 'concentration:    %s\n' % TD_Functions.format_concentration(self.quantity)
+        rep += 'concentration:    %s\n' % tdf.format_concentration(self.quantity)
         rep += 'number of cycles: %d\n' % self.cycles
         rep += '\nforward annealing site:\n'
         rep += str(self.fwd_template)

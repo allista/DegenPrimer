@@ -17,28 +17,46 @@ Created on Jun 23, 2012
 
 @author: Allis Tauri <allista@gmail.com>
 '''
-from Bio.Seq import Seq
-import TD_Functions
-from TD_Functions import dimer_dG_corrected, hairpin_dG_corrected, equilibrium_constant
+
 from StringTools import hr
 from Equilibrium import Reaction
+import TD_Functions as tdf
 
 
 #default filtration parameters
 max_dimer_dG   = -3  #kcal/mol #corresponds to equilibrium constant ~100  and conversion degree ~1e-3
 max_hairpin_dG =  3  #kcal/mol #corresponds to equilibrium constant ~0.01 and conversion degree ~1e-2
-min_K          = 100 #minimum equilibrium constant: annealing reactions with EC less than this will not be taken into account 
+min_K          = 100 #minimum equilibrium constant: annealing reactions with EC less than this will not be taken into account
+
+
+def reverse_complement(seq): #this is much faster than the Bio.Seq.reverse_complement() method
+    '''Make a reverse complement of an unambiguous DNA sequence'''
+    rc = ''
+    for l in seq.upper():
+        if   l == 'A': rc += 'T'
+        elif l == 'T': rc += 'A'
+        elif l == 'G': rc += 'C'
+        elif l == 'C': rc += 'G'
+        else: raise ValueError('SecStructures.reverse_complement: unknown letter: %s' % l)
+    return rc[::-1]
+#end def
+
 
 class Dimer(object):
     '''
     Structure of a dimer without bulges (i.e. asymmetrical loops):
     forward matches is a list of nucleotide indices of forward sequence 
     directed 5'->3' that are paired to reverse strand.
-    reverse matches is a list of nucleotide indices of reverse 
-    directed 3'->5' that are paired to reverse strand.
-    Nucleotide fwd_match[n] canonically matches nucleotide rev_matches[n]
-    e.g. fwd_matches = 5'-[2,4,7, 9]-3'
-         rev_matches = 3'-[4,6,9,11]-5'
+    offset is a shift of forward indexes relative to the corresponding 
+    reverse indexes: positive offset means that forward strand is shifted to 
+    the right relative to the reverse strand; negative offset means shift to the left.
+    
+    Thus, for example:
+                          234  7 :fwd_matches 
+                        ATGCACGA :offset=-2
+                          |||  |
+                          CGTTATGT
+                          012  5 :rev_matches[n] = fwd_matches[n]-offset
     '''
     __slots__ = ['fwd_matches', '_offset', 'num_matches',
                  'conversion_degree', 'dG', 'K',
@@ -48,7 +66,7 @@ class Dimer(object):
         #dG, K and CD are properties of a Duplex, not a Dimer, but since 
         #a Duplex may have several associated dimers, it's convenient to store them here 
         if fwd_matches:
-            self.fwd_matches  = tuple(sorted(list(fwd_matches)))
+            self.fwd_matches  = tuple(sorted(fwd_matches))
             self._offset      = offset
             self.num_matches  = len(self.fwd_matches)
         else:
@@ -60,7 +78,7 @@ class Dimer(object):
         self.dG = None
         self.K  = None
         #topological parameters
-        self.fwd_mismatch   = None
+        self.fwd_mismatch = None
     #end def
     
     def __hash__(self):
@@ -78,8 +96,11 @@ class Dimer(object):
     
     
     @property
+    def offset(self): return self._offset
+    
+    @property
     def rev_matches(self):
-        return tuple(sorted(list(i - self._offset for i in self.fwd_matches)))
+        return tuple(sorted(i - self._offset for i in self.fwd_matches))
     
     @property
     def fwd_min(self):
@@ -103,33 +124,25 @@ class Dimer(object):
         """remove terminal internal loops from a dimer one by one in all 
         possible combinations to produce a bunch of new structures"""
         #scan for loops from both ends
-        left_loops   = []
-        right_loops  = []
-        left_margin  = set()
-        right_margin = set()
-        for i,j in zip(xrange(self.num_matches-1), xrange(self.num_matches-1, 0, -1)):
-            #left
-            left_margin.add(self.fwd_matches[i])
+        if self.num_matches < 2: return []
+        margins = [set()]
+        for i in xrange(self.num_matches-1):
+            margins[-1].add(self.fwd_matches[i])
             if self.fwd_matches[i+1]-self.fwd_matches[i] > 1:
-                left_loops.append(left_margin)
-                left_margin  = set()
-            #right
-            #matches and gaps
-            right_margin.add(self.fwd_matches[j])
-            if self.fwd_matches[j]-self.fwd_matches[j-1] > 1:
-                right_loops.append(right_margin)
-                right_margin = set()
+                margins.append(set())
+        margins[-1].add(self.fwd_matches[-1])
+        num_loops = len(margins)-1
         #of no loops have been found, return empty list
-        if not left_loops: return []
-        #else, remove boundary loops one by one
+        if not num_loops: return []
+        #remove boundary loops one by one
         dimers  = []
         l_dimer = self
-        for l in xrange(len(left_loops)):
+        for l in xrange(num_loops):
             r_dimer = l_dimer
-            for r in xrange(len(right_loops)-l):
-                r_dimer = Dimer(set(r_dimer.fwd_matches)-right_loops[r], self._offset)
+            for r in xrange(num_loops,l,-1):
+                r_dimer = Dimer(set(r_dimer.fwd_matches)-margins[r], self._offset)
                 dimers.append(r_dimer)
-            l_dimer = Dimer(set(l_dimer.fwd_matches)-left_loops[l], self._offset)
+            l_dimer = Dimer(set(l_dimer.fwd_matches)-margins[l], self._offset)
             dimers.append(l_dimer)
         return dimers
     #end def
@@ -148,18 +161,16 @@ class Dimer(object):
     
         
     @classmethod
-    def from_sequences(cls, seq1, seq2, anchor=None):
+    def from_sequences(cls, forward, revcomp, offset=0):
         '''Form a dimer structure from two sequences using a pair of indexes 
-        as an anchor; if anchor is not provided, sequences are left-aligned;
-        both sequences should be 5'->3' oriented'''
-        forward  = seq1
-        revcomp  = str(Seq(seq2).complement())[::-1]
+        as an anchor; if anchor is not provided, sequences are left-aligned.
+        The forward sequence should be 5'->3' oriented.
+        The revcom sequence should be 3'->5' oriented'''
         dimer    = cls()
-        offset   = (anchor[0]-anchor[1]) if anchor else 0
         dimer._offset = offset
         dimer.fwd_matches = []
-        if offset > 0: _range = range(offset, min(len(seq1), len(seq2)+offset))
-        else: _range = range(0, min(len(seq1)-offset, len(seq2)+offset))
+        if offset > 0: _range = range(offset, min(len(forward), len(revcomp)+offset))
+        else: _range = range(0, min(len(forward)-offset, len(revcomp)+offset))
         for i in _range:
             if forward[i] == revcomp[i-offset]:
                 #add indexes directly is much faster than to call Dimer.add method
@@ -188,8 +199,8 @@ class Hairpin(object):
     def __init__(self, fwd_matches, rev_matches): 
         if len(fwd_matches) != len(rev_matches):
             raise ValueError('SecStructures.Dimer: number of forward matches should equal that of reverse matches.')
-        self.fwd_matches = tuple(sorted(list(fwd_matches)))
-        self.rev_matches = tuple(sorted(list(rev_matches), reverse=True))
+        self.fwd_matches = tuple(sorted(fwd_matches))
+        self.rev_matches = tuple(sorted(rev_matches, reverse=True))
         #thermodynamic parameters
         self.conversion_degree = None
         self.dG = None
@@ -206,16 +217,20 @@ class Duplex(object):
                  '_nonzero',
                  '_fwd_matches', '_fwd_mismatches', 'fwd_3_overhang']
     
-    def __init__(self, fwd_seq, rev_seq, dimer=None):
+    def __init__(self, fwd_seq, rev_seq, dimer=None, revcomp=False):
         '''
-        fwd_seq -- Seq object, 5'->3' sequence of forward strand
-        rev_seq -- Seq object, 5'->3' sequence of reverse strand
+        fwd_seq -- string, 5'->3' sequence of forward strand
+        rev_seq -- string, 5'->3' or 3'->5' sequence of reverse strand
+        dimer, optinal -- an initial Dimer structure
+        revcom  -- indicates rev_seq orientation: False means 5'->3' 
         '''
-        self._fwd_sequence   = fwd_seq
-        self._rev_sequence   = rev_seq
         self.fwd_len         = len(fwd_seq)
         self.rev_len         = len(rev_seq)
-        if not dimer: dimer  = Dimer.from_sequences(fwd_seq, rev_seq)
+        self._fwd_sequence   = fwd_seq
+        self._rev_sequence   = reverse_complement(rev_seq) if revcomp else rev_seq 
+        if not dimer: dimer  = Dimer.from_sequences(fwd_seq, 
+                                                    rev_seq if revcomp 
+                                                    else reverse_complement(rev_seq))
         self._dimers         = [dimer]+dimer.alternatives
         self._fwd_matches    = []
         self._fwd_mismatches = []
@@ -268,12 +283,11 @@ class Duplex(object):
         for i, dimer in enumerate(self._dimers):
             if not dimer: continue
             #thermodynamical parameters
-            dimer.dG = dimer_dG_corrected(dimer, 
-                                          self._fwd_sequence,
-                                          self._rev_sequence)
+            dimer.dG = tdf.dimer_dG_corrected(dimer, 
+                                              self._fwd_sequence,
+                                              self._rev_sequence)
             if dimer.dG > max_dimer_dG: continue
-            dimer.K  = equilibrium_constant(dimer.dG, 
-                                            TD_Functions.PCR_P.PCR_T)
+            dimer.K  = tdf.equilibrium_constant(dimer.dG, tdf.PCR_P.PCR_T)
             if dimer.K < min_K: continue
             #mismatch at 3' end of forward sequence
             dimer.fwd_mismatch = dimer.fwd_max < self.fwd_len-1
@@ -362,8 +376,7 @@ class Duplex(object):
                'seq2'   :rev_sequence[::-1]}
         #dG
         if dimer.dG != None:
-            duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_P.PCR_T, 
-                                                              dimer.dG)
+            duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (tdf.PCR_P.PCR_T, dimer.dG)
         #conversion degree
         if dimer.conversion_degree != None:
             duplex_string += 'conversion degree = %.4f%%\n' % (dimer.conversion_degree*100)
@@ -428,14 +441,14 @@ class SecStructures(object):
             if self._seq1_dimers:
                 for d_hash in self._seq1_dimers:
                     D = self._seq1_dimers[d_hash]
-                    reactions[d_hash] = Reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
+                    reactions[d_hash] = Reaction(tdf.equilibrium_constant(D.dG, tdf.PCR_P.PCR_T), 
                                                  str(self._seq1), 
                                                  None, 
                                                  '2A')
             if self._seq1_hairpins:
                 for h_hash in self._seq1_hairpins:
                     H = self._seq1_hairpins[h_hash]
-                    reactions[h_hash] = Reaction(equilibrium_constant(H.dG, TD_Functions.PCR_P.PCR_T), 
+                    reactions[h_hash] = Reaction(tdf.equilibrium_constant(H.dG, tdf.PCR_P.PCR_T), 
                                                  str(self._seq1), 
                                                  None, 
                                                  'A')
@@ -443,7 +456,7 @@ class SecStructures(object):
             if self._cross_dimers:
                 for d_hash in self._cross_dimers:
                     D = self._cross_dimers[d_hash]
-                    reactions[d_hash] = Reaction(equilibrium_constant(D.dG, TD_Functions.PCR_P.PCR_T), 
+                    reactions[d_hash] = Reaction(tdf.equilibrium_constant(D.dG, tdf.PCR_P.PCR_T), 
                                                  str(self._seq1), 
                                                  str(self._seq2), 
                                                  'AB')
@@ -598,7 +611,7 @@ class SecStructures(object):
         dimers   = all_structures['dimers']
         hairpins = all_structures['hairpins']
         fwd_str  = str(seq1)
-        rev_str  = str(seq2.reverse_complement())
+        rev_str  = reverse_complement(str(seq2))
         fwd_len  = len(fwd_str)
         rev_len  = len(rev_str)
         full_len = fwd_len+rev_len-1
@@ -635,7 +648,7 @@ class SecStructures(object):
                 new_dimers   = [dimer,] + dimer.alternatives
                 for dimer in new_dimers:
                     #calculate dG for every dimer
-                    dimer.dG = dimer_dG_corrected(dimer, seq1, seq2)
+                    dimer.dG = tdf.dimer_dG_corrected(dimer, seq1, seq2)
                     #find the most stable
                     if min_dG > dimer.dG:
                         min_dG = dimer.dG
@@ -678,7 +691,7 @@ class SecStructures(object):
                 new_dimers = [dimer,] + dimer.alternatives
                 for new_dimer in new_dimers:
                     hairpin = Hairpin(new_dimer.fwd_matches, set(seq_len-1-m for m in new_dimer.rev_matches))
-                    dG = hairpin_dG_corrected(hairpin, seq)
+                    dG = tdf.hairpin_dG_corrected(hairpin, seq)
                     hairpin.dG = dG
                     #find the most stable
                     if min_dG > dG:
@@ -801,7 +814,7 @@ class SecStructures(object):
                'rev'    :str((seq[break_pos+odd_loop:])[::-1])}
         #dG
         if hairpin.dG != None:
-            hairpin_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (TD_Functions.PCR_P.PCR_T, hairpin.dG)
+            hairpin_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (tdf.PCR_P.PCR_T, hairpin.dG)
         #conversion degree
         if hairpin.conversion_degree != None:
             hairpin_string += 'conversion degree = %.4f%%\n' % (hairpin.conversion_degree*100)
@@ -858,16 +871,12 @@ class SecStructures(object):
 
 #tests
 if __name__ == '__main__':
-    from tests.asizeof import heappy
-
-    d = Dimer()
-    h = Hairpin([], [])
-    du = Duplex('A', 'T')
+    tdf.PCR_P.Na = 50.0e-3
+    tdf.PCR_P.Mg = 3.0e-3
+    tdf.PCR_P.dNTP = 0.15e-6
+    tdf.PCR_P.DNA = 1.0e-9
+    tdf.PCR_P.DMSO = 0.0
+    tdf.PCR_P.PCR_T = 60.0
+    du = Duplex('GAACGCAAAGATCGGGAAC', 'CTTGCGTTTCTAACCCTTG'[::-1])
+    print du
     
-    print heappy.iso(d)
-    print heappy.iso(h)
-    print heappy.iso(du)
-
-    print heappy.iso(set())
-    print heappy.iso(list())
-    print heappy.iso(tuple())

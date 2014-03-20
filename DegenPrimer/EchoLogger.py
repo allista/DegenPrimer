@@ -22,12 +22,14 @@ Created on Mar 4, 2014
 
 import logging, sys, traceback
 from StringTools import print_exception
+from Output import OutIntercepter
 
-class EchoLogger(object):
+class EchoLogger(OutIntercepter):
     '''Wrapper around logging module to capture stdout-err into a log file
     while still print it to std'''
 
     def __init__(self, name, level=logging.INFO):
+        OutIntercepter.__init__(self)
         self._name      = name
         self._log       = name+'.log'
         self._level     = level
@@ -40,9 +42,6 @@ class EchoLogger(object):
         #assemble pipeline
         self._handler.setFormatter(self._formatter)
         self._logger.addHandler(self._handler)
-        #saved std-streams
-        self._oldout    = None
-        self._olderr    = None
     #end def
         
     def __del__(self):
@@ -50,10 +49,7 @@ class EchoLogger(object):
         
         
     def __enter__(self):
-        self._oldout = sys.stdout
-        self._olderr = sys.stderr
-        sys.stdout = self
-        sys.stderr = self
+        OutIntercepter.__enter__(self)
         self._logger.log(self._level, '=== START LOGGING ===')
         return self
     #end def
@@ -77,8 +73,7 @@ class EchoLogger(object):
         self._oldout.write(text)
     #end def
     
-    def flush(self): 
-        self._oldout.flush()
+    def flush(self): self._oldout.flush()
 #end class
 
 

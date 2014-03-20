@@ -21,57 +21,22 @@ Created on Dec 15, 2012
 '''
 
 from abc import ABCMeta, abstractmethod
-from AbortableBase import AbortableBase
 from ReporterInterface import ReporterInterface
 from PCR_ProductsFinder import PCR_ProductsFinder
-from PCR_Simulation import PCR_Simulation
+from PCR_Simulation import PCR_Simulation_Interface, PCR_Simulation
 from StringTools import hr, time_hr
 
 
-class iPCR_Interface(AbortableBase, ReporterInterface):
+class iPCR_Interface(PCR_Simulation_Interface, ReporterInterface):
     '''Interface class to create facilities which use PCR_Simulation'''
     __metaclass__ = ABCMeta
 
     _PCR_report_suffix = 'iPCR'
 
-    def __init__(self,
-                 abort_event,
-                 job_id,  
-                 primers, 
-                 min_amplicon, 
-                 max_amplicon, 
-                 polymerase, 
-                 with_exonuclease,
-                 num_cycles,
-                 side_reactions=None,
-                 side_concentrations=None,
-                 include_side_annealings=False):
-        AbortableBase.__init__(self, abort_event)
+    def __init__(self, abort_event, job_id, *args, **kwargs):
         ReporterInterface.__init__(self)
-        #parameters
-        try:
-            if len(primers) == 0: 
-                raise ValueError('iPCR_Interface: no primers given.')
-        except TypeError:
-            raise TypeError(('iPCR_Interface: primers should be an iterable. '
-                            'Given %s instead') % str(primers))
-        
+        PCR_Simulation_Interface.__init__(self, abort_event, *args, **kwargs)
         self._job_id              = job_id
-        self._primers             = primers
-         
-        self._min_amplicon        = min_amplicon
-        self._max_amplicon        = max_amplicon
-        
-        self._polymerase          = polymerase
-        self._with_exonuclease    = with_exonuclease
-        
-        self._num_cycles          = num_cycles
-        
-        self._side_reactions      = side_reactions
-        self._side_concentrations = side_concentrations
-        self._include_side_annealings = include_side_annealings
-        
-        #report files
         self._PCR_report_filename = '%s-%s-report.txt' % (self._job_id, 
                                                           self._PCR_report_suffix)
         self._PCR_products_filename = '%s-%s-products.txt' % (self._job_id, 
@@ -91,19 +56,16 @@ class iPCR_Interface(AbortableBase, ReporterInterface):
     
     #factory for PCR_Simulation objects
     def _new_PCR_Simulation(self):
-        _PCR_simulation = PCR_Simulation(self._abort_event,
-                                         self._primers,
-                                         self._min_amplicon,
-                                         self._max_amplicon,
-                                         self._polymerase,
-                                         self._with_exonuclease,
-                                         self._num_cycles,
-                                         self._include_side_annealings)
-        if self._side_reactions:
-            _PCR_simulation.add_side_reactions(self._side_reactions)
-        if self._side_concentrations:
-            _PCR_simulation.add_side_concentrations(self._side_concentrations)
-        return _PCR_simulation
+        return PCR_Simulation(self._abort_event,
+                              self._primers,
+                              self._min_amplicon,
+                              self._max_amplicon,
+                              self._polymerase,
+                              self._with_exonuclease,
+                              self._num_cycles,
+                              self._side_reactions,
+                              self._side_concentrations,
+                              self._include_side_annealings)
     #end def
     
     
@@ -137,7 +99,8 @@ class iPCR_Interface(AbortableBase, ReporterInterface):
         report.close()
         print '\n%s report was written to:\n   %s' % (self._PCR_report_suffix,
                                                       self._PCR_report_filename)
-        self._add_report(self._PCR_report_suffix.replace('_', ' '), self._PCR_report_filename)
+        report_name = self._PCR_report_suffix.replace('_', ' ').replace('-', ' ')
+        self._add_report(report_name, self._PCR_report_filename)
     #end def
     
     def write_reports(self):

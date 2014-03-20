@@ -40,4 +40,21 @@ class PrimerTaskBase(PipelineTaskBase):
             return False
         return True
     #end def
+    
+    def __init__(self, abort_event):
+        PipelineTaskBase.__init__(self, abort_event)
+        self._primers = []
+    #end def
+    
+    def _prepare_primers(self, args):
+        self._print('\nCalculating unambiguous components and melting temperatures '
+                    'of the primers...')
+        for primer in args.primers:
+            if self.aborted(): return False
+            primer.generate_components()
+            primer.calculate_Tms(self._abort_event)
+        self._primers = args.primers
+        self._print('Done.')
+        return True
+    #end def
 #end class

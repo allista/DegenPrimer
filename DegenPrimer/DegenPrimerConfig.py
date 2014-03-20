@@ -28,13 +28,12 @@ from Option import Option, OptionGroup
 from itertools import chain
 from copy import deepcopy
 from datetime import datetime
-                               
+from abc import ABCMeta, abstractmethod
 
 
 class DegenPrimerConfig(object):
-    """
-    Base class for degen_primer configuration parsers
-    """
+    '''Base class for degen_primer configuration parsers'''
+    __metaclass__ = ABCMeta
     
     #program description
     _description = ('This is a tool to compute degenerate primer parameters. '
@@ -122,18 +121,11 @@ class DegenPrimerConfig(object):
                                                     scale=1e-6,
                                                     ),
                                              )),
-#                             Option(name='only_tm', 
-#                                    desc='Only perform Tm calculations',
-#                                    nargs='?',
-#                                    py_type=bool,
-#                                    default=False,
-#                                    save=False,
-#                                    ),
                              )),
         OptionGroup('BLAST',
                     'BLAST parameters',
                     options=(Option(name='do_blast', 
-                                    desc='Do blast search for specificity of primers/primer-pairs. '
+                                    desc='Do BLAST search to check specificity of the primers. '
                                     'This option must always be set explicitly.',
                                     nargs='?',
                                     py_type=bool,
@@ -141,10 +133,11 @@ class DegenPrimerConfig(object):
                                     save=False,
                                     ),
                              Option(name='organisms', 
-                                    desc='List of organisms or higher taxons to be used in Entrez '
-                                    'query in blast searches (e.g. bacteria)',
+                                    desc='List of organisms or higher taxons to '
+                                    'limit BLAST search to (e.g. bacteria)',
                                     nargs='+',
                                     py_type=str,
+                                    value_required=False,
                                     ),
                              )),
         OptionGroup('PCR',
@@ -191,7 +184,7 @@ class DegenPrimerConfig(object):
                                     py_type=float,
                                     units='%% v/v',
                                     default=0.0,
-                                    limits=(0, 100), #1M max
+                                    limits=(0, 100),
                                     scale=1,
                                     ),
                              Option(name='PCR_T', 
@@ -201,7 +194,7 @@ class DegenPrimerConfig(object):
                                     py_type=float,
                                     units='C',
                                     default=60.0,
-                                    limits=(20, 80), #1M max
+                                    limits=(20, 80),
                                     scale=1,
                                     ),
                              )),
@@ -213,7 +206,7 @@ class DegenPrimerConfig(object):
                                     py_type=int,
                                     units='bp',
                                     default=50,
-                                    limits=(1, 1000000000), #5M max
+                                    limits=(1, 1000000000),
                                     scale=1,
                                     ),
                              Option(name='max_amplicon', 
@@ -222,7 +215,7 @@ class DegenPrimerConfig(object):
                                     py_type=int,
                                     units='bp',
                                     default=3000,
-                                    limits=(1, 1000000000), #5M max
+                                    limits=(1, 1000000000),
                                     scale=1,
                                     ),
                              Option(name='max_mismatches', 
@@ -233,12 +226,12 @@ class DegenPrimerConfig(object):
                                     'up to 6-7, for some annealings with 6 or even 7 mismatches may be '
                                     'more stable than some with 5 mismatches. '
                                     'Note, that PCR simulation with 6 and more mismatches '
-                                    'may take a considerable time due to an increasing number of possible products. ',
+                                    'may take a considerable time due to an increasing number of possible products.',
                                     nargs=1,
                                     py_type=int,
                                     units='bp',
                                     default=None,
-                                    limits=(0, 1000000000), #5M max
+                                    limits=(0, 1000000000),
                                     scale=1,
                                     ),
                              Option(name='polymerase', 
@@ -265,7 +258,7 @@ class DegenPrimerConfig(object):
                                     nargs=1,
                                     py_type=int,
                                     default=30,
-                                    limits=(5, 1000), #5M max
+                                    limits=(5, 1000),
                                     scale=1,
                                     ),
                              Option(name='analyse_all_annealings', 
@@ -286,6 +279,7 @@ class DegenPrimerConfig(object):
                                     'target sequences for iPCR simulation.',
                                     nargs='+',
                                     py_type=str,
+                                    value_required=False,
                                     field_type='file',
                                     ),
                              Option(name='sequence_db', 
@@ -294,6 +288,7 @@ class DegenPrimerConfig(object):
                                     '--fasta-files option will be ignored.',
                                     nargs=1,
                                     py_type=str,
+                                    value_required=False,
                                     field_type='file',
                                     ),
                              Option(name='use_sequences', 
@@ -303,10 +298,12 @@ class DegenPrimerConfig(object):
                                     'in the database will be used.',
                                     nargs='+',
                                     py_type=str,
+                                    value_required=False,
                                     ),
                              )),
         OptionGroup('seq_db',
                     'Management of a sequence database',
+                    value_required=False,
                     options=(Option(name='list_db', 
                                     desc='List contents of a sequence database '
                                     'specified.',
@@ -365,27 +362,29 @@ class DegenPrimerConfig(object):
                                     desc='PCR product which concentration and purity will be '
                                     'maximized during an optimization. If several products are '
                                     'given, then their sum is maximized.',
-                                    nargs='*',
+                                    nargs='+',
                                     py_type=None,
+                                    value_required=False,
                                     options=(Option(name='start',
-                                                       desc='Product start as defined in PCR simulation report.',
-                                                       nargs=1,
-                                                       py_type=int,
-                                                       limits=(1,None),
-                                                       ),
-                                                Option(name='end',
-                                                       desc='Product end as defined in PCR simulation report.',
-                                                       nargs=1,
-                                                       py_type=int,
-                                                       limits=(1,None),
-                                                       ),
-                                                )),
+                                                    desc='Product start as defined in PCR simulation report.',
+                                                    nargs=1,
+                                                    py_type=int,
+                                                    limits=(1,None),
+                                                    ),
+                                             Option(name='end',
+                                                    desc='Product end as defined in PCR simulation report.',
+                                                    nargs=1,
+                                                    py_type=int,
+                                                    limits=(1,None),
+                                                    ),
+                                             )),
                              Option(name='optimization_parameter', 
                                     desc='PCR parameter to optimize. Optimization is performed '
                                     'in terms of maximization of an objective function which is: '
                                     'sum_over_target_products(product_concentration*product_fraction^product_purity).',
-                                    nargs='*',
+                                    nargs='+',
                                     py_type=None,
+                                    value_required=False,
                                     options=(Option(name='name',
                                                     desc='Name of the parameter. '
                                                     'Any of PCR conditions as well as '
@@ -497,11 +496,11 @@ class DegenPrimerConfig(object):
         option_hashes = []
         for option in self._options:
             if not option.save: continue
-            if hasattr(self, option.dest):
-                value = getattr(self, option.dest)
-                try: value = hash(value)
-                except: value = str(value)
-                option_hashes.append(value)
+            value = getattr(self, option.dest, None)
+            if value is None: continue
+            try: value = hash(value)
+            except: value = hash(tuple(sorted(str(value))))
+            option_hashes.append(value)
         return hash(tuple(option_hashes)) & 0xFFFFFFF
     #end def
     
@@ -519,7 +518,7 @@ class DegenPrimerConfig(object):
         setattr(self, option.dest, value)
     
 
-    #virtual
+    @abstractmethod
     def _override_option(self, option): pass
     
     
@@ -570,7 +569,7 @@ class DegenPrimerConfig(object):
     
     
     def _fill_option(self, option):
-        #setup class member for the option
+        #setup instance attribute for the option
         self._set_option(option, option.default)
         #try to override default value
         value_override = self._override_option(option)
@@ -738,8 +737,7 @@ class DegenPrimerConfig(object):
         
     def register_reports(self, reports):
         if not reports: return
-        for report_name, report_file in reports:
-            self._reports.append((report_name, report_file))
+        self._reports.extend(reports)
     #end def
 #end class
 

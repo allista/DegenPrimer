@@ -23,12 +23,18 @@ Created on Mar 1, 2014
 from PCR_Mixture import MixtureFactory
 from SearchEngine import SearchEngine
 
-
 class PCR_ProductsFinder(MixtureFactory):
     
     def __init__(self, *args, **kwargs):
         MixtureFactory.__init__(self, *args, **kwargs)
-        self._searcher = SearchEngine(self._abort_event)
+        self._searcher  = SearchEngine(self._abort_event)
+        self._p_weights = [p.num_components for p in self._primers]
+        self._pw_sum    = sum(self._p_weights)
+        self._num_p     = len(self._primers)
+    #end def 
+    
+    @property
+    def searcher(self): return self._searcher
     
     @staticmethod
     def _combine_annealings(*annealings_list):
@@ -41,18 +47,46 @@ class PCR_ProductsFinder(MixtureFactory):
     #end def
     
     
-    def find(self, counter, t_name, template, mismatches):
-        search_results  = []
-        p_weights = [p.num_components for p in self._primers]
-        counter.set_subwork(len(self._primers)+1,
-                            p_weights+[0.01*sum(p_weights)])
-        for i, primer in enumerate(self._primers):
-            if self._abort_event.is_set(): return None
-            result = self._searcher.find(counter[i], template, primer, mismatches)
-            if result is None: return None
-            search_results.append(result)
+    def matches_to_mixture(self, counter, t_name, matches_list):
+        all_annealings = []
+        m_weights = [len(m) for m in matches_list]
+        counter.set_subwork(len(matches_list)+1,
+                            m_weights+[0.01*sum(m_weights)])
+        for i, matches in enumerate(matches_list):
+            if self.aborted(): return None
+            annealings = self._searcher.compile_duplexes_mp(counter[i], *matches)
+            if annealings is None: return None
+            all_annealings.append(annealings)
         mixture = self.create_PCR_mixture(counter[-1], t_name, 
-                                          *self._combine_annealings(*search_results))
+                                          *self._combine_annealings(*all_annealings))
+        counter.done()
+        return mixture
+    #end def
+    
+    
+    def find_matches(self, counter, t_name, template, mismatches):
+        all_matches = []
+        counter.set_subwork(self._num_p, self._p_weights)
+        for i, primer in enumerate(self._primers):
+            if self.aborted(): return None
+            matches = self._searcher.find_matches(counter[i], template, primer, mismatches)
+            if matches is None: return None
+            all_matches.append(matches)
+        return all_matches
+    #end def
+    
+    
+    def find(self, counter, t_name, template, mismatches):
+        all_annealings = []
+        counter.set_subwork(self._num_p+1,
+                            self._p_weights+[0.01*self._pw_sum])
+        for i, primer in enumerate(self._primers):
+            if self.aborted(): return None
+            annealings = self._searcher.find(counter[i], template, primer, mismatches)
+            if annealings is None: return None
+            all_annealings.append(annealings)
+        mixture = self.create_PCR_mixture(counter[-1], t_name, 
+                                          *self._combine_annealings(*all_annealings))
         counter.done()
         return mixture
     #end def
@@ -62,10 +96,10 @@ class PCR_ProductsFinder(MixtureFactory):
         results        = dict()
         search_results = dict()
         counter.set_subwork(2)
-        counter[0].set_subwork(len(self._primers))
+        counter[0].set_subwork(self._num_p)
         counter[1].set_subwork(len(templates))
         for i, primer in enumerate(self._primers):
-            if self._abort_event.is_set(): return None
+            if self.aborted(): return None
             result = self._searcher.batch_find(counter[0][i], templates, primer, mismatches)
             if result is None: return None
             for t_id, annealings in result.iteritems():
@@ -83,6 +117,15 @@ class PCR_ProductsFinder(MixtureFactory):
 
 
 #ProductsFnder wrapped in a Manager
+def _find_matches(counter, t_name, template, mismatches, products_finder):
+    return products_finder.find_matches(counter, t_name, template, mismatches)
+
+def _matches_to_mixture(counter, t_name, matches_list, products_finder):
+    mixture = products_finder.matches_to_mixture(counter, t_name, matches_list)
+    if mixture is None: return None
+    return mixture.save()
+#end def
+
 def _find(counter, t_name, template, mismatches, products_finder):
     mixture = products_finder.find(counter, t_name, template, mismatches)
     if mixture is None: return None
@@ -96,5 +139,9 @@ def _batch_find(counter, t_names, templates, mismatches, products_finder):
 #end def
         
 #mp computations
-from MultiprocessingBase import FuncManager
-PPFManager = FuncManager((_find, _batch_find))
+from UMP import FuncManager
+PPFManager = FuncManager('PPFManager', 
+                         (_matches_to_mixture, 
+                          _find_matches, 
+                          _find, 
+                          _batch_find))
