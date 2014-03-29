@@ -102,21 +102,20 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     
     def _save_query_config(self):
         #save query config
-        query_config   = SafeConfigParser()
+        query_config = SafeConfigParser()
         query_config.optionxform = str
         query_config.add_section('query')
         query_config.set('query', 'id', str(self._primers_hash))
         query_config.set('query', 'query', str(self._query.seq))
         query_config.set('query', 'boundaries', str(self._bounds))
-        query_filename = self._job_id+'-blast.cfg'
         try:
-            query_file     = open(query_filename, 'wb')
+            query_file = open(self._query_filename, 'wb')
             query_config.write(query_file)
             query_file.close()
         except IOError, e:
-            print '\nUnable to write BLAST configuration file:\n   %s' % query_filename
+            print '\nUnable to write BLAST configuration file:\n   %s' % self._query_filename
             print e.message
-        print '\nBLAST query configuration was written to:\n   %s' % query_filename
+        print '\nBLAST query configuration was written to:\n   %s' % self._query_filename
     #end def
     
     

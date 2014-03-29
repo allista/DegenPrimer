@@ -522,49 +522,63 @@ class DegenPrimerConfig(object):
     def _override_option(self, option): pass
     
     
-    def _apply_to_option(self, value, option, func):
+    @staticmethod
+    def _apply_to_option(value, option, func):
         if value is None: return value
         if option.is_compound:
             values = value if option.is_poly else [value]
             for sub in option.options:
                 for val in values:
                     if sub.name in val:
-                        val[sub.name] = self._apply_to_option(val[sub.name], sub, func)
+                        val[sub.name] = DegenPrimerConfig._apply_to_option(val[sub.name], sub, func)
             return value
         return func(value, option)
     #end def
     
+    @staticmethod
+    def _check_option_limits(value, option):
+        if option.limits is None: return value
+        if option.limits[0] and value < option.limits[0] \
+        or option.limits[1] and value > option.limits[1]:
+            raise ValueError(('The value of "%s" parameter should be '
+                              'within %s %s') % (option.name, 
+                                                 option.limits_str,
+                                                 option.units))
+        return value
+    #end def
     
     def _check_limits(self, option):
-        def check_limits(value, option):
-            if option.limits is None: return value
-            if option.limits[0] and value < option.limits[0] \
-            or option.limits[1] and value > option.limits[1]:
-                raise ValueError(('The value of "%s" parameter should be '
-                                  'within %s %s') % (option.name, 
-                                                     option.limits_str,
-                                                     option.units))
-            return value
         value = self._get_option(option)
-        self._apply_to_option(value, option, check_limits)
+        self._apply_to_option(value, option, self._check_option_limits)
     #end def
     
+    
+    @staticmethod
+    def _scale_option_value(value, option):
+        if option.scale is None: return value
+        return value*option.scale
+    #end def
     
     def _scale_value(self, option):
-        def scale_value(value, option):
-            if option.scale is None: return value
-            return value*option.scale
         value = self._get_option(option)
-        self._set_option(option, self._apply_to_option(value, option, scale_value))
+        self._set_option(option, self._apply_to_option(value, option, self._scale_option_value))
     #end def
         
+        
+    @staticmethod
+    def _unscale_value(value, option):
+        if option.scale is None: return value
+        return value/option.scale
+    #end def
     
     def _unscaled_value(self, option):
-        def unscale_value(value, option):
-            if option.scale is None: return value
-            return value/option.scale
         value = self._copy_option(option)
-        return self._apply_to_option(value, option, unscale_value)
+        return self._apply_to_option(value, option, self._unscale_value)
+    #end def
+    
+    def _unscaled_default(self, option):
+        value = deepcopy(option.default)
+        return self._apply_to_option(value, option, self._unscale_value)
     #end def
     
     
@@ -702,12 +716,10 @@ class DegenPrimerConfig(object):
         config = SafeConfigParser()
         config.optionxform = str
         for option in self._options:
-            #do not save options not marked to be saved
-            if not option.save: continue
-            #save all other
             if not config.has_section(option.group):
                 config.add_section(option.group)
-            value = self._unscaled_value(option)
+            if option.save: value = self._unscaled_value(option)
+            else: value = self._unscaled_default(option)
             config.set(option.group, option.dest, unicode(value).encode('UTF-8'))
         #save checksum and time
         tech_group = 'technical info'
@@ -744,9 +756,12 @@ class DegenPrimerConfig(object):
 
 #tests
 if __name__ == '__main__':
-    conf = DegenPrimerConfig()
-#    conf.parse_configuration('../A9F-A915R_master.cfg')
-    conf.parse_configuration('../A9F-U1492-A9F-U1492.cfg')
+    class TestConfig(DegenPrimerConfig):
+        def _override_option(self, option):
+            return DegenPrimerConfig._override_option(self, option)
+
+    conf = TestConfig()
+    conf.parse_configuration('../F-TGAM_0057-268_d1-R-TGAM_0055-624-d4.cfg')
     opts = conf.options
     print conf.find_option('primers/primer/sequence').full_name
     conf.from_options(opts)
