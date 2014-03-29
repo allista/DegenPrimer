@@ -1,3 +1,20 @@
+degen-primer (2.8-rc1-0ppa1) precise; urgency=low
+
+  * Many speed improvements; calculations are even more parallelized now.
+  * Drastic memory usage improvement: it's possible to perform analysis with as many template sequences as needed and with number of mismatches up to 50% of primer's length (more mismatches should still be OK, but calculations may take hours and even days in that case).
+
+  * New robust termination mechanism.
+
+  * Calculation progress display was added.
+
+  * Naming of configuration files and results now depends on analysis parameters. No more overwriting of previous results.
+
+  * Automatic logging of all output to a file.
+
+  * PBS support (see pbs-utils package on PyPi).
+
+ -- Allis Tauri <allista@gmail.com>  Sat, 29 Mar 2014 21:16:43 +0400
+
 degen-primer (2.5-rc1-0ppa1) precise; urgency=low
 
   Major Release:
