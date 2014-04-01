@@ -28,12 +28,10 @@ from Option import Option, OptionGroup
 from itertools import chain
 from copy import deepcopy
 from datetime import datetime
-from abc import ABCMeta, abstractmethod
 
 
 class DegenPrimerConfig(object):
     '''Base class for degen_primer configuration parsers'''
-    __metaclass__ = ABCMeta
     
     #program description
     _description = ('This is a tool to compute degenerate primer parameters. '
@@ -517,10 +515,8 @@ class DegenPrimerConfig(object):
     def _set_option(self, option, value):
         setattr(self, option.dest, value)
     
-
-    @abstractmethod
+    #abstract method
     def _override_option(self, option): pass
-    
     
     @staticmethod
     def _apply_to_option(value, option, func):

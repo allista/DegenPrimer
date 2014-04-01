@@ -1,3 +1,9 @@
+degen-primer (2.8-rc2-0ppa1) precise; urgency=low
+
+  * Fixed the bug that have broken DegenPrimerGUI.
+
+ -- Allis Tauri <allista@gmail.com>  Tue, 01 Apr 2014 14:36:01 +0400
+
 degen-primer (2.8-rc1-0ppa1) precise; urgency=low
 
   * Many speed improvements; calculations are even more parallelized now.

@@ -30,7 +30,7 @@ from DegenPrimer.UnifiedNN import UnifiedNN
 
 from distutils.core import setup
 setup(name='degen-primer',
-      version='2.8-rc1',
+      version='2.8-rc2',
       description='Degenerate primer characterization and '
                   'in silico PCR simulation software.',
       long_description=read('README'),
