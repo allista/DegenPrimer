@@ -178,6 +178,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
             results_path = self._pcrM.ParallelPCR(counter[0],
                                                   self._abort_event, pcr,
                                                   self._PCR_mixtures.values())
+            if not results_path or self.aborted(): return
             results = roDict(results_path)['result']
             cleanup_file(results_path)
             counter[1].done()

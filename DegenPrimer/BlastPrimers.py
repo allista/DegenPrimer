@@ -294,13 +294,14 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         return True
     #end def
     
-    
+    @MultiprocessingBase.raise_tb_on_error
     def blast_and_analyze(self, counter, entrez_query=''):
         counter.set_subwork(2)
         return self.blast_query(counter[0], entrez_query) \
         and    self.simulate_PCR(counter[1])
     #end def
     
+    @MultiprocessingBase.raise_tb_on_error
     def load_and_analyze(self, counter):
         counter.set_subwork(2)
         return self.load_results(counter[0]) \

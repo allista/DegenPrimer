@@ -123,7 +123,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
         return True
     #end def
     
-    
+    @MultiprocessingBase.raise_tb_on_error
     def calculate_equilibrium(self, counter):
         if not self._reactions: return False
         counter.set_subwork(3)

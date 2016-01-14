@@ -22,6 +22,7 @@ Created on Feb 27, 2013
 '''
 
 from BioUtils.Tools.UMP import FuncManager, at_manager
+from BioUtils.Tools.Multiprocessing import raise_tb_on_error
 
 from .PCR_ProductsFinder import PPFManager
 from .SearchEngine import mp_better
@@ -116,10 +117,9 @@ class iPCR(iPCR_Base):
         return result
     #end def
     
-    
+    @raise_tb_on_error
     def simulate_PCR(self, counter, seq_files, seq_ids=None):
         counter.set_subwork(2, (10, 1+5*self._include_side_annealings))
-        counter[0]
         if self._find_products(counter[0], 
                                self._PCR_Simulation, 
                                self._ProductsFinder, 

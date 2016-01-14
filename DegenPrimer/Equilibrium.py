@@ -220,19 +220,19 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         #solve the system
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            try: r0 = self._solve(sys_func, obj_func, r0, solver)
+            try: sol = self._solve(sys_func, obj_func, r0, solver)
             except: 
-                try: r0 = self._solve(sys_func, obj_func, r0, altsolv)
+                try: sol = self._solve(sys_func, obj_func, r0, altsolv)
                 except Exception, e:
                     print '\nUnable to calculate equilibrium.'
                     print e
-                    r0 = None
-        if r0 is None: return False
+                    sol = None
+        if sol is None: return False
         #calculate solution objective function and reactant consumptions
-        self.objective_value = obj_func(r0)
+        self.objective_value = obj_func(sol)
         self.solution     = dict((self._reaction_ids[ri], r) 
-                                 for ri, r in enumerate(r0))
-        self.consumptions = dict((self._reactants_ids[ri], func(r0)) 
+                                 for ri, r in enumerate(sol))
+        self.consumptions = dict((self._reactants_ids[ri], func(sol)) 
                                  for ri, func in enumerate(rc_funcs))
         return True
     #end def
@@ -259,7 +259,6 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
     #end def
     
     def __nonzero__(self): return self.solution is not None
-    
     
     def _index_reaction(self, reaction):
         rid, R = reaction
@@ -336,7 +335,7 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
                                reactions_group[0], reactions_group[1], precision)
         if eq.calculate():
             return eq.objective_value, eq.solution, eq.consumptions
-        return None, None, None
+        return -1, None, None
     #end def
 
     def calculate(self, counter):

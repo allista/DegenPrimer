@@ -18,7 +18,7 @@ Created on Jan 1, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from BioUtils.Tools.Multiprocessing import MultiprocessingBase, cpu_count
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase, aborted, cpu_count
 from array import array
 from scipy.fftpack import fft, ifft
 
@@ -271,9 +271,8 @@ class SearchEngine(MultiprocessingBase):
         fwd_score = []
         rev_score = []
         pos       = start
-        aborted   = False
-        while pos < end and not aborted:
-            aborted = abort_e.is_set()
+        while pos < end:
+            if aborted(abort_e): return None
             front = min(end, pos+c_size)
             fwd_score.append(SearchEngine._find_in_chunk(fwd_seq[pos:front], 
                                                          p_fft, correction,
@@ -282,7 +281,6 @@ class SearchEngine(MultiprocessingBase):
                                                          p_fft, correction,
                                                          c_size, c_stride))
             pos += c_stride
-        if aborted: return None
         return (start, 
                 np.concatenate(fwd_score)[:s_stride], 
                 np.concatenate(rev_score)[:s_stride])
@@ -323,10 +321,11 @@ class SearchEngine(MultiprocessingBase):
         scores_len = slice_stride*len(work)
         scores = [np.zeros(scores_len), np.zeros(scores_len)]
         def assemble_scores(out, scores):
-            scores[0][out[0]:out[0]+slice_stride] = out[1]
-            scores[1][out[0]:out[0]+slice_stride] = out[2]
+            if out:
+                scores[0][out[0]:out[0]+slice_stride] = out[1]
+                scores[1][out[0]:out[0]+slice_stride] = out[2]
         work.set_assembler(assemble_scores, scores)
-        work.get_result()
+        if not self.wait(work): return None
         #if search was aborted, return empty results
         if self.aborted(): return None
         #compute match indices

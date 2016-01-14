@@ -128,8 +128,8 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
         concentrations.update(self._side_concentrations)
         #calculate equilibrium
         equilibrium = Equilibrium(self._abort_event, reactions, concentrations)
-        equilibrium.calculate(counter[1])
-        return equilibrium
+        if equilibrium.calculate(counter[1]): return equilibrium
+        return None
     #end def
     
 
