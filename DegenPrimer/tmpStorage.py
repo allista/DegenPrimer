@@ -114,9 +114,11 @@ class tupleView(Sequence):
         
     def __getitem__(self, index):
         key = self._keys[index]
-        if isinstance(key, Sequence):
+        if isinstance(key, str):
+            return self._db[key]
+        elif isinstance(key, Sequence):
             return tuple(self._db[k] for k in key)
-        else: return self._db[key]
+        raise ValueError('Unsupported key type: %s' % type(key)) 
     #end def
     
     def __reduce__(self):

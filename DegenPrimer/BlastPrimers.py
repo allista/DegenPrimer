@@ -488,7 +488,8 @@ if __name__ == '__main__':
     import sys
     from time import sleep
     from multiprocessing import Manager
-    from Primer import Primer, load_sequence
+    from Primer import Primer
+    from SeqUtils import load_sequence
     from WorkCounter import WorkCounterManager
     from WaitingThread import WaitingThread
     from TD_Functions import PCR_P

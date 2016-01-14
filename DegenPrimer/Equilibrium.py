@@ -27,10 +27,9 @@ from numpy.random import random
 from scipy.optimize import fsolve, newton_krylov
 from scipy.sparse import csr_matrix, csgraph
 from AbortableBase import AbortableBase
-from StringTools import print_exception
 
 
-class Reaction:
+class Reaction(object):
     '''
     Structure like object that defines a reversible mono or bimolecular chemical 
     reaction with four parameters:
@@ -389,6 +388,7 @@ def sig_handler(signal, frame):
 
 
 if __name__ == '__main__':
+    from WorkCounter import WorkCounter
     #setup signal handler
     import signal
     signal.signal(signal.SIGINT,  sig_handler)
@@ -411,7 +411,7 @@ if __name__ == '__main__':
     print len(concentrations)
     
     eq = Equilibrium(abort_event, reactions, concentrations, 1e-10)
-    eq.calculate()
+    eq.calculate(WorkCounter())
     print eq.objective_value
     print eq.solution
     

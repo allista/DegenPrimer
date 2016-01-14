@@ -23,7 +23,6 @@ Created on Feb 27, 2013
 
 from StringTools import wrap_text, hr
 from iPCR_Base import iPCR_Base
-from MultiprocessingBase import cpu_count, even_chunks
 from SearchEngine import mp_better
 from UMP import FuncManager, at_manager
 from PCR_ProductsFinder import PPFManager
@@ -81,6 +80,7 @@ class iPCR(iPCR_Base):
             long_counter   = counter[1]
         else: long_counter = short_counter = counter
         if long_templates: long_counter.set_subwork(len(long_templates), [seqs_info[t_id] for t_id in long_templates])
+        #search short templates in batch
         if short_templates:
             short_counter.set_subwork(len(short_templates))
             results = self._find_products_in_templates(short_counter, 
@@ -118,6 +118,7 @@ class iPCR(iPCR_Base):
     
     def simulate_PCR(self, counter, seq_files, seq_ids=None):
         counter.set_subwork(2, (10, 1+5*self._include_side_annealings))
+        counter[0]
         if self._find_products(counter[0], 
                                self._PCR_Simulation, 
                                self._ProductsFinder, 
@@ -176,7 +177,8 @@ class iPCR(iPCR_Base):
 if __name__ == '__main__':
     import sys, time
     from multiprocessing import Manager
-    from Primer import Primer, load_sequence
+    from Primer import Primer
+    from SeqUtils import load_sequence
     from WorkCounter import WorkCounterManager
     from WaitingThread import WaitingThread
     from threading import Lock
@@ -192,7 +194,7 @@ if __name__ == '__main__':
     fwd_primer = Primer(load_sequence('ATATTCTACRACGGCTATCC', 'fwd_test', 'fwd_test'), 0.43e-6, True)
     rev_primer = Primer(load_sequence('GAASGCRAAKATYGGGAAC', 'rev_test', 'rev_test'), 0.43e-6, True)
     ipcr = iPCR(abort_event,
-                max_mismatches=5,
+                max_mismatches=6,
                 job_id='test-job', 
                 primers=[fwd_primer,
                          rev_primer], 
@@ -214,7 +216,7 @@ if __name__ == '__main__':
                         name='simulate_PCR',
                         args=(counter, 
                               ('../ThGa.fa', #single sequence
-                               '../Ch5_gnm.fa', '../ThDS1.fa', '../ThES1.fa', #long sequences 
+#                               '../Ch5_gnm.fa', '../ThDS1.fa', '../ThES1.fa', #long sequences 
                                '../ThDS1-FC.fa', '../ThDS1-850b-product.fa', #short sequences
                               ),))
     job.start(); print ''

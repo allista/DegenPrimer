@@ -29,6 +29,8 @@ biomolecular structure, 33, 415-40. doi:10.1146/annurev.biophys.32.110601.141800
 import os
 import csv
 from math import log
+
+from SeqUtils import unambiguous_sequences
 ###############################################################################
 
 
@@ -139,42 +141,39 @@ class UnifiedNN(object):
         cls.loops         = dict((int(k), v) for k, v 
                                  in _load_csv(cls._loops_paths).iteritems())
         cls.internal_NN   = _load_csv(cls._internal_NN_paths)
+        for nn in cls.internal_NN.keys():
+            cls.internal_NN[nn[::-1]] = cls.internal_NN[nn]
         cls.dangling_ends = _load_csv(cls._dangling_ends_paths)
         cls._inited       = True
     #end def
     
-
     #'standard' enthalpy, enthropy and Gibbs energy
     @classmethod
     def pair_dPar_37(cls, seq, rev):
         '''return 'standard' parameter (enthalpy, enthropy and Gibbs energy) 
         for the given dinucleotide duplex'''
-        fwd_key = '%s/%s' % (seq, rev)
-        if '-' in fwd_key:
-            try: return cls.dangling_ends[fwd_key]
-            except: pass 
-        else: #if it's not a dangling end
-            try: return cls.internal_NN[fwd_key] 
-            except KeyError:
-                try: return cls.internal_NN[fwd_key[::-1]]
-                except: pass
-        #if not found anywhere
-        raise ValueError('UnifiedNN._delta_par: sequence is not in the database: %s' % fwd_key)
+        key = '%s/%s' % (seq, rev)
+        if '-' in key: pars = cls.dangling_ends.get(key, None)
+        else: pars = cls.internal_NN.get(key, None)
+        if pars: return pars
+        #if not found anywhere, try to unambiguate sequences
+        seqs = unambiguous_sequences(seq)
+        revs = unambiguous_sequences(rev)
+        pars = dict(dH=0, dS=0, dG=0)
+        if len(seqs) == 1 and len(revs) == 1:
+            print 'UnifiedNN.dPar: sequence is not in the database: %s' % key
+            return pars
+        for s in seqs:
+            for r in revs:
+                p = cls.pair_dPar_37(s, r)
+                for par in pars: pars[par] += p[par]
+        numpars = float(len(seqs)*len(revs))
+        for par in pars: pars[par] /= numpars
+        #cache results
+        cls.internal_NN[key] = pars
+        cls.internal_NN[key[::-1]] = pars
+        return pars
     #end def
-    
-    
-    @classmethod
-    def pair_dH_37(cls, seq, rev):
-        return cls.pair_dPar_37(seq, rev, 'dH')
-    
-    @classmethod
-    def pair_dS_37(cls, seq, rev):
-        return cls.pair_dPar_37(seq, rev, 'dS')
-    
-    @classmethod
-    def pair_dG_37(cls, seq, rev):
-        return cls.pair_dPar_37(seq, rev, 'dG')
-
 
     @classmethod
     def _extrapolate_loop_dG_37(cls, length, loop_type):

@@ -89,9 +89,9 @@ class SeqDB(object):
         self._cursor.execute('PRAGMA cache_size=500000')
         #populate database with data
         for sequence in sequences:
-            if self.is_ambiguous(sequence):
-                print '\nSequence %s is excluded because it contains ambiguous symbols\n' % sequence.id
-                continue
+#            if self.is_ambiguous(sequence):
+#                print '\nSequence %s is excluded because it contains ambiguous symbols\n' % sequence.id
+#                continue
             self._cursor.execute('''
             INSERT INTO sequences (name, sequence, length)
             VALUES (?, ?, ?)''', 

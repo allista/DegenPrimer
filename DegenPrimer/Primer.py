@@ -33,28 +33,14 @@ try:
 except ImportError:
     print'The BioPython must be installed in your system.'
     raise
-from StringTools import print_exception
 from MultiprocessingBase import parallelize_work
+from SeqUtils import unambiguous_sequences
 import TD_Functions as tdf
 
 
 class Primer(object):
     '''Representation of a degenerate primer'''
 
-    IUPAC_ambiguous = {'R': ['A', 'G'],
-                       'Y': ['C', 'T'],
-                       'S': ['G', 'C'],
-                       'W': ['A', 'T'],
-                       'K': ['G', 'T'],
-                       'M': ['A', 'C'],
-                       'B': ['C', 'G', 'T'],
-                       'D': ['A', 'G', 'T'],
-                       'H': ['A', 'C', 'T'],
-                       'V': ['A', 'C', 'G'],
-                       'N': ['A', 'T', 'C', 'G']}
-    
-    IUPAC_unambiguous = ['A', 'T', 'G', 'C']
-    
     def __init__(self, seq_rec, concentration, generate_components=False):
         self._seq_record    = seq_rec
         self._concentration = concentration
@@ -131,8 +117,9 @@ class Primer(object):
             return True
         except ValueError, e:
             print 'Primer: unable to generate unambiguous components:'
-            print_exception(e)
-        except: pass
+            print e
+        except Exception, e:
+            print e
         return False
     #end def
         
@@ -261,30 +248,13 @@ class Primer(object):
     @classmethod
     def generate_unambiguous(cls, seq_rec):
         '''generate a list of all possible combinations from an ambiguous sequence'''
-        unambiguous_strings = ['']
-        #generate list of sequence strings
-        for letter in seq_rec.seq:
-            n_sequences = len(unambiguous_strings)
-            if letter in cls.IUPAC_unambiguous:
-                for s in xrange(n_sequences):
-                    unambiguous_strings[s] += letter
-            elif letter in cls.IUPAC_ambiguous:
-                replacements = cls.IUPAC_ambiguous[letter]
-                n_replacements = len(replacements) 
-                unambiguous_strings *= n_replacements
-                for r in xrange(n_replacements):
-                    for s in xrange(n_sequences):
-                        unambiguous_strings[s+n_sequences*r] += replacements[r]
-            else: raise ValueError(('Primer.generate_unambiguous: ' 
-                                   'unknown letter %s in sequence:\n%s')
-                                    % (letter, str(seq_rec)))
-        #make a list of SeqRecords
+        unambiguous = unambiguous_sequences(seq_rec.seq)
         unambiguous_seq_list = list()
-        num_unambiguous = len(unambiguous_strings)
+        num_unambiguous = len(unambiguous)
         id_template = '%s_%0' + '%d' % int(log(num_unambiguous, 10)+1) + 'd'
         if num_unambiguous < 2: return unambiguous_seq_list
         for s in xrange(num_unambiguous):
-            un_seq = Seq(unambiguous_strings[s], IUPAC.unambiguous_dna)
+            un_seq = Seq(unambiguous[s], IUPAC.unambiguous_dna)
             unambiguous_seq_list.append(SeqRecord(un_seq, description=seq_rec.description, 
                                                   id=(id_template % (seq_rec.id, s+1))))
         return unambiguous_seq_list
@@ -323,60 +293,6 @@ class Primer(object):
         return cls(master_record, concentration)
     #end def
 #end class
-
-
-def load_sequence(seq_string, rec_id='', desc=''):
-    '''generate a SeqRecord object with sequence from a raw string or a file'''
-    #check if seq_string is an existing file
-    if os.path.isfile(seq_string):
-        filename = seq_string
-        #check file format by extension
-        genbank_pattern = re.compile(".*(\.gb|\.gbk)$")
-        fasta_pattern   = re.compile(".*(\.fa|\.faa|\.fasta)$")
-        if genbank_pattern.match(filename): filetype = "gb"
-        elif fasta_pattern.match(filename): filetype = "fasta"
-        else:
-            raise ValueError(('Unable to guess format of %s'
-                              '*it is expected that GenBank '
-                              'files have .gb or .gbk extension '
-                              'and FASTA files have .fa, .faa or '
-                              '.fasta extension.') % filename)
-        #parse file
-        #only the first record is loaded
-        try:
-            record = SeqIO.parse(filename, filetype).next().upper()
-        except Exception, e:
-            print_exception(e)
-            raise ValueError('Primer.load_sequence: unable to parse %s.' % filename)
-        #set record id, name and description
-        if rec_id: 
-            record.id = rec_id
-        if not record.name:
-            record.name = desc
-        if not record.description:
-            record.description = desc
-        return record
-    else: #check if seq_string is a valid sequence
-        _is_sequence  = True
-        sequence      = seq_string.replace(' ', '').upper()
-        full_alphabet = Primer.IUPAC_unambiguous + Primer.IUPAC_ambiguous.keys() 
-        for letter in sequence:
-            _is_sequence &= letter in full_alphabet
-            if not _is_sequence: break
-        #if it is, make a SeqRecord out of it
-        if not _is_sequence: 
-            raise ValueError(('Primer.load_sequence: given string is not a '
-                              'valid sequence nor a valid path '
-                              'to a file: %s') % seq_string)
-        try:
-            record = SeqRecord(Seq(sequence, IUPAC.ambiguous_dna).upper(), 
-                               id=rec_id, name=desc, description=desc)
-        except Exception, e:
-            print_exception(e)
-            raise ValueError('Primer.load_sequence: unable to interpret %s as a sequence data.' % sequence)
-        return record
-#end def
-
 
 
 #tests

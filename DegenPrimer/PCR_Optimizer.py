@@ -323,7 +323,8 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
 if __name__ == '__main__':
     import sys, time
     from multiprocessing import Manager
-    from Primer import Primer, load_sequence
+    from Primer import Primer
+    from SeqUtils import load_sequence
     from WorkCounter import WorkCounterManager
     from WaitingThread import WaitingThread
     from threading import Lock

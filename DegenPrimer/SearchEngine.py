@@ -511,7 +511,8 @@ if __name__ == '__main__':
     import TD_Functions as tdf
     tdf.PCR_P.PCR_T = 60
     
-#    searcher = SearchEngine(abort_event)
+    searcher = SearchEngine(abort_event)
+    searcher.find(WorkCounter(), template, primer, 6)
     
     def mem_test(num):
         for _n in xrange(num):
@@ -562,13 +563,14 @@ if __name__ == '__main__':
 #    plt.show()
 
     #find vs regexp
+    from SeqUtils import IUPAC_ambiguous, IUPAC_unambiguous
     def primer2re(primer):
         re_str = ''
         for l in primer.master_sequence:
-            if l in Primer.IUPAC_unambiguous:
+            if l in IUPAC_unambiguous:
                 re_str += l
             else:
-                re_str += '[%s]' % (''.join(Primer.IUPAC_ambiguous[l]))
+                re_str += '[%s]' % (''.join(IUPAC_ambiguous[l]))
         return re.compile(re_str)
     
     import re
@@ -596,13 +598,13 @@ if __name__ == '__main__':
 #        print fwd_res[0]
         return find_times, re_times
             
-    print 'template length:   %d' % len(template)
-    print 'primer length:     %d' % len(primer)
-    print 'primer components: %d' % primer.num_components
-    print
-    ft, rt = find_vs_regexp(primer, template)
-    print
-    print 'find mean: %f sec' % (sum(ft)/float(len(ft)))
-    print 're mean: %f sec' % (sum(rt)/float(len(rt)))
+#    print 'template length:   %d' % len(template)
+#    print 'primer length:     %d' % len(primer)
+#    print 'primer components: %d' % primer.num_components
+#    print
+#    ft, rt = find_vs_regexp(primer, template)
+#    print
+#    print 'find mean: %f sec' % (sum(ft)/float(len(ft)))
+#    print 're mean: %f sec' % (sum(rt)/float(len(rt)))
     
     print 'Done.'
