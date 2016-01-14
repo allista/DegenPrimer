@@ -127,7 +127,7 @@ class AnalysisTask(PrimerTaskBase):
         self._run_subroutine(all_sec_structures.calculate_equilibrium, None, p_entry,
                              'Calculate relative concentrations of secondary structures at Tm.')
         #----------------------------------------------------------------------#
-        #in silica PCR simulation. This is only available if sequence database #
+        #in-silico PCR simulation. This is only available if sequence database #
         #is provided in some form                                              #
         if args.fasta_files or args.sequence_db:
             p_entry = self._generate_subroutine_entry()
@@ -300,8 +300,7 @@ class AnalysisTask(PrimerTaskBase):
             if not analysis_routines or self.aborted():
                 self._clean_subroutines()
                 with self._print_lock: 
-                    self._print('\nAnalysis Task aborted%s' 
-                                % (' by user.' if analysis_routines else ' due to an error.'))
+                    self._print('\nAnalysis Task aborted')
                     self._print('\nTotal elapsed time: %s' % self._elapsed())
                 return 1 if analysis_routines else -1
             #write reports
