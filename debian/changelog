@@ -1,6 +1,11 @@
+degen-primer (2.8-rc3-0ppa1ubuntu1) precise; urgency=low
+
+  * Fixed the bug that has broken analysis of non-degenerate primers. 
+
+ -- Allis Tauri <allista@gmail.com>  Wed, 02 Apr 2014 16:38:44 +0400
 degen-primer (2.8-rc2-0ppa1) precise; urgency=low
 
-  * Fixed the bug that have broken DegenPrimerGUI.
+  * Fixed the bug that has broken DegenPrimerGUI.
 
  -- Allis Tauri <allista@gmail.com>  Tue, 01 Apr 2014 14:36:01 +0400
 
