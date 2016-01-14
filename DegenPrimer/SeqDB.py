@@ -29,6 +29,15 @@ class SeqDB(object):
     '''Create and manage a database of sequences with fast approximate match 
     searching.'''
     
+    _ambiguous = set(IUPAC.ambiguous_dna.letters.upper()) - set(IUPAC.unambiguous_dna.letters.upper())
+    
+    @classmethod
+    def is_ambiguous(cls, seqrec):
+        sstr = str(seqrec.seq).upper()
+        for l in cls._ambiguous:
+            if l in sstr: return True
+        return False
+    
     _sequences_schema = \
     '''CREATE TABLE "sequences" (
            "id"         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,10 +89,14 @@ class SeqDB(object):
         self._cursor.execute('PRAGMA cache_size=500000')
         #populate database with data
         for sequence in sequences:
+            if self.is_ambiguous(sequence):
+                print '\nSequence %s is excluded because it contains ambiguous symbols\n' % sequence.id
+                continue
             self._cursor.execute('''
             INSERT INTO sequences (name, sequence, length)
             VALUES (?, ?, ?)''', 
-            (sequence.description, sequence.format('fasta'), len(sequence)))
+            (sequence.description or sequence.name or sequence.id, 
+             sequence.format('fasta'), len(sequence)))
         self._db.commit()
         self._cursor.execute('PRAGMA cache_size=64000')
         self._db.commit()
@@ -101,9 +114,11 @@ class SeqDB(object):
         if not files: return None
         sequences = []
         for filename in files:
-            if os.path.isfile(filename):
-                sequences += SeqIO.parse(filename, 'fasta', IUPAC.unambiguous_dna)
-            else: print '\nSeqDB._get_sequences: no such file:\n%s' % filename
+            try: sequences.extend(SeqIO.parse(filename, 'fasta', IUPAC.unambiguous_dna))
+            except Exception, e:
+                print '\nError while parsing %s' % filename
+                print e
+                print
         if not sequences:
             print '\nNo sequences were found in given fasta files.' 
             return None
