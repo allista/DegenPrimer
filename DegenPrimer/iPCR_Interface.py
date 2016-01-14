@@ -21,9 +21,10 @@ Created on Dec 15, 2012
 '''
 
 from abc import ABCMeta, abstractmethod
-from ReporterInterface import ReporterInterface
+
 from PCR_ProductsFinder import PCR_ProductsFinder
 from PCR_Simulation import PCR_Simulation_Interface, PCR_Simulation
+from ReporterInterface import ReporterInterface
 from StringTools import hr, time_hr
 
 

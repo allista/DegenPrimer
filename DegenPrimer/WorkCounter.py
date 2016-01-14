@@ -20,14 +20,12 @@ Created on Mar 4, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import warnings
-import numpy as np
-from scipy import stats
-from time import time
-from datetime import timedelta
-from collections import Sequence, Sized
+from BioUtils.Tools.UMP import UManager, AutoProxyMeta
 from abc import ABCMeta
-
+from collections import Sequence, Sized
+from datetime import timedelta
+from multiprocessing.managers import BaseProxy
+from time import time
 
 class ReturnProxy(type):
     '''A metaclass to work around http://bugs.python.org/issue20854'''
@@ -184,10 +182,6 @@ class WorkCounter(Sequence):
 
 
 #proxy for WorkerCounter
-from BioUtils.Tools.UMP import UManager, AutoProxyMeta
-from multiprocessing.managers import BaseProxy
-
-        
 class WorkCounterProxy(BaseProxy):
     __metaclass__ = AutoProxyMeta
     _exposed_ = ('__str__', 'rstr', '__repr__',

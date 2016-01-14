@@ -18,9 +18,9 @@ Created on Jun 23, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from StringTools import hr
-from Equilibrium import Reaction
-import TD_Functions as tdf
+from .Equilibrium import Reaction
+from .StringTools import hr
+from . import TD_Functions as tdf
 
 
 #default filtration parameters

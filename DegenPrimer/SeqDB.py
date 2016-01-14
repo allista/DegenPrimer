@@ -17,14 +17,16 @@ Created on Dec 21, 2012
 
 @author: Allis Tauri <allista@gmail.com>
 '''
+from Bio import SeqIO
+from BioUtils.SeqUtils import load_files
+from BioUtils.Tools.AbortableBase import AbortableBase
+from StringIO import StringIO
 import os
 import shutil
 import sqlite3
-from Bio import SeqIO
+
 from Bio.Alphabet import IUPAC
-from StringIO import StringIO
-from BioUtils.Tools.AbortableBase import AbortableBase
-from BioUtils.SeqUtils import load_files
+
 
 class SeqDB(AbortableBase):
     '''Create and manage a database of sequences with fast approximate match 

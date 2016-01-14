@@ -21,15 +21,19 @@ Created on Nov 16, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from BioUtils.Tools.Multiprocessing import Parallelizer
+from BioUtils.Tools.UMP import FuncManager, at_manager
+from BioUtils.Tools.tmpStorage import roDict, cleanup_file, register_tmp_file
+from collections import Iterable
 from datetime import timedelta
 from math import log, exp
-from collections import Iterable
-from SecStructures import min_K
-from SinglePCR import PCR_Base, SinglePCR
-from BioUtils.Tools.tmpStorage import roDict, cleanup_file, register_tmp_file
-from StringTools import wrap_text, line_by_line, hr
-import TD_Functions as tdf
-import StringTools
+
+from .PCR_Mixture import ShelvedMixture
+from .SecStructures import min_K
+from .SinglePCR import PCR_Base, SinglePCR
+from .StringTools import wrap_text, line_by_line, hr
+from . import StringTools
+from . import TD_Functions as tdf
 
 
 class PCR_Simulation_Interface(PCR_Base):
@@ -68,9 +72,6 @@ class PCR_Simulation_Interface(PCR_Base):
 
 
 #manager to isolate forking point in a low-memory process
-from PCR_Mixture import ShelvedMixture
-from BioUtils.Tools.Multiprocessing import Parallelizer
-from BioUtils.Tools.UMP import FuncManager, at_manager
 
 class run_pcr_from_file(object):
     def __init__(self, pcr, counter=None):

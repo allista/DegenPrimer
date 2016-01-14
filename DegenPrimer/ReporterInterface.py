@@ -23,6 +23,7 @@ Created on Feb 27, 2013
 
 from abc import ABCMeta, abstractmethod
 
+
 class ReporterInterface(object):
     '''Provides common interface to register reports if DegenPrimerConfig'''
     __metaclass__ = ABCMeta

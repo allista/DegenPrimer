@@ -20,9 +20,9 @@ Created on Mar 13, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from math import sqrt
 from multiprocessing import Value
 from textwrap import dedent
-from math import sqrt
 
 
 class PCR_P_Meta(type):

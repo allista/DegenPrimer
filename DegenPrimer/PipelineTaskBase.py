@@ -18,8 +18,9 @@ Created on Mar 28, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from abc import ABCMeta, abstractmethod
 from BioUtils.Tools.AbortableBase import AbortableBase
+from abc import ABCMeta, abstractmethod
+
 
 class PipelineTaskBase(AbortableBase):
     '''Base class for pipeline tasks'''

@@ -26,14 +26,13 @@ biomolecular structure, 33, 415-40. doi:10.1146/annurev.biophys.32.110601.141800
 '''
 
 
-import os
 import csv
 from math import log
+import os
 
-from SeqUtils import unambiguous_sequences
+from .SeqUtils import unambiguous_sequences
+
 ###############################################################################
-
-
 def _load_csv(filenames):
     '''Load a csv (tab delimited, quoting character ") file into a dictionary of 
     dicts, assuming that the first row and first column define names, and each cell 

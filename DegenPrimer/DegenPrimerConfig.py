@@ -22,13 +22,14 @@ Created on Jul 1, 2012
 '''
 
 from ConfigParser import SafeConfigParser
-from StringTools import random_text
-from Primer import Primer
-from SeqUtils import load_sequence
-from Option import Option, OptionGroup
-from itertools import chain
 from copy import deepcopy
 from datetime import datetime
+from itertools import chain
+
+from .Option import Option, OptionGroup
+from .Primer import Primer
+from .SeqUtils import load_sequence
+from .StringTools import random_text
 
 
 class DegenPrimerConfig(object):

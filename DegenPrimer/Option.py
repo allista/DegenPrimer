@@ -21,9 +21,10 @@ Created on Mar 22, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from math import ceil, log
 from argparse import Action
-from StringTools import wrap_text
+from math import ceil, log
+
+from .StringTools import wrap_text
 
 
 class OptionBase(object):

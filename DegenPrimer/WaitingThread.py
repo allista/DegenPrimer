@@ -17,11 +17,13 @@ Created on Mar 6, 2014
 
 @author: Allis Tauri <allista@gmail.com>
 '''
-import errno
-import traceback as tb
-from time import time, sleep
 from datetime import timedelta
+import errno
 from threading import Thread
+from time import time, sleep
+
+import traceback as tb
+
 
 class WaitingThread(Thread):
     '''Thread that specially handle EOFError and IOError 4, interpreting them 

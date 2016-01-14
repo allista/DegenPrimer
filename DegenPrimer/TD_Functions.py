@@ -33,12 +33,13 @@ comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-6
 
 from copy import deepcopy
 from math import sqrt, log, exp
-from UnifiedNN import UnifiedNN
-from PCR_Parameters import PCR_Parameters
-import StringTools
+
+from .PCR_Parameters import PCR_Parameters
+from .UnifiedNN import UnifiedNN
+from . import StringTools
+
+
 ###############################################################################
-
-
 #Unified Nearest Neighbour model and PCR parameters initialization
 NN = UnifiedNN()
 if not NN: raise RuntimeError('TD_Functions: Unable to initialize UnifiedNN.')

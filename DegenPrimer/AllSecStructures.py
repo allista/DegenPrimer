@@ -18,14 +18,13 @@ Created on Feb 15, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from Equilibrium import Equilibrium
-from ReporterInterface import ReporterInterface
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase
-from SecStructures import SecStructures
-from StringTools import hr, time_hr, wrap_text
-import TD_Functions
 
-
+from .Equilibrium import Equilibrium
+from .ReporterInterface import ReporterInterface
+from .SecStructures import SecStructures
+from .StringTools import hr, time_hr, wrap_text
+from . import TD_Functions
 
 class AllSecStructures(ReporterInterface, MultiprocessingBase):
     '''

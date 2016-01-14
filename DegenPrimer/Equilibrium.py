@@ -21,13 +21,14 @@ Created on Nov 25, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import warnings
-import numpy as np
+from BioUtils.Tools.AbortableBase import AbortableBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from numpy.random import random
 from scipy.optimize import fsolve, newton_krylov
 from scipy.sparse import csr_matrix, csgraph
-from BioUtils.Tools.AbortableBase import AbortableBase
+import warnings
 
+import numpy as np
 
 class Reaction(object):
     '''
@@ -238,7 +239,6 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
 #end class
 
 
-from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 class Equilibrium(EquilibriumBase, MultiprocessingBase):
     '''
     Calculate equilibrium parameters in arbitrary system of concurrent reactions.

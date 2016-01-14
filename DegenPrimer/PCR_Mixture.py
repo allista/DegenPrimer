@@ -22,7 +22,9 @@ Created on Mar 1, 2014
 
 from BioUtils.Tools.AbortableBase import AbortableBase
 from BioUtils.Tools.tmpStorage import tmpDict, roDict, tupleView
-from Product import Product, Region
+
+from .Product import Product, Region
+
 
 class PCR_Mixture(object):
     __slots__ = ['reaction_id', 'annealings', 'templates', 'products']

@@ -18,24 +18,25 @@ Created on Mar 15, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import numpy as np
-from scipy.optimize import fmin_l_bfgs_b
-
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase
-from BioUtils.Tools.Output import OutIntercepter
-from BioUtils.Tools.tmpStorage import register_tmp_file, cleanup_file
 from BioUtils.Tools.Multiprocessing import Parallelizer
 from BioUtils.Tools.UMP import FuncManager, at_manager
+from BioUtils.Tools.tmpStorage import register_tmp_file, cleanup_file
+from scipy.optimize import fmin_l_bfgs_b
 
-from .StringTools import wrap_text
+from BioUtils.Tools.Output import OutIntercepter
+import numpy as np
+
+from . import TD_Functions as tdf
 from .AllSecStructures import AllSecStructures
+from .PCR_Mixture import ShelvedMixture
 from .PCR_ProductsFinder import PPFManager
-from .SinglePCR import SinglePCR
 from .Product import Region
+from .SinglePCR import SinglePCR
+from .StringTools import wrap_text
 from .WorkCounter import WorkCounter
 from .iPCR_Base import iPCR_Base
-from .PCR_Mixture import ShelvedMixture
-from . import TD_Functions as tdf
+
 
 class compute_objective_value(object):
     def __init__(self, pcr, product_bounds, purity):

@@ -18,14 +18,16 @@ Created on Jan 1, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import numpy as np
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase, cpu_count
 from array import array
 from scipy.fftpack import fft, ifft
-from BioUtils.Tools.Multiprocessing import MultiprocessingBase, cpu_count
+
+import numpy as np
 
 from . import TD_Functions as tdf
 from .SecStructures import Duplex, reverse_complement
 from .WorkCounter import WorkCounter
+
 
 class SearchEngine(MultiprocessingBase):
     '''Fast search of a pattern sequence in a given set of template sequences 

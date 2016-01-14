@@ -19,8 +19,9 @@ Created on Mar 27, 2013
 '''
 
 from BioUtils.Tools import EchoLogger
-from PrimerTaskBase import PrimerTaskBase
+
 from PCR_Optimizer import PCR_Optimizer
+from PrimerTaskBase import PrimerTaskBase
 import TD_Functions as tdf
 
 

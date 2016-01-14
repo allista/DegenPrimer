@@ -22,7 +22,7 @@ Created on Jul 1, 2012
 '''
 
 import argparse
-from DegenPrimerConfig import DegenPrimerConfig
+from .DegenPrimerConfig import DegenPrimerConfig
 
 
 class BoolAction(argparse.Action):

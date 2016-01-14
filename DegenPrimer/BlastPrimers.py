@@ -21,23 +21,20 @@ Created on Jun 26, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import os, re
-try:
-    from Bio.Blast import NCBIWWW, NCBIXML 
-    from Bio.SeqRecord import SeqRecord
-    from Bio.Alphabet import IUPAC
-    from Bio.Seq import Seq
-except ImportError:
-    print'The BioPython must be installed in your system.'
-    raise
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase
-from iPCR_Interface import iPCR_Interface
 from ConfigParser import SafeConfigParser
-from StringTools import hr, wrap_text, time_hr, print_exception
-from SecStructures import Dimer, Duplex, max_dimer_dG
-from WorkCounter import WorkCounter
-import TD_Functions as tdf
+import os, re
 
+from Bio.Blast import NCBIWWW, NCBIXML 
+from Bio.SeqRecord import SeqRecord
+from Bio.Alphabet import IUPAC
+from Bio.Seq import Seq
+
+from .SecStructures import Dimer, Duplex, max_dimer_dG
+from .StringTools import hr, wrap_text, time_hr, print_exception
+from .WorkCounter import WorkCounter
+from .iPCR_Interface import iPCR_Interface
+from . import TD_Functions as tdf
 
 class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     '''Check specificity of primers using BLAST query and iPCR_Simulation'''

@@ -22,13 +22,15 @@ Created on Jul 11, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from BioUtils.Tools.Multiprocessing import parallelize_work
 from math import log
+
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from BioUtils.Tools.Multiprocessing import parallelize_work
-from SeqUtils import unambiguous_sequences
-import TD_Functions as tdf
+
+from .SeqUtils import unambiguous_sequences
+from . import TD_Functions as tdf
 
 
 class Primer(object):

@@ -22,11 +22,12 @@ Created on Jun 30, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import string
-import random
-from time import ctime
 from math import log
+import random
+import string
 from textwrap import TextWrapper
+from time import ctime
+
 
 text_width = 80
 wrapper = TextWrapper(width=text_width, expand_tabs=False)

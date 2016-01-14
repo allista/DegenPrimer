@@ -18,10 +18,12 @@ Created on Mar 28, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import  errno
-import traceback as tb
 from BioUtils.Tools.AbortableBase import AbortableBase
-from PipelineTaskBase import PipelineTaskBase
+import errno
+
+from .PipelineTaskBase import PipelineTaskBase
+import traceback as tb
+
 
 class Pipeline(AbortableBase):
     '''Run registered tasks in a sequence.'''
