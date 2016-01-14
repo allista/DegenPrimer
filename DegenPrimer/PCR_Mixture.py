@@ -147,8 +147,8 @@ class MixtureFactory(AbortableBase):
         self._include_side_annealings = include_side_annealings
     #end def
     
-    
-    def _add_side_annealings(self, conditions, sorted_annealings):
+    @staticmethod
+    def _add_side_annealings(conditions, sorted_annealings):
         conditions.add_annealings(tuple((d, t) for _p, d, t in sorted_annealings))
     #end def
             
@@ -194,7 +194,7 @@ class MixtureFactory(AbortableBase):
         were found. None otherwise.'''
         if not fwd_annealings or not rev_annealings: 
             counter.done(); return None
-        print 'PCR Simulation: searching for possible PCR products in %s...' % hit
+#        print 'PCR Simulation: searching for possible PCR products in %s...' % hit
         if self._include_side_annealings: counter.set_work(3)
         else: counter.set_work(2)
         mixture = PCR_Mixture(hit)        
@@ -241,9 +241,9 @@ class MixtureFactory(AbortableBase):
                                                        if i not in added_positons[0]])
                 self._add_side_annealings(mixture, bad_annealings)
                 counter.count()
-            print 'PCR Simulation: found some possible products in %s.' % hit
+#            print 'PCR Simulation: found some possible products in %s.' % hit
             return mixture
-        print 'PCR Simulation: no products was found in %s.' % hit
+#        print 'PCR Simulation: no products were found in %s.' % hit
         return None
     #end def
 #end class
