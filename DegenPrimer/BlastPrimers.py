@@ -65,7 +65,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         #query_id use hash of primers instead of all-config hash as in job_id
         self._primers_hash = (hash(tuple(self._primers)) & 0xFFFFFFF)
         self._query_id  = re.split('_[0-9]+\Z', self._job_id)[0]
-        self._query_id += '_%d' % self._primers_hash
+        self._query_id += '_%s' % str(self._primers_hash)
         #results
         self._results_filename = self._query_id+'-blast.xml'
         self._query_filename   = self._query_id+'-blast.cfg'
@@ -96,7 +96,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
                 query += self.spacer
                 next_start = self._bounds[-1][0][1] + len(self.spacer)+1
                 self._bounds.append([[next_start, next_start],])
-        self._query = SeqRecord(Seq(query, IUPAC.ambiguous_dna), self._job_id)
+        self._query = SeqRecord(Seq(query, IUPAC.ambiguous_dna), self._query_id)
     #end def
     
     
