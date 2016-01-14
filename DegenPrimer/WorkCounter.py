@@ -70,7 +70,7 @@ class WorkCounter(Sequence):
     #end def
     
     def rstr(self, level=0):
-        '''String representation of a counter and all its' subcounters,
+        '''String representation of a counter and all its subcounters,
         recursively.'''
         s  = str(self)
         if not self._subcounters: return s
@@ -121,7 +121,7 @@ class WorkCounter(Sequence):
         if not weights: weights = [1]*work
         assert len(weights) == work, \
         ('Counter: %x: a weight should be provided for every subwork.' % id(self))
-        assert min(weights) >= 0, 'Weights should be grater than zero.'
+        assert min(weights) > 0, 'Weights should be grater than zero.'
         subwork = sum(weights)
         self._work    += subwork
         self._subwork += subwork
