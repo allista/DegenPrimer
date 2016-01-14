@@ -181,7 +181,7 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
     def _solve(self, sys_func, obj_func, r0, solver):
         #try to find the solution using selected solver
         sol = solver(sys_func, r0, self._precision)
-        #if failed for the first time, iterate fsolve while jitter r0 a little
+        #if failed for the first time, iterate solver while jitter r0 a little
         r0_obj = obj_func(sol)
         while r0_obj > self._precision \
         or    min(sol) < 0 \
@@ -204,31 +204,37 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         rc_funcs = [self._reactants_consumption_factory(Ai) 
                      for Ai in xrange(len(self._concentrations))]
         #initial evaluation point
-        r0 = [1e-6,]*n_reactions
+        r0 = np.repeat(1e-6, n_reactions)
         #system function and objective function for solver
         def sys_func(r):
             consumptions = [func(r) for func in rc_funcs]
             return tuple(l_func(r, consumptions) for l_func in l_funcs)
         obj_func = lambda(r): sum(sf**2 for sf in sys_func(r))
         #choose the solver
-        if n_reactions < 100: solver = self._fsolve #fsole is fast for small systems
-        else: solver = self._nksolve #but nksolve is MUCH faster for big ones
+        if n_reactions < 100: 
+            solver = self._fsolve #fsole is fast for small systems
+            altsolv = self._nksolve
+        else: 
+            solver = self._nksolve #but nksolve is MUCH faster for big ones
+            altsolv = self._fsolve
         #solve the system
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                r0 = self._solve(sys_func, obj_func, r0, solver)
-        except Exception, e:
-            print '\nUnable to calculate equilibrium.'
-            print_exception(e)
-            return None
-        if r0 is None: return None
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try: r0 = self._solve(sys_func, obj_func, r0, solver)
+            except: 
+                try: r0 = self._solve(sys_func, obj_func, r0, altsolv)
+                except Exception, e:
+                    print '\nUnable to calculate equilibrium.'
+                    print e
+                    r0 = None
+        if r0 is None: return False
         #calculate solution objective function and reactant consumptions
         self.objective_value = obj_func(r0)
         self.solution     = dict((self._reaction_ids[ri], r) 
                                  for ri, r in enumerate(r0))
         self.consumptions = dict((self._reactants_ids[ri], func(r0)) 
                                  for ri, func in enumerate(rc_funcs))
+        return True
     #end def
 #end class
 
@@ -329,8 +335,9 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
     def _calculate(self, reactions_group, precision):
         eq = EquilibriumSolver(self._abort_event, 
                                reactions_group[0], reactions_group[1], precision)
-        eq.calculate()
-        return eq.objective_value, eq.solution, eq.consumptions
+        if eq.calculate():
+            return eq.objective_value, eq.solution, eq.consumptions
+        return None, None, None
     #end def
 
     def calculate(self, counter):
@@ -340,10 +347,10 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
                                             self.reactions, 
                                             self.concentrations, 
                                             self._precision)
-            equilibrium.calculate()
-            self.objective_value = equilibrium.objective_value
-            self.solution        = equilibrium.solution
-            self.consumptions    = equilibrium.consumptions
+            if equilibrium.calculate():
+                self.objective_value = equilibrium.objective_value
+                self.solution        = equilibrium.solution
+                self.consumptions    = equilibrium.consumptions
             counter.done()
         else:
             #parallel processing
