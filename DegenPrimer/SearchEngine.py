@@ -511,7 +511,7 @@ if __name__ == '__main__':
     import TD_Functions as tdf
     tdf.PCR_P.PCR_T = 60
     
-    searcher = SearchEngine(abort_event)
+#    searcher = SearchEngine(abort_event)
     
     def mem_test(num):
         for _n in xrange(num):
@@ -531,19 +531,19 @@ if __name__ == '__main__':
         
     
     #compile duplexes serial vs parallel statistics
-    fwd_seq = template.seq
-    rev_seq = template.seq.reverse_complement()
-    t_len = len(template); p_len = len(primer)
-    n = 1000; j = []; s = []; p = []
-    jobs = (4,32,4); tries = 1
-    c = WorkCounter(len(xrange(*jobs))*tries)
-    np.random.seed(42)
-    fwd_matches = np.random.randint(0, t_len, n/2)
-    rev_matches = np.random.randint(0, t_len, n-n/2)
-    dups = None
-#    dups = searcher.compile_duplexes_mp(WorkCounter(), fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)
-    cProfile.run('dups = searcher.compile_duplexes(WorkCounter(), fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)', 'compile_duplexes.profile')
-    print dups
+#    fwd_seq = template.seq
+#    rev_seq = template.seq.reverse_complement()
+#    t_len = len(template); p_len = len(primer)
+#    n = 1000; j = []; s = []; p = []
+#    jobs = (4,32,4); tries = 1
+#    c = WorkCounter(len(xrange(*jobs))*tries)
+#    np.random.seed(42)
+#    fwd_matches = np.random.randint(0, t_len, n/2)
+#    rev_matches = np.random.randint(0, t_len, n-n/2)
+#    dups = None
+##    dups = searcher.compile_duplexes_mp(WorkCounter(), fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)
+#    cProfile.run('dups = searcher.compile_duplexes(WorkCounter(), fwd_seq, rev_seq, primer, t_len, p_len, fwd_matches, rev_matches)', 'compile_duplexes.profile')
+#    print dups
 #    for ji in xrange(*jobs):
 #        for _i in xrange(tries):
 #            j.append(ji)
@@ -561,4 +561,48 @@ if __name__ == '__main__':
 #    plt.plot(j, p, 'b.', j, j*lm[0]+lm[1], 'r-') 
 #    plt.show()
 
+    #find vs regexp
+    def primer2re(primer):
+        re_str = ''
+        for l in primer.master_sequence:
+            if l in Primer.IUPAC_unambiguous:
+                re_str += l
+            else:
+                re_str += '[%s]' % (''.join(Primer.IUPAC_ambiguous[l]))
+        return re.compile(re_str)
+    
+    import re
+    def find_vs_regexp(primer, template):
+        find_times = []
+        re_times = []
+        for _i in xrange(10): 
+            #find
+            t0 = time()
+            searcher = SearchEngine(abort_event)
+            p_len,t_len = len(primer),len(template)
+            res = searcher._find(WorkCounter(), template, primer, t_len, p_len, 10)
+            find_times.append(time()-t0)
+            #regexp
+            t0 = time()
+            fwd_seq = str(template.seq)
+            rev_seq = str(template.seq.reverse_complement())
+            primer_re = primer2re(primer)
+            fwd_res = primer_re.findall(fwd_seq)
+            rev_res = primer_re.findall(rev_seq)
+            re_times.append(time()-t0)
+        print 'find results: f %d, r %d' % (len(res[5]), len(res[6]))
+        print 're results:   f %d, r %d' % (len(fwd_res), len(rev_res))
+#        print template.seq[res[5][0]:res[5][0]+p_len]
+#        print fwd_res[0]
+        return find_times, re_times
+            
+    print 'template length:   %d' % len(template)
+    print 'primer length:     %d' % len(primer)
+    print 'primer components: %d' % primer.num_components
+    print
+    ft, rt = find_vs_regexp(primer, template)
+    print
+    print 'find mean: %f sec' % (sum(ft)/float(len(ft)))
+    print 're mean: %f sec' % (sum(rt)/float(len(rt)))
+    
     print 'Done.'
