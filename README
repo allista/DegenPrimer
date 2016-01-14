@@ -1,21 +1,19 @@
-DegenPrimer is a tool to check the quality of degenerate primers. It calculates 
-melting temperatures, finds stable dimers, hairpins and crossdimers, uses a 
-BLAST search and ipcress (in silica PCR simulation program from exonerate 
-package) as a starting point for full-fledged PCR simulation cycle by cycle to 
-provide accurate predictions of possible PCR products and their quantities.
-It has a simple command line interface as well as a GUI (which is a separate 
-package: https://launchpad.net/degenprimergui).
+DegenPrimer is a tool to check the quality of degenerate primers. 
+It calculates melting temperatures, finds stable dimers, hairpins 
+and crossdimers, uses BLAST search and full-fledged PCR simulation 
+cycle by cycle to provide accurate predictions of possible PCR 
+products and their quantities.
 It is written in python using SciPy and BioPython libraries.
 
-All calculations of thermodynamic parameters are made using Nearest Neighbor 
-model and the latest thermodynamic tables with corrections for particular PCR 
-conditions.
+All calculations of thermodynamic parameters are made using 
+Nearest Neighbor model and the latest thermodynamic tables 
+with corrections for particular PCR conditions. PCR simulation 
+supports multiplex PCR.
 
-The align_as_amino tool is still provided but will be soon moved into 
-the BioUtils project.
+The program has simple command line interface as well as a GUI 
+(which is a separate package: https://launchpad.net/degenprimergui). 
+PBS is also supported with PBS-utils package at PyPi (https://pypi.python.org/pypi/PBS-utils)
 
-Dependecies: python2 >= 2.7, 
-             Biopython >= 1.58, 
-	     NumPy >= 1.6.1,
-             SciPy >= 0.9,
-             exonerate (optional, yet strongly recommended)
+Dependecies: python2 >= 2.7,
+             Biopython >= 1.58,
+             SciPy >= 0.9
