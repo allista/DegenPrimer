@@ -22,10 +22,7 @@ Tool to compute degenerate primer parameters using BioPython
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import sys, os
-import signal
-from multiprocessing.managers import SyncManager
-from time import sleep
+import sys
 from DegenPrimer.StringTools import hr, wrap_text
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
@@ -33,60 +30,37 @@ from DegenPrimer.Pipeline import Pipeline
 from DegenPrimer.AnalysisTask import AnalysisTask
 from DegenPrimer.DBManagementTask import DBManagmentTask
 from DegenPrimer.OptimizationTask import OptimizationTask
-from DegenPrimer.UMP import ignore_interrupt
-from DegenPrimer import tmpStorage
+from BioUtils.Tools import MPMain
 ###############################################################################
 
-
-_pid = -1
-abort_event = None
-def sig_handler(signal, frame):
-    if _pid != os.getpid(): return
-    print('\nAborting. This may take some time '
-          'as not all operations could be stopped immediately.\n')
-    abort_event.set(); sleep(0.1)
-    tmpStorage.clean_tmp_files()
-#end def
-
-
-if __name__ == '__main__':
-    _pid = os.getpid()
-    #setup signal handler
-    signal.signal(signal.SIGINT,  sig_handler)
-    signal.signal(signal.SIGTERM, sig_handler)
-    signal.signal(signal.SIGQUIT, sig_handler)
-    #setup abort event and print lock
-    event_manager = SyncManager()
-    event_manager.start(ignore_interrupt)
-    abort_event   = event_manager.Event()
-    #initialize pipeline
-    pipeline = Pipeline(abort_event)
-    pipeline.register_task(DBManagmentTask(abort_event))
-    pipeline.register_task(OptimizationTask(abort_event))
-    pipeline.register_task(AnalysisTask(abort_event))
-    #get commandline arguments
-    args = DegenPrimerConfigCLI()
-    try:
-        #parse command line arguments and/or configuration file
-        args.parse_configuration()
-    except ValueError, e:
-        #if not in batch mode, consider incorrect values as errors
-        if not args.batch():
-            print e.message
-            sys.exit(1)
-        #in batch mode all values except do_blast flag are ignored anyway
-        else: pass
-    
-    print ''
-    if not args.batch(): #single analysis mode
-        sys.exit(pipeline.run(args))
-    else:
+class DP_Main(MPMain):
+    def _main(self):
+        #initialize pipeline
+        pipeline = Pipeline(self.abort_event)
+        pipeline.register_task(DBManagmentTask(self.abort_event))
+        pipeline.register_task(OptimizationTask(self.abort_event))
+        pipeline.register_task(AnalysisTask(self.abort_event))
+        #get commandline arguments
+        args = DegenPrimerConfigCLI()
+        try:
+            #parse command line arguments and/or configuration file
+            args.parse_configuration()
+        except ValueError, e:
+            #if not in batch mode, consider incorrect values as errors
+            if not args.batch():
+                print e.message
+                return 1
+            #in batch mode all values except do_blast flag are ignored anyway
+            else: pass
+        print
+        if not args.batch(): #single analysis mode
+            return pipeline.run(args)
         #batch analysis mode
         print wrap_text('Batch mode enabled. All command-line arguments '
                         'except "--do-blast" are discarded.\n')
         exit_code = 0
         for config_file in args.config_files:
-            if abort_event.is_set(): break
+            if self.abort_event.is_set(): break
             config = DegenPrimerConfig()
             try:
                 config.parse_configuration(config_file)
@@ -98,4 +72,8 @@ if __name__ == '__main__':
             print hr(' Repeating analysis for %s ' % config_file)
             exit_code |= pipeline.run(config)
             print hr('')
-        sys.exit(exit_code)
+        return exit_code
+
+if __name__ == '__main__':
+    main = DP_Main()
+    sys.exit(main())
