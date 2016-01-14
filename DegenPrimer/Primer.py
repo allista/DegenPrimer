@@ -124,13 +124,21 @@ class Primer(object):
 
 
     def generate_components(self):
-        self._unambiguous  = self.generate_unambiguous(self._seq_record)
-        self._n_components = len(self._unambiguous)
+        try:
+            self._unambiguous  = self.generate_unambiguous(self._seq_record)
+            if self._unambiguous: self._n_components = len(self._unambiguous)
+            else: self._n_components = 1
+            return True
+        except ValueError, e:
+            print 'Primer: unable to generate unambiguous components:'
+            print_exception(e)
+        except: pass
+        return False
     #end def
         
     def calculate_Tms(self, abort_event=None):
         self._check_components()
-        if self.self_complement: return
+        if self.self_complement: return False
         #iterative algorithm is faster or no abort event is given to control parallelization
         if self._n_components < 256 or abort_event is None:
             temperatures  = []
@@ -141,11 +149,12 @@ class Primer(object):
             temperatures  = parallelize_work(abort_event, 
                                              1, tdf.primer_template_Tm, 
                                              self.sequences, self.concentration)
-        if not temperatures: return
+        if not temperatures: return False
         self._Tm_max  = max(temperatures)
         self._Tm_min  = min(temperatures)
         self._Tm_mean = (self._Tm_max + self._Tm_min)/2.0
         self._initialized = True
+        return True
     #end def
     
 
@@ -266,7 +275,9 @@ class Primer(object):
                 for r in xrange(n_replacements):
                     for s in xrange(n_sequences):
                         unambiguous_strings[s+n_sequences*r] += replacements[r]
-            else: raise ValueError('Unknown letter %s in sequence:\n%s' % (letter, str(seq_rec)))
+            else: raise ValueError(('Primer.generate_unambiguous: ' 
+                                   'unknown letter %s in sequence:\n%s')
+                                    % (letter, str(seq_rec)))
         #make a list of SeqRecords
         unambiguous_seq_list = list()
         num_unambiguous = len(unambiguous_strings)
@@ -316,23 +327,8 @@ class Primer(object):
 
 def load_sequence(seq_string, rec_id='', desc=''):
     '''generate a SeqRecord object with sequence from a raw string or a file'''
-    #check seq_string to be a sequence
-    _is_sequence  = True
-    full_alphabet = Primer.IUPAC_unambiguous + Primer.IUPAC_ambiguous.keys() 
-    for letter in seq_string:
-        _is_sequence &= letter in full_alphabet
-        if not _is_sequence: break
-    #if it is, make a SeqRecord out of it
-    if _is_sequence:
-        try:
-            record = SeqRecord(Seq(seq_string, IUPAC.ambiguous_dna).upper(), 
-                               id=rec_id, name=desc, description=desc)
-        except Exception, e:
-            print_exception(e)
-            raise ValueError('Primer.load_sequence: unable to interpret %s as a sequence data.' % seq_string)
-        return record
-    #else, check if seq_string is an existing file
-    elif os.path.isfile(seq_string):
+    #check if seq_string is an existing file
+    if os.path.isfile(seq_string):
         filename = seq_string
         #check file format by extension
         genbank_pattern = re.compile(".*(\.gb|\.gbk)$")
@@ -360,8 +356,25 @@ def load_sequence(seq_string, rec_id='', desc=''):
         if not record.description:
             record.description = desc
         return record
-    else:
-        raise ValueError('No such file o directory: %s' % seq_string)
+    else: #check if seq_string is a valid sequence
+        _is_sequence  = True
+        sequence      = seq_string.replace(' ', '').upper()
+        full_alphabet = Primer.IUPAC_unambiguous + Primer.IUPAC_ambiguous.keys() 
+        for letter in sequence:
+            _is_sequence &= letter in full_alphabet
+            if not _is_sequence: break
+        #if it is, make a SeqRecord out of it
+        if not _is_sequence: 
+            raise ValueError(('Primer.load_sequence: given string is not a '
+                              'valid sequence nor a valid path '
+                              'to a file: %s') % seq_string)
+        try:
+            record = SeqRecord(Seq(sequence, IUPAC.ambiguous_dna).upper(), 
+                               id=rec_id, name=desc, description=desc)
+        except Exception, e:
+            print_exception(e)
+            raise ValueError('Primer.load_sequence: unable to interpret %s as a sequence data.' % sequence)
+        return record
 #end def
 
 

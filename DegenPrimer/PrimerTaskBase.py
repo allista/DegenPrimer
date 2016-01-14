@@ -51,8 +51,8 @@ class PrimerTaskBase(PipelineTaskBase):
                     'of the primers...')
         for primer in args.primers:
             if self.aborted(): return False
-            primer.generate_components()
-            primer.calculate_Tms(self._abort_event)
+            if not primer.generate_components(): return False
+            if not primer.calculate_Tms(self._abort_event): return False
         self._primers = args.primers
         self._print('Done.')
         return True
