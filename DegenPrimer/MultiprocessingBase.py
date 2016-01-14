@@ -122,7 +122,7 @@ class Work(Sequence, Thread, AbortableBase):
         Thread.__init__(self)
         AbortableBase.__init__(self, abort_event)
         self.daemon     = True
-        self._jobs      = jobs if jobs else []
+        self._jobs      = jobs or []
         self._daemonic  = daemonic
         self._timeout   = timeout
         self._assembler = None
@@ -139,6 +139,7 @@ class Work(Sequence, Thread, AbortableBase):
 
 
     def set_assembler(self, assembler, *args):
+        assert hasattr(assembler, '__call__'), 'Assembler should be a callable'
         self._assembler = assembler
         self._args      = args
     #end def
@@ -170,7 +171,8 @@ class Work(Sequence, Thread, AbortableBase):
     #end def
     
     def get_result(self):
-        assert hasattr(self._assembler, '__call__'), 'Assembler should be a callable'
+        assert self._assembler is not None, \
+        'Assembler should be set before calling get_results'
         while self._jobs:
             finished_job = None
             for i,job in enumerate(self._jobs):
@@ -193,11 +195,12 @@ class Work(Sequence, Thread, AbortableBase):
                     if e.errno == errno.EINTR:
                         continue
                     else:
-                        print 'Unhandled IOError:', e.message
+                        print 'Unhandled IOError:'
+                        print e
                         raise
                 except Exception, e:
                     print 'Unhandled Exception:'
-                    print str(e)
+                    print e
                     raise
             if finished_job is not None:
                 del self._jobs[finished_job]
@@ -214,7 +217,11 @@ class Work(Sequence, Thread, AbortableBase):
         #IO code=4 means the same
         except IOError, e:
             if e.errno == errno.EINTR: return
-            raise
+            print e
+            self._abort_event.set()
+        except Exception, e:
+            print e
+            self._abort_event.set()
     #end def
     
     def wait(self):
