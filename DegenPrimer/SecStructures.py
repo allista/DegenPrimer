@@ -37,6 +37,17 @@ def reverse_complement(seq): #this is much faster than the Bio.Seq.reverse_compl
         elif l == 'T': rc += 'A'
         elif l == 'G': rc += 'C'
         elif l == 'C': rc += 'G'
+        elif l == 'R': rc += 'Y'
+        elif l == 'Y': rc += 'R'
+        elif l == 'S': rc += 'S'
+        elif l == 'W': rc += 'W'
+        elif l == 'K': rc += 'M'
+        elif l == 'M': rc += 'K'
+        elif l == 'B': rc += 'V'
+        elif l == 'V': rc += 'B'
+        elif l == 'D': rc += 'H'
+        elif l == 'H': rc += 'D'
+        elif l == 'N': rc += 'N'
         else: raise ValueError('SecStructures.reverse_complement: unknown letter: %s' % l)
     return rc[::-1]
 #end def
