@@ -42,6 +42,8 @@ class PCR_P_Meta(type):
 class PCR_Parameters_Base(object):
     def _recalculate(self): pass
     
+    parameters = []        
+    
     def set(self, params):
         for name in params:
             if name in self.parameters:
@@ -50,6 +52,7 @@ class PCR_Parameters_Base(object):
     #end def
     
     def __str__(self):
+        if not self.parameters: return ''
         s  = '\n'
         max_par_len = max(len(str(par)) for par in self.parameters)
         for name in self.parameters:
@@ -62,7 +65,7 @@ class PCR_Parameters_Base(object):
 class PCR_Parameters_Copy(PCR_Parameters_Base): pass
 class PCR_Parameters(PCR_Parameters_Base):
     __metaclass__ = PCR_P_Meta
-    parameters   = ['Mg', 'Na', 'dNTP', 'DNA', 'DMSO', 'PCR_T', 'Na_eq']
+    parameters    = ['Mg', 'Na', 'dNTP', 'DNA', 'DMSO', 'PCR_T', 'Na_eq']
     
     def __init__(self):
         #standard PCR conditions
@@ -83,7 +86,7 @@ class PCR_Parameters(PCR_Parameters_Base):
     #end def
     
     def __deepcopy__(self, memo):
-        params = dict(_parameters=self.parameters)
+        params = dict(parameters=self.parameters)
         for name in self.parameters:
             param = getattr(self, '_'+name)
             params[name] = param.value

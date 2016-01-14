@@ -1,6 +1,6 @@
 dist/**
 build/**
-tests/results/**
+Tests/results/**
 *~
 *.pyc
 MANIFEST

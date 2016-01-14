@@ -22,17 +22,10 @@ Created on Jul 11, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import os
-import re
 from math import log
-try:
-    from Bio.Alphabet import IUPAC
-    from Bio.Seq import Seq
-    from Bio.SeqRecord import SeqRecord
-    from Bio import SeqIO
-except ImportError:
-    print'The BioPython must be installed in your system.'
-    raise
+from Bio.Alphabet import IUPAC
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from BioUtils.Tools.Multiprocessing import parallelize_work
 from SeqUtils import unambiguous_sequences
 import TD_Functions as tdf
@@ -293,38 +286,3 @@ class Primer(object):
         return cls(master_record, concentration)
     #end def
 #end class
-
-
-#tests
-if __name__ == '__main__':
-#    import cProfile
-#    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATKCAGNCTGGGANGGNTACGNGGGTAAANAAACG'),id='primer1'), 0.9e-6)
-    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCNATKCAGGNCTGRGGA'),id='primer1'), 0.9e-6)
-    primer.generate_components()
-    primer.calculate_Tms()
-    print primer.str_sequences
-    print primer.concentration
-    print repr(primer)
-    
-#    from timeit import timeit
-#    from tests.violin_plot import violin_plot
-#    from matplotlib.pyplot import figure, show
-#    
-#    gen = [timeit('primer.generate_components()', 'from __main__ import primer', number=1) for _i in xrange(1)]
-#    gen_mp = [timeit('primer.generate_components_mp()', 'from __main__ import primer', number=1) for _i in xrange(1)]
-#    data = [gen, gen_mp]
-#    print data
-#    
-#    fig=figure()
-#    ax = fig.add_subplot(111)
-#    violin_plot(ax,data,range(len(data)),bp=1)
-#    show()
-    
-    
-#    cProfile.run('''
-#for _n in xrange(100): primer.generate_components_mp()
-#for _n in xrange(100): primer.generate_components()
-#''',
-#    'gen_components.profile')
-    print 'Done.'
-    

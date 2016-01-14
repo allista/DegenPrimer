@@ -749,18 +749,3 @@ class DegenPrimerConfig(object):
         self._reports.extend(reports)
     #end def
 #end class
-
-
-#tests
-if __name__ == '__main__':
-    class TestConfig(DegenPrimerConfig):
-        def _override_option(self, option):
-            return DegenPrimerConfig._override_option(self, option)
-
-    conf = TestConfig()
-    conf.parse_configuration('../F-TGAM_0057-268_d1-R-TGAM_0055-624-d4.cfg')
-    opts = conf.options
-    print conf.find_option('primers/primer/sequence').full_name
-    conf.from_options(opts)
-    conf.job_id = 'test'
-    conf.save_configuration()

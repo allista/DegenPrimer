@@ -153,17 +153,3 @@ def format_quantity(quantity, unit='U'):
     #if everything fails for some unknown reason
     return 'N/A  %s' % unit
 #end def
-
-
-#tests
-if __name__ == '__main__':
-    txt = '''If true, TextWrapper attempts to detect sentence endings and ensure 
-    that sentences are always separated by exactly two spaces. This is generally 
-    desired for text in a monospaced font. However, the sentence detection 
-    algorithm is imperfect: it assumes that a sentence ending consists of a 
-    lowercase letter followed by one of '.', '!', or '?', possibly followed by 
-    one of '"' or "'", followed by a space. One problem with this is algorithm 
-    is that it is unable to detect the difference between “Dr.” in'''
-    print wrap_text(txt)
-    print '='*80
-    

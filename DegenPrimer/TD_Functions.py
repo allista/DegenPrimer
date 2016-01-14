@@ -302,17 +302,3 @@ def primer_DNA_conversion_degree(primer_concentration, K):
     DUP  = (_b-sqrt(disc))/(2*K) #take the smallest positive root
     return DUP/min(P,D)
 #end def
-
-
-#tests
-if __name__ == '__main__':
-    from copy import deepcopy
-    print PCR_P
-    PCR_P.set({'PCR_T': 30})
-    print PCR_P
-
-    pcrp = deepcopy(PCR_P)
-    print type(PCR_P), type(pcrp)
-    PCR_P.set({'PCR_T': 60})
-    print PCR_P
-    print pcrp

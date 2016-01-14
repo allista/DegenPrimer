@@ -255,9 +255,3 @@ class UnifiedNN(object):
     def dG_T(cls, dH, dS, temperature):
         return dH - (temperature-cls.K0)*dS/1000.0
 #end class
-    
-
-#tests
-if __name__ == '__main__':
-    UnifiedNN.load_tables()
-    print UnifiedNN.loops

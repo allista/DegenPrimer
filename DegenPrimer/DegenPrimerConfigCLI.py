@@ -103,12 +103,3 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
         return (self.config_files and len(self.config_files) > 1)
     #end def
 #end class
-
-
-#tests
-if __name__ == '__main__':
-    conf = DegenPrimerConfigCLI()
-    conf.parse_configuration()
-    print conf
-    conf.job_id = 'test'
-    conf.save_configuration()

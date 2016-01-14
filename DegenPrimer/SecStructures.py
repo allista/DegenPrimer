@@ -878,16 +878,3 @@ class SecStructures(object):
         return hairpins_string
     #end def
 #end class
-
-
-#tests
-if __name__ == '__main__':
-    tdf.PCR_P.Na = 50.0e-3
-    tdf.PCR_P.Mg = 3.0e-3
-    tdf.PCR_P.dNTP = 0.15e-6
-    tdf.PCR_P.DNA = 1.0e-9
-    tdf.PCR_P.DMSO = 0.0
-    tdf.PCR_P.PCR_T = 60.0
-    du = Duplex('GAACGCAAAGATCGGGAAC', 'CTTGCGTTTCTAACCCTTG'[::-1])
-    print du
-    

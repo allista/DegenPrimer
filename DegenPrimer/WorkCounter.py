@@ -217,20 +217,3 @@ def RebuildWorkCounterManager(address, authkey, serializer):
     mgr.connect()
     return mgr
 #end def
-
-
-if __name__ == '__main__':
-    import sys
-    from time import sleep
-    import cPickle as pickle
-    
-    cmgr = WorkCounterManager(); cmgr.start()
-    c = WorkCounter(10)
-    c.add_subwork(10, weights=(1.1,2.2,3,4,5,6,7,8,9,10))
-    
-    for i in xrange(10):
-        print c
-        c[i].count()
-        c.count()
-        sleep(1)
-    print c
