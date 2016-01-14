@@ -81,23 +81,14 @@ class iPCR(iPCR_Base):
             long_counter   = counter[1]
         else: long_counter = short_counter = counter
         if long_templates: long_counter.set_subwork(len(long_templates), [seqs_info[t_id] for t_id in long_templates])
-        #If there's enough short templates, run a series of batch searches.
-        #This is needed to lower memory usage pikes during search and to 
-        #better utilize cpus.
         if short_templates:
-            chunks = even_chunks(short_templates, 
-                                 max(len(short_templates)/cpu_count, 1))
-            start  = 0; short_counter.set_subwork(len(chunks))
-            for i, chunk in enumerate(chunks):
-                end = start+chunk
-                results = self._find_products_in_templates(short_counter[i], 
-                                                           short_templates[start:end], 
-                                                           P_Finder)
-                if results is None: 
-                    if self.aborted(): return False
-                    else: continue
-                for t_name, m_path in results.iteritems():
-                    PCR_Sim.add_mixture(t_name, m_path)
+            short_counter.set_subwork(len(short_templates))
+            results = self._find_products_in_templates(short_counter, 
+                                                       short_templates, 
+                                                       P_Finder)
+            if not results or self.aborted(): return False
+            for t_name, m_path in results.iteritems():
+                PCR_Sim.add_mixture(t_name, m_path)
         #if there're long templates, search sequentially
         for i, t_id in enumerate(long_templates):
             result = self._find_products_in_templates(long_counter[i], (t_id,), P_Finder)
