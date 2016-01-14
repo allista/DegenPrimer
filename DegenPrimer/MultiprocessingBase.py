@@ -55,26 +55,46 @@ def worker_method(func):
 #end def
     
 def data_mapper(func):
-    def mapper(queue, abort_event, start, end, data, *args):
-        for i, item in enumerate(data[start:end]):
-            if abort_event.is_set(): break
-            result = func(item, *args)
-            queue.put((start+i, result))
-        if abort_event.is_set(): queue.cancel_join_thread()
-        queue.put(None)
-        queue.close()
+    def mapper(queue, abort_event, in_queue, data, *args):
+        while True:
+            if abort_event.is_set():
+                queue.cancel_join_thread() 
+                break
+            try: item = in_queue.get(True, 0.1)
+            except Empty: continue
+            except Exception, e:
+                print 'Exception in %s' % func.__name__
+                print e
+                queue.cancel_join_thread() 
+                break
+            if item is None:
+                queue.put(None)
+                queue.close()
+                break
+            result = func(data[item], *args)
+            queue.put((item, result))
     return mapper
 #end def
     
 def data_mapper_method(func):
-    def mapper_method(self, queue, abort_event, start, end, data, *args):
-        for i, item in enumerate(data[start:end]):
-            if abort_event.is_set(): break
-            result = func(self, item, *args)
-            queue.put((start+i, result))
-        if abort_event.is_set(): queue.cancel_join_thread()
-        queue.put(None)
-        queue.close()
+    def mapper_method(self, queue, abort_event, in_queue, data, *args):
+        while True:
+            if abort_event.is_set():
+                queue.cancel_join_thread() 
+                break
+            try: item = in_queue.get(True, 0.1)
+            except Empty: continue
+            except Exception, e:
+                print 'Exception in %s' % func.__name__
+                print e
+                queue.cancel_join_thread() 
+                break
+            if item is None:
+                queue.put(None)
+                queue.close()
+                break
+            result = func(self, data[item], *args)
+            queue.put((item, result))
     return mapper_method
 #end def
     
@@ -146,22 +166,24 @@ class Work(Sequence, Thread, AbortableBase):
     
     def set_jobs(self, jobs): self._jobs = jobs
         
-    def prepare_jobs(self, worker, work, num_jobs, *args):
-        if not len(work): return
-        if self._counter is not None: self._counter.set_work(len(work))
-        #determine number of jobs to launch
+    def prepare_jobs(self, mapper, work, num_jobs, *args):
+        '''work should be and indexable sequence''' 
+        wlen = len(work)
+        if not wlen: return
+        if self._counter is not None: self._counter.set_work(wlen)
         if not num_jobs: num_jobs = cpu_count
-        chunks = even_chunks(work, num_jobs)
-        #prepare processes
-        self._jobs = []; start = 0
-        for chunk in chunks:
-            end   = start+chunk
+        #prepare job queue
+        in_queue = mp.Queue()
+        for i in xrange(wlen): in_queue.put_nowait(i)
+        #prepare jobs
+        self._jobs = [None]*num_jobs
+        for j in xrange(num_jobs):
             queue = mp.Queue()
-            job   = UProcess(target=worker, args=(queue, self._abort_event, 
-                                                  start, end, work)+args)
+            job   = UProcess(target=mapper, args=(queue, self._abort_event, 
+                                                       in_queue, work)+args)
             job.daemon = self._daemonic
-            self._jobs.append((job,queue))
-            start = end
+            self._jobs[j] = (job,queue)
+            in_queue.put_nowait(None)
     #end def
     
     def launch(self):
@@ -289,8 +311,7 @@ class MultiprocessingBase(AbortableBase):
     
     def parallelize_functions(self, timeout, funcs, *args, **kwargs):
         @MultiprocessingBase.data_mapper
-        def worker(func, *args):
-            return func(*args)
+        def worker(func, *args): return func(*args)
         return self.parallelize(timeout, worker, funcs, *args, **kwargs)
     #end def
     
