@@ -22,11 +22,14 @@ Created on Mar 1, 2014
 
 from PCR_Mixture import MixtureFactory
 from SearchEngine import SearchEngine
+from MultiprocessingBase import MultiprocessingBase
+from WorkCounter import WorkCounter
 
-class PCR_ProductsFinder(MixtureFactory):
+class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
     
-    def __init__(self, *args, **kwargs):
-        MixtureFactory.__init__(self, *args, **kwargs)
+    def __init__(self, abort_event, *args, **kwargs):
+        MixtureFactory.__init__(self, abort_event, *args, **kwargs)
+        MultiprocessingBase.__init__(self, abort_event)
         self._searcher  = SearchEngine(self._abort_event)
         self._p_weights = [p.num_components for p in self._primers]
         self._pw_sum    = sum(self._p_weights)
@@ -97,7 +100,6 @@ class PCR_ProductsFinder(MixtureFactory):
         search_results = dict()
         counter.set_subwork(2)
         counter[0].set_subwork(self._num_p)
-        counter[1].set_subwork(len(templates))
         for i, primer in enumerate(self._primers):
             if self.aborted(): return None
             result = self._searcher.batch_find(counter[0][i], templates, primer, mismatches)
@@ -106,10 +108,23 @@ class PCR_ProductsFinder(MixtureFactory):
                 if t_id in search_results:
                     search_results[t_id] = self._combine_annealings(search_results[t_id], annealings)
                 else: search_results[t_id] = annealings
-        for i, (t_id, (fwd_annealings, rev_annealings)) in enumerate(search_results.items()):
-            mixture = self.create_PCR_mixture(counter[1][i], t_names[t_id], 
-                                              fwd_annealings, rev_annealings)
-            if mixture is not None: results[t_names[t_id]] = mixture
+        print '\nPSR Simulation: creating PCR mixtures...\n'
+        @MultiprocessingBase.data_mapper
+        def _worker(i, factory, search_results, t_names):
+            t_id, (fwd_annealings, rev_annealings) = search_results[i]
+            t_name = t_names[t_id]
+            mixture = factory.create_PCR_mixture(WorkCounter(), t_name, fwd_annealings, rev_annealings)
+            if not mixture: return t_name, None
+            return t_name, mixture.save()
+        @MultiprocessingBase.results_assembler
+        def _assembler(index, result, results):
+            if result[1]: results[result[0]] = result[1]
+        work = self.Work(counter=counter[1])
+        work.prepare_jobs(_worker, range(len(search_results)), None,
+                          self, search_results.items(), t_names)
+        work.set_assembler(_assembler, results)
+        self.start_work(work)
+        if not self.wait(work): return None
         if not results: return None
         return results
     #end def
@@ -133,9 +148,7 @@ def _find(counter, t_name, template, mismatches, products_finder):
 #end def
 
 def _batch_find(counter, t_names, templates, mismatches, products_finder):
-    mixtures = products_finder.batch_find(counter, t_names, templates, mismatches)
-    if mixtures is None: return None
-    return dict((k, m.save()) for k, m in mixtures.iteritems())
+    return products_finder.batch_find(counter, t_names, templates, mismatches)
 #end def
         
 #mp computations
