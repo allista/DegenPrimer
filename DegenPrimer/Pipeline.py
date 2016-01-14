@@ -20,7 +20,7 @@ Created on Mar 28, 2013
 
 import  errno
 import traceback as tb
-from AbortableBase import AbortableBase
+from BioUtils.Tools.AbortableBase import AbortableBase
 from PipelineTaskBase import PipelineTaskBase
 
 class Pipeline(AbortableBase):

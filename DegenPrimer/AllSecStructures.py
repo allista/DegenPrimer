@@ -20,7 +20,7 @@ Created on Feb 15, 2014
 
 from Equilibrium import Equilibrium
 from ReporterInterface import ReporterInterface
-from MultiprocessingBase import MultiprocessingBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from SecStructures import SecStructures
 from StringTools import hr, time_hr, wrap_text
 import TD_Functions

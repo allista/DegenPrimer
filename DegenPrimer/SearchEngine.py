@@ -23,7 +23,7 @@ from array import array
 from scipy.fftpack import fft, ifft
 from SecStructures import Duplex, reverse_complement
 from StringTools import print_exception
-from MultiprocessingBase import MultiprocessingBase, cpu_count
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase, cpu_count
 from WorkCounter import WorkCounter
 import TD_Functions as tdf
 

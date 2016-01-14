@@ -33,7 +33,7 @@ try:
 except ImportError:
     print'The BioPython must be installed in your system.'
     raise
-from MultiprocessingBase import parallelize_work
+from BioUtils.Tools.Multiprocessing import parallelize_work
 from SeqUtils import unambiguous_sequences
 import TD_Functions as tdf
 

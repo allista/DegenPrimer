@@ -35,7 +35,7 @@ class iPCR_Base(iPCR_Interface):
     def __init__(self, abort_event, max_mismatches, *args, **kwargs):
         iPCR_Interface.__init__(self, abort_event, *args, **kwargs)
         self._max_mismatches = max_mismatches
-        self._seq_db         = SeqDB()
+        self._seq_db         = SeqDB(self._abort_event)
         self._seq_names      = None
         self._PCR_Simulation = None
     #end def

@@ -19,7 +19,7 @@ Created on Mar 28, 2013
 '''
 
 from abc import ABCMeta, abstractmethod
-from AbortableBase import AbortableBase
+from BioUtils.Tools.AbortableBase import AbortableBase
 
 class PipelineTaskBase(AbortableBase):
     '''Base class for pipeline tasks'''

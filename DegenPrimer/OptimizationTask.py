@@ -18,7 +18,7 @@ Created on Mar 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from EchoLogger import EchoLogger
+from BioUtils.Tools import EchoLogger
 from PrimerTaskBase import PrimerTaskBase
 from PCR_Optimizer import PCR_Optimizer
 import TD_Functions as tdf

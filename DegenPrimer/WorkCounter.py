@@ -184,7 +184,7 @@ class WorkCounter(Sequence):
 
 
 #proxy for WorkerCounter
-from UMP import UManager, AutoProxyMeta
+from BioUtils.Tools.UMP import UManager, AutoProxyMeta
 from multiprocessing.managers import BaseProxy
 
         

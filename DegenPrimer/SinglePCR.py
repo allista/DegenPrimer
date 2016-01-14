@@ -24,8 +24,8 @@ Created on Feb 24, 2014
 from abc import ABCMeta
 from copy import deepcopy
 from Equilibrium import Equilibrium, Reaction
-from AbortableBase import AbortableBase
-from MultiprocessingBase import MultiprocessingBase
+from BioUtils.Tools.AbortableBase import AbortableBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from WorkCounter import WorkCounter
 import TD_Functions as tdf
 

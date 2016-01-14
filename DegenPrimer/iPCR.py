@@ -24,7 +24,7 @@ Created on Feb 27, 2013
 from StringTools import wrap_text, hr
 from iPCR_Base import iPCR_Base
 from SearchEngine import mp_better
-from UMP import FuncManager, at_manager
+from BioUtils.Tools.UMP import FuncManager, at_manager
 from PCR_ProductsFinder import PPFManager
 
 

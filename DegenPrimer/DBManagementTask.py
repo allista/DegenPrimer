@@ -44,7 +44,7 @@ class DBManagmentTask(PipelineTaskBase):
 
     def __init__(self, abort_event):
         PipelineTaskBase.__init__(self, abort_event)
-        self._seq_db = SeqDB()
+        self._seq_db = SeqDB(self._abort_event)
     #end def
     
     

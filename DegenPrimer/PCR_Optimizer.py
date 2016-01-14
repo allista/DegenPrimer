@@ -22,22 +22,22 @@ Created on Mar 15, 2013
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 from StringTools import wrap_text
-from MultiprocessingBase import MultiprocessingBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from AllSecStructures import AllSecStructures
 from PCR_ProductsFinder import PPFManager
 from SinglePCR import SinglePCR
 from Product import Region
 from WorkCounter import WorkCounter
-from Output import OutIntercepter
-from tmpStorage import register_tmp_file, cleanup_file
+from BioUtils.Tools.Output import OutIntercepter
+from BioUtils.Tools.tmpStorage import register_tmp_file, cleanup_file
 from iPCR_Base import iPCR_Base
 import TD_Functions as tdf
 
 
 #manager to isolate forking point in a low-memory process
 from PCR_Mixture import ShelvedMixture
-from MultiprocessingBase import Parallelizer
-from UMP import FuncManager, at_manager
+from BioUtils.Tools.Multiprocessing import Parallelizer
+from BioUtils.Tools.UMP import FuncManager, at_manager
 
 class compute_objective_value(object):
     def __init__(self, pcr, product_bounds, purity):
@@ -323,7 +323,7 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
 if __name__ == '__main__':
     import sys, time
     from multiprocessing import Manager
-    from Primer import Primer
+    from DegenPrimer.Primer import Primer
     from SeqUtils import load_sequence
     from WorkCounter import WorkCounterManager
     from WaitingThread import WaitingThread

@@ -26,7 +26,7 @@ import numpy as np
 from numpy.random import random
 from scipy.optimize import fsolve, newton_krylov
 from scipy.sparse import csr_matrix, csgraph
-from AbortableBase import AbortableBase
+from BioUtils.Tools.AbortableBase import AbortableBase
 
 
 class Reaction(object):
@@ -238,7 +238,7 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
 #end class
 
 
-from MultiprocessingBase import MultiprocessingBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 class Equilibrium(EquilibriumBase, MultiprocessingBase):
     '''
     Calculate equilibrium parameters in arbitrary system of concurrent reactions.

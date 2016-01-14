@@ -30,7 +30,7 @@ try:
 except ImportError:
     print'The BioPython must be installed in your system.'
     raise
-from MultiprocessingBase import MultiprocessingBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from iPCR_Interface import iPCR_Interface
 from ConfigParser import SafeConfigParser
 from StringTools import hr, wrap_text, time_hr, print_exception

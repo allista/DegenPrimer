@@ -22,7 +22,7 @@ Created on Mar 1, 2014
 
 from PCR_Mixture import MixtureFactory
 from SearchEngine import SearchEngine
-from MultiprocessingBase import MultiprocessingBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from WorkCounter import WorkCounter
 
 class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
@@ -152,7 +152,7 @@ def _batch_find(counter, t_names, templates, mismatches, products_finder):
 #end def
         
 #mp computations
-from UMP import FuncManager
+from BioUtils.Tools.UMP import FuncManager
 PPFManager = FuncManager('PPFManager', 
                          (_matches_to_mixture, 
                           _find_matches, 

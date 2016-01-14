@@ -23,9 +23,10 @@ import sqlite3
 from Bio import SeqIO
 from Bio.Alphabet import IUPAC
 from StringIO import StringIO
+from BioUtils.Tools.AbortableBase import AbortableBase
+from BioUtils.SeqUtils import load_files
 
-
-class SeqDB(object):
+class SeqDB(AbortableBase):
     '''Create and manage a database of sequences with fast approximate match 
     searching.'''
     
@@ -46,7 +47,8 @@ class SeqDB(object):
            "length"     INTEGER UNSIGNED NOT NULL)'''
   
     
-    def __init__(self):
+    def __init__(self, abort_event):
+        super(SeqDB, self).__init__(abort_event)
         self._db_name  = None
         self._db       = None
         self._cursor   = None
@@ -108,26 +110,10 @@ class SeqDB(object):
         self._init_db(filename)
         self._populate_db(sequences)
     #end def
-    
-    
-    def _get_sequences(self, files):
-        if not files: return None
-        sequences = []
-        for filename in files:
-            try: sequences.extend(SeqIO.parse(filename, 'fasta', IUPAC.unambiguous_dna))
-            except Exception, e:
-                print '\nError while parsing %s' % filename
-                print e
-                print
-        if not sequences:
-            print '\nNo sequences were found in given fasta files.' 
-            return None
-        return sequences
-    #end def
-    
+
     
     def create_db_from_files(self, db_filename, files):
-        sequences = self._get_sequences(files)
+        sequences = load_files(self._abort_event, files, 'fasta')
         if sequences:
             self.create_db(db_filename, sequences)
             return True

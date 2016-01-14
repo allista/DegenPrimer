@@ -26,7 +26,7 @@ from math import log, exp
 from collections import Iterable
 from SecStructures import min_K
 from SinglePCR import PCR_Base, SinglePCR
-from tmpStorage import roDict, cleanup_file, register_tmp_file
+from BioUtils.Tools.tmpStorage import roDict, cleanup_file, register_tmp_file
 from StringTools import wrap_text, line_by_line, hr
 import TD_Functions as tdf
 import StringTools
@@ -69,8 +69,8 @@ class PCR_Simulation_Interface(PCR_Base):
 
 #manager to isolate forking point in a low-memory process
 from PCR_Mixture import ShelvedMixture
-from MultiprocessingBase import Parallelizer
-from UMP import FuncManager, at_manager
+from BioUtils.Tools.Multiprocessing import Parallelizer
+from BioUtils.Tools.UMP import FuncManager, at_manager
 
 class run_pcr_from_file(object):
     def __init__(self, pcr, counter=None):
