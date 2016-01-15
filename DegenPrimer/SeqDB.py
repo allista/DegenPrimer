@@ -25,21 +25,9 @@ import os
 import shutil
 import sqlite3
 
-from Bio.Alphabet import IUPAC
-
-
 class SeqDB(AbortableBase):
     '''Create and manage a database of sequences with fast approximate match 
     searching.'''
-    
-    _ambiguous = set(IUPAC.ambiguous_dna.letters.upper()) - set(IUPAC.unambiguous_dna.letters.upper())
-    
-    @classmethod
-    def is_ambiguous(cls, seqrec):
-        sstr = str(seqrec.seq).upper()
-        for l in cls._ambiguous:
-            if l in sstr: return True
-        return False
     
     _sequences_schema = \
     '''CREATE TABLE "sequences" (
@@ -93,9 +81,6 @@ class SeqDB(AbortableBase):
         self._cursor.execute('PRAGMA cache_size=500000')
         #populate database with data
         for sequence in sequences:
-#            if self.is_ambiguous(sequence):
-#                print '\nSequence %s is excluded because it contains ambiguous symbols\n' % sequence.id
-#                continue
             self._cursor.execute('''
             INSERT INTO sequences (name, sequence, length)
             VALUES (?, ?, ?)''', 
