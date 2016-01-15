@@ -21,9 +21,12 @@ Created on Feb 27, 2013
 '''
 
 import os
-from StringTools import print_exception, time_hr, hr
-from iPCR_Interface import iPCR_Interface
-from SeqDB import SeqDB
+
+from BioUtils.Tools import mktmp_name, tmpStorage
+
+from .StringTools import print_exception, time_hr, hr
+from .iPCR_Interface import iPCR_Interface
+from .SeqDB import SeqDB
 
 
 class iPCR_Base(iPCR_Interface):
@@ -58,10 +61,14 @@ class iPCR_Base(iPCR_Interface):
                 else: 
                     print '\niPCR: no such file: %s' % seq_files[0]
                     return False
-            #or make one in the memory from provided sequences
-            elif not self._seq_db.create_db_from_files(':memory:', seq_files): 
-                print '\niPCR: unable to create sequence database from given files.'
-                return False
+            #or make one in temp file
+            else:
+                dbfile = mktmp_name('.db')
+                tmpStorage.register_tmp_file(dbfile)
+                if not self._seq_db.create_db_from_files(dbfile, seq_files): 
+                    print '\niPCR: unable to create sequence database from given files.'
+                    tmpStorage.cleanup_file(dbfile)
+                    return False
         except Exception, e:
             print_exception(e)
             return False
