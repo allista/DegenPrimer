@@ -339,6 +339,7 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
     #end def
 
     def calculate(self, counter):
+        result = False
         if len(self._reactions_groups) < 2:
             #single process mode
             equilibrium = EquilibriumSolver(self._abort_event, 
@@ -349,6 +350,7 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
                 self.objective_value = equilibrium.objective_value
                 self.solution        = equilibrium.solution
                 self.consumptions    = equilibrium.consumptions
+                result = True
             counter.done()
         else:
             #parallel processing
@@ -369,5 +371,7 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
                     self.objective_value = obj_val
                 self.solution.update(sol)
                 self.consumptions.update(cons)
+            result = self.solution is not None
+        return result
     #end def
 #end class

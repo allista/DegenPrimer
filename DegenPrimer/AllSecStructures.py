@@ -18,12 +18,12 @@ Created on Feb 15, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from BioUtils.Tools.Multiprocessing import MultiprocessingBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase, raise_tb_on_error
 
 from .Equilibrium import Equilibrium
 from .ReporterInterface import ReporterInterface
 from .SecStructures import SecStructures
-from .StringTools import hr, time_hr, wrap_text
+from BioUtils.Tools.Text import hr, time_hr, wrap_text
 from . import TD_Functions
 
 class AllSecStructures(ReporterInterface, MultiprocessingBase):
@@ -227,5 +227,6 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
         self._add_report('Secondary structures', self._short_structs_filename)
     #end def
     
+    @raise_tb_on_error
     def write_reports(self): self.write_report()
 #end class

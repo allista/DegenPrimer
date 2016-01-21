@@ -22,11 +22,13 @@ Created on Dec 15, 2012
 
 from abc import ABCMeta, abstractmethod
 
-from PCR_ProductsFinder import PCR_ProductsFinder
-from PCR_Simulation import PCR_Simulation_Interface, PCR_Simulation
-from ReporterInterface import ReporterInterface
-from StringTools import hr, time_hr
+from BioUtils.Tools.Text import hr, time_hr
+from BioUtils.Tools.Debug import raise_tb_on_error
+from BioUtils.Tools.Output import simple_timeit
 
+from .PCR_ProductsFinder import PCR_ProductsFinder
+from .PCR_Simulation import PCR_Simulation_Interface, PCR_Simulation
+from .ReporterInterface import ReporterInterface
 
 class iPCR_Interface(PCR_Simulation_Interface, ReporterInterface):
     '''Interface class to create facilities which use PCR_Simulation'''
@@ -104,8 +106,11 @@ class iPCR_Interface(PCR_Simulation_Interface, ReporterInterface):
         self._add_report(report_name, self._PCR_report_filename)
     #end def
     
+    @raise_tb_on_error
     def write_reports(self):
-        self.write_products_report()
-        self.write_report()
+        with simple_timeit('write products'):#test
+            self.write_products_report()
+        with simple_timeit('write PCR report'):#test
+            self.write_report()
     #end def
 #end class

@@ -21,9 +21,14 @@ Created on Nov 16, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from BioUtils.Tools.Debug import Timeit #test
+
 from BioUtils.Tools.Multiprocessing import Parallelizer
 from BioUtils.Tools.UMP import FuncManager, at_manager
-from BioUtils.Tools.tmpStorage import roDict, cleanup_file, register_tmp_file
+from BioUtils.Tools.tmpStorage import register_tmp_file, from_shelf
+from BioUtils.Tools.Text import wrap_text, line_by_line, hr
+from BioUtils.Tools import Text
+
 from collections import Iterable
 from datetime import timedelta
 from math import log, exp
@@ -31,8 +36,6 @@ from math import log, exp
 from .PCR_Mixture import ShelvedMixture
 from .SecStructures import min_K
 from .SinglePCR import PCR_Base, SinglePCR
-from .StringTools import wrap_text, line_by_line, hr
-from . import StringTools
 from . import TD_Functions as tdf
 
 
@@ -179,14 +182,15 @@ class PCR_Simulation(PCR_Simulation_Interface):
                                                   self._abort_event, pcr,
                                                   self._PCR_mixtures.values())
             if not results_path or self.aborted(): return
-            results = roDict(results_path)['result']
-            cleanup_file(results_path)
+            results = from_shelf(results_path)
             counter[1].done()
         else:
             pcr = run_pcr_from_file(pcr, counter)
             results = (pcr(self._PCR_mixtures.itervalues().next()),)
         if results is None or self.aborted(): return
-        for hit_id, obj_val, products, reaction_end in results:
+        for res in results:
+            if not res: continue
+            hit_id, obj_val, products, reaction_end = res
             self._max_objective_value   = max(self._max_objective_value, obj_val)
             self._products[hit_id]      = products
             self._reaction_ends[hit_id] = reaction_end
@@ -199,6 +203,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
     
     
     @classmethod
+    @Timeit()
     def _construct_histogram(cls, main_title, products, reaction_ends=None, with_titles=True, sort=True):
         #construct histogram
         histogram  = []
@@ -239,15 +244,16 @@ class PCR_Simulation(PCR_Simulation_Interface):
     
     
     @classmethod
+    @Timeit()
     def _format_histogram(cls, title, histogram):
         #maximum column name width and value
         max_value = max(c[1] for c in histogram)
-        widths    = [StringTools.text_width-cls._hist_width-1, cls._hist_width+1]
-        histogram_string  = '-'*StringTools.text_width + '\n'
+        widths    = [Text.text_width-cls._hist_width-1, cls._hist_width+1]
+        histogram_string  = '-'*Text.text_width + '\n'
         #wrap column and hist titles
         histogram_string += line_by_line([title, cls._hist_column_title], 
                                          widths, j_center=True)
-        histogram_string += '-'*StringTools.text_width + '\n'
+        histogram_string += '-'*Text.text_width + '\n'
         #histogram lines
         for col in histogram:
             #line value
@@ -264,12 +270,12 @@ class PCR_Simulation(PCR_Simulation_Interface):
                 hist_bar += '#'*(_bar/2) + value_str 
                 hist_bar += '#'*(_bar-_bar/2) + ' '*col_spacer
             histogram_string += line_by_line([col[0],hist_bar], widths, divider=':')
-            histogram_string += '-'*StringTools.text_width + '\n'
+            histogram_string += '-'*Text.text_width + '\n'
         histogram_string += '\n'
         return histogram_string
     #end def
     
-    
+    @Timeit()
     def _construct_electrophoresis(self, products):
         max_len      = max(len(p) for p in products)
         window       = int(max_len*self._window_percent)
@@ -290,9 +296,9 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return self._format_electrophoresis(window, phoresis)
     #end def
     
-    
+    @Timeit()
     def _format_electrophoresis(self, window, phoresis):
-        text_width  = StringTools.text_width
+        text_width  = Text.text_width
         max_line    = max(min(p.concentration for p in self._primers)*self._max_amplicon, 
                           max(l[1] for l in phoresis))
         max_mark    = max(len(str(l[2]+window)) for l in phoresis)*2
@@ -317,7 +323,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return phoresis_text
     #end def
     
-
+    @Timeit()
     def per_hit_header(self, hit):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -345,7 +351,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
         header_string += '\n'
         return header_string
 
-        
+    @Timeit()
     def all_products_histogram(self):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -360,7 +366,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
                                          None, with_titles=True, sort=False)
     #end def
     
-    
+    @Timeit()
     def per_hit_histogram(self, hit):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -369,7 +375,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
                                          self._reaction_ends, with_titles=False)
     #end def
     
-    
+    @Timeit()
     def per_hit_electrophoresis(self, hit):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -377,7 +383,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return self._construct_electrophoresis(products)
     #end def
     
-    
+    @Timeit()
     def all_graphs_grouped_by_hit(self):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -394,7 +400,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
             all_graphs += '\n\n'
         return all_graphs
     
-    
+    @Timeit()
     def format_report_header(self):
         header_string  = ''
         header_string += hr(' PCR conditions ')
@@ -415,7 +421,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return header_string
     #end def
     
-    
+    @Timeit()
     def format_quantity_explanation(self):
         expl_string  = ''
         expl_string += hr(' estimation of PCR products concentrations ')
@@ -436,7 +442,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return expl_string
     #end def
     
-    
+    @Timeit()
     def format_products_report(self):
         prod_string  = ''
         prod_string += wrap_text('For each target sequence a list of possible '

@@ -18,7 +18,6 @@ Created on Mar 15, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from BioUtils.Tools.Multiprocessing import Parallelizer
 from BioUtils.Tools.UMP import FuncManager, at_manager
 from BioUtils.Tools.tmpStorage import register_tmp_file, cleanup_file
@@ -33,7 +32,7 @@ from .PCR_Mixture import ShelvedMixture
 from .PCR_ProductsFinder import PPFManager
 from .Product import Region
 from .SinglePCR import SinglePCR
-from .StringTools import wrap_text
+from BioUtils.Tools.Text import wrap_text
 from .WorkCounter import WorkCounter
 from .iPCR_Base import iPCR_Base
 
@@ -85,7 +84,7 @@ SearchManager = FuncManager('SearchManager',
                              at_manager(PPFManager, 'find_matches')))
 
 
-class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
+class PCR_Optimizer(iPCR_Base):
     '''
     Repeatedly perform PCR simulation varying parameters 
     to find optimal conditions
@@ -97,7 +96,6 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
     def __init__(self, 
                   abort_event, max_steps, purity, 
                   *args, **kwargs):
-        MultiprocessingBase.__init__(self, abort_event)
         iPCR_Base.__init__(self, abort_event, *args, **kwargs)
         #PCR simulations
         self._PCR_ProductsFinder = self._new_PCR_ProductsFinder()
@@ -234,13 +232,13 @@ class PCR_Optimizer(MultiprocessingBase, iPCR_Base):
         #try to connect to a database
         if not self._try_connect_db((seq_file,)): return False
         #get names of the sequences
-        self._seq_names = self._get_names((seq_id,) if seq_id else None)
-        if not self._seq_names:
+        self._seq_infos = self._get_names((seq_id,) if seq_id else None)
+        if not self._seq_infos:
             self._seq_db.close() 
             return False
-        self._seq_name = self._seq_names.values()[0]
+        self._seq_name = self._seq_infos.values()[0]
         #get sequences
-        templates = self._seq_db.get_seqs(self._seq_names.keys())
+        templates = self._seq_db.get_seqs(self._seq_infos.keys())
         self._seq_db.close()
         #find match positions
         self._matches_list = self._searcher.find_matches(WorkCounter(), 

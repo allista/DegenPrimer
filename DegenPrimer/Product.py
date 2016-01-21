@@ -23,7 +23,7 @@ Created on Mar 15, 2013
 
 from copy import deepcopy
 
-from StringTools import hr
+from BioUtils.Tools.Text import hr
 import TD_Functions as tdf
 
 

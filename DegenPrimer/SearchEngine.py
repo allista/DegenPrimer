@@ -18,7 +18,10 @@ Created on Jan 1, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from BioUtils.Tools.Debug import Pstats #test
+
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase, aborted, cpu_count
+from BioUtils.Tools.tmpStorage import to_shelf
 from array import array
 from scipy.fftpack import fft, ifft
 
@@ -138,28 +141,27 @@ class SearchEngine(MultiprocessingBase):
                               t_len, p_len,
                               fwd_matches, rev_matches, num_jobs=None):
         '''Compile duplexes for both strands of a template in parallel'''
-        if not len(fwd_matches)+len(rev_matches): return [],[]
+        if not len(fwd_matches)+len(rev_matches): return None
         counter.set_subwork(2, map(len, (fwd_matches, rev_matches)))
         if len(fwd_matches): counter[0].set_work(len(fwd_matches))
         if len(rev_matches): counter[1].set_work(len(rev_matches))
         #prepare and start two sets of jobs
-        tdf.aquire_parameters()
-        fwd_work = self.Work(timeout=0.1, counter=counter[0])
-        rev_work = self.Work(timeout=0.1, counter=counter[1])
-        fwd_work.prepare_jobs(self._compile_duplexes_mapper, 
-                              fwd_matches, num_jobs, 
-                              fwd_seq, primer, t_len, p_len, False)
-        rev_work.prepare_jobs(self._compile_duplexes_mapper, 
-                              rev_matches, num_jobs, 
-                              rev_seq, primer, t_len, p_len, True)
-        self.start_work(fwd_work, rev_work)
-        #allocate results containers and get results
-        fwd_results = []; rev_results = []
-        fwd_work.set_assembler(self._duplexes_assembler, fwd_results)
-        rev_work.set_assembler(self._duplexes_assembler, rev_results)
-        res = self.wait(fwd_work, rev_work)
-        tdf.release_parameters() 
-        if not res: return None
+        with tdf.PCR_parameters():
+            fwd_work = self.Work(timeout=0.1, counter=counter[0])
+            rev_work = self.Work(timeout=0.1, counter=counter[1])
+            fwd_work.prepare_jobs(self._compile_duplexes_mapper, 
+                                  fwd_matches, num_jobs, 
+                                  fwd_seq, primer, t_len, p_len, False)
+            rev_work.prepare_jobs(self._compile_duplexes_mapper, 
+                                  rev_matches, num_jobs, 
+                                  rev_seq, primer, t_len, p_len, True)
+            self.start_work(fwd_work, rev_work)
+            #allocate results containers and get results
+            fwd_results = []; rev_results = []
+            fwd_work.set_assembler(self._duplexes_assembler, fwd_results)
+            rev_work.set_assembler(self._duplexes_assembler, rev_results)
+            if not self.wait(fwd_work, rev_work): return None
+        if self.aborted() or not fwd_results and not rev_results: return None
         #sort duplexes by position and return them
         fwd_results.sort(key=lambda x: x[0])
         rev_results.sort(key=lambda x: x[0])
@@ -172,27 +174,29 @@ class SearchEngine(MultiprocessingBase):
                            t_len, p_len,
                            fwd_matches, rev_matches):
         '''Compile duplexes for both strands of a template'''
-        if not len(fwd_matches)+len(rev_matches): return [],[]
+        if not len(fwd_matches)+len(rev_matches): return None
         counter.set_work(len(fwd_matches)+len(rev_matches))
-        fwd_results = []
-        tdf.aquire_parameters()
-        for pos in fwd_matches:
-            if self.aborted(): break
-            duplexes = self._compile_duplexes_for_position(pos, fwd_seq, primer, 
-                                                           t_len, p_len, reverse=False)
-            if duplexes[1]: fwd_results.append(duplexes)
-            counter.count()
-        rev_results = []
-        for pos in rev_matches:
-            if self.aborted(): break
-            duplexes = self._compile_duplexes_for_position(pos, rev_seq, primer, 
-                                                           t_len, p_len, reverse=True)
-            if duplexes[1]: rev_results.append(duplexes)
-            counter.count()
-        tdf.release_parameters()
-        #if aborted, return None
+        with tdf.PCR_parameters():
+            fwd_results = []
+            for pos in fwd_matches:
+                if self.aborted(): break
+                duplexes = self._compile_duplexes_for_position(pos, fwd_seq, primer, 
+                                                               t_len, p_len, reverse=False)
+                if duplexes[1]: fwd_results.append(duplexes)
+                counter.count()
+            rev_results = []
+            for pos in rev_matches:
+                if self.aborted(): break
+                duplexes = self._compile_duplexes_for_position(pos, rev_seq, primer, 
+                                                               t_len, p_len, reverse=True)
+                if duplexes[1]: rev_results.append(duplexes)
+                counter.count()
+        #if aborted or no results, return None
         if self.aborted(): return None
-        return fwd_results,rev_results
+        if not fwd_results: fwd_results = None
+        if not rev_results: rev_results = None
+        if not fwd_results and not rev_results: return None
+        return fwd_results, rev_results
     #end def
         
     
@@ -392,27 +396,35 @@ class SearchEngine(MultiprocessingBase):
         counter.set_subwork(2, (t_len, t_len*primer.num_components))
         matches = self.find_matches(counter[0], template, primer, mismatches)
         if matches is None: return None
-        return self.compile_duplexes_mp(counter[1], *matches)
+        duplexes = self.compile_duplexes_mp(counter[1], *matches)
+        return to_shelf(duplexes) if duplexes else None
     #end def
     
-    
+    @MultiprocessingBase.data_mapper_method
     def _batch_find(self, template, primer, p_len, mismatches):
-        t_id, t_len, _template = template
-        matches = self._find(WorkCounter(), _template, primer, t_len, p_len, mismatches)
-        if matches is None: return t_id, None
-        return t_id, self.compile_duplexes(WorkCounter(), *matches)
+        matches = self._find(WorkCounter(), template, primer, len(template), p_len, mismatches)
+        if matches is None: return None
+        duplexes = self.compile_duplexes(WorkCounter(), *matches) 
+        return (template.id, to_shelf(duplexes)) if duplexes else None 
     #end def
     
-    def batch_find(self, counter, templates, primer, mismatches):
+    @Pstats('SearchEngine.batch_find')#test
+    def batch_find(self, counter, templates, primer, mismatches, **kwargs):
         '''Find occurrences of a degenerate primer in each of the provided 
         templates. Return dictionary of results using template IDs as keys.
         It uses multiprocessing to parallelize searches, each of which does 
         not use parallelization. Use it to search in many short sequences.'''
-        results = self.parallelize_work(0.1, self._batch_find,
-                                        templates, primer, len(primer), 
-                                        mismatches, counter=counter)
-        if results is None: return None
-        return dict(results)
+        work = self.Work(0.1, counter=counter)
+        work.prepare_jobs(self._batch_find, templates, None,
+                          primer, len(primer), mismatches, **kwargs)
+        @MultiprocessingBase.results_assembler
+        def assembler(index, result, results):
+            if result: results[result[0]] = result[1]
+        results = {}
+        work.set_assembler(assembler, results)
+        work.start()
+        if not work.wait(): return None
+        return results
     #end def
 #end class
 
@@ -422,5 +434,5 @@ mp_better = SearchEngine.mp_better
 def find(counter, template, primer, mismatches, abort_event):
     return SearchEngine(abort_event).find(counter, template, primer, mismatches)
 
-def batch_find(counter, templates, primer, mismatches, abort_event):
-    return SearchEngine(abort_event).batch_find(counter, templates, primer, mismatches)
+def batch_find(counter, templates, primer, mismatches, abort_event, **kwargs):
+    return SearchEngine(abort_event).batch_find(counter, templates, primer, mismatches, **kwargs)

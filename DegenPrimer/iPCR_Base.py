@@ -20,13 +20,10 @@ Created on Feb 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import os
+from BioUtils.SeqUtils import SeqView
 
-from BioUtils.Tools import mktmp_name, tmpStorage
-
-from .StringTools import print_exception, time_hr, hr
+from BioUtils.Tools.Text import time_hr, hr
 from .iPCR_Interface import iPCR_Interface
-from .SeqDB import SeqDB
 
 
 class iPCR_Base(iPCR_Interface):
@@ -38,55 +35,22 @@ class iPCR_Base(iPCR_Interface):
     def __init__(self, abort_event, max_mismatches, *args, **kwargs):
         iPCR_Interface.__init__(self, abort_event, *args, **kwargs)
         self._max_mismatches = max_mismatches
-        self._seq_db         = SeqDB(self._abort_event)
-        self._seq_names      = None
+        self._seq_db         = None
         self._PCR_Simulation = None
     #end def
     
-    
     def __del__(self):
-        self._seq_db.close()
         try: self._searcher.shutdown()
         except: pass
     #end def
     
-    
-    def _try_connect_db(self, seq_files):
-        try: #to connect to a database
-            if len(seq_files) == 1 and seq_files[0].endswith('.db'):
-                if os.path.isfile(seq_files[0]):
-                    if not self._seq_db.connect(seq_files[0]):
-                        print '\niPCR: unable to connect to %s' % seq_files[0]
-                        return False
-                else: 
-                    print '\niPCR: no such file: %s' % seq_files[0]
-                    return False
-            #or make one in temp file
-            else:
-                dbfile = mktmp_name('.db')
-                tmpStorage.register_tmp_file(dbfile)
-                if not self._seq_db.create_db_from_files(dbfile, seq_files): 
-                    print '\niPCR: unable to create sequence database from given files.'
-                    tmpStorage.cleanup_file(dbfile)
-                    return False
-        except Exception, e:
-            print_exception(e)
+    def _load_db(self, filenames):
+        self._seq_db = SeqView()
+        self._seq_db.load(filenames)
+        if not self._seq_db:
+            self._seq_db = None
             return False
         return True
-    #end def
-    
-    
-    def _get_names(self, seq_ids):
-        seq_names = self._seq_db.get_names(seq_ids)
-        if not seq_names:
-            if seq_ids:
-                print ('\nPCR Simulation: there\'re no sequences with ' 
-                       'ids in %s in the database.') % str(seq_ids)
-            else: print '\nPCR Simulation: the database is empty.'
-            return None
-        return seq_names
-    #end def
-    
     
     def _format_header(self):
         header = iPCR_Interface._format_header(self)
@@ -94,7 +58,6 @@ class iPCR_Base(iPCR_Interface):
             header += 'Number of mismatches allowed: %d\n\n' % self._max_mismatches
         return header
     #end def
-    
     
     def write_products_report(self):
         if not self._have_results: return

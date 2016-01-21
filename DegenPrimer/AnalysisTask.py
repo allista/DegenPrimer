@@ -24,18 +24,19 @@ from datetime import timedelta
 from Queue import Empty
 from threading import Lock
 from Bio import SeqIO
-from BioUtils.Tools.Output import OutQueue
+from BioUtils.Tools.Output import OutQueue, simple_timeit
 from BioUtils.Tools import EchoLogger
-from PrimerTaskBase import PrimerTaskBase
-from BlastPrimers import BlastPrimers
-from AllSecStructures import AllSecStructures
-from WaitingThread import WaitingThread
-from WorkCounter import WorkCounterManager
-from StringTools import print_exception
 from BioUtils.Tools.UMP import UManager
-from SeqDB import SeqDB
-from iPCR import iPCR
-import TD_Functions as tdf
+from BioUtils.Tools import WaitingThread
+
+from .PrimerTaskBase import PrimerTaskBase
+from .BlastPrimers import BlastPrimers
+from .AllSecStructures import AllSecStructures
+
+from .WorkCounter import WorkCounterManager
+from .SeqDB import SeqDB
+from .iPCR import iPCR
+from . import TD_Functions as tdf
 
 
 class SubroutineManager(UManager): pass
@@ -199,7 +200,7 @@ class AnalysisTask(PrimerTaskBase):
                 SeqIO.write(primer.all_seq_records, filename, self._fmt)
             except Exception, e:
                 self._print('\nFailed to write %s primer and it\'s unambiguous components to:\n   %s' % (primer.id, filename))
-                print_exception(e)
+                print e
                 return False 
             self._print('\n%s primer and it\'s unambiguous components were written to:\n   %s' % (primer.id, filename))
         return True
@@ -265,11 +266,11 @@ class AnalysisTask(PrimerTaskBase):
                 if e.errno != errno.EINTR:
                     with self._print_lock:
                         print '\nAnalysisTask._listen_subroutines:'
-                        print_exception(e)
+                        print e
             except Exception, e:
                 with self._print_lock:
                     print '\nAnalysisTask._listen_subroutines:'
-                    print_exception(e)
+                    print e
             finally: processes_alive = self._join_finished()
     #end def
     
@@ -282,7 +283,7 @@ class AnalysisTask(PrimerTaskBase):
                     self._print('\n'+''.join(message[1] for message in output))
                 return
             except Exception, e:
-                print_exception(e)
+                print e
     #end def
    
     def run(self, args):
@@ -307,7 +308,8 @@ class AnalysisTask(PrimerTaskBase):
             with self._print_lock: self._print('\nWriting analysis reports...')
             for routine in analysis_routines:
                 if routine.have_results():
-                    routine.write_reports()
+                    with simple_timeit(str(routine)): #test
+                        routine.write_reports()
                     args.register_reports(routine.reports())
             #print last messages
             self._print_out_queue()

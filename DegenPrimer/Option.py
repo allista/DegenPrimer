@@ -24,7 +24,7 @@ Created on Mar 22, 2013
 from argparse import Action
 from math import ceil, log
 
-from .StringTools import wrap_text
+from BioUtils.Tools.Text import wrap_text
 
 
 class OptionBase(object):

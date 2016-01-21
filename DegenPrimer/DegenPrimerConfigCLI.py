@@ -41,7 +41,7 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
         DegenPrimerConfig.__init__(self)
         #setup a list of options and a parser for command line arguments
         self._parser = argparse.ArgumentParser(description=self._description)
-        self._args   = None
+        self._assembler_args   = None
         #configuration file
         self.config_files = None
         conf_group = self._parser.add_argument_group('Preset configuration')
@@ -76,8 +76,8 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
     
     def _override_option(self, option):
         value_override = None
-        if hasattr(self._args, option.dest):
-            value_override = getattr(self._args, option.dest)
+        if hasattr(self._assembler_args, option.dest):
+            value_override = getattr(self._assembler_args, option.dest)
             #single values should not be lists
             if not option.is_multi and not option.is_poly \
             and type(value_override) == list:
@@ -88,8 +88,8 @@ class DegenPrimerConfigCLI(DegenPrimerConfig):
     
     def parse_configuration(self, config_file = None):
         #parse command line arguments
-        self._args = self._parser.parse_args()
-        self.config_files = self._args.config_files
+        self._assembler_args = self._parser.parse_args()
+        self.config_files = self._assembler_args.config_files
         #call parent function
         #if a single configuration file was provided, use it
         if self.config_files and len(self.config_files) == 1:

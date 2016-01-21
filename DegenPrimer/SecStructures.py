@@ -19,7 +19,7 @@ Created on Jun 23, 2012
 '''
 
 from .Equilibrium import Reaction
-from .StringTools import hr
+from BioUtils.Tools.Text import hr
 from . import TD_Functions as tdf
 
 
@@ -67,7 +67,7 @@ class Dimer(object):
                         ATGCACGA :offset=-2
                           |||  |
                           CGTTATGT
-                          012  5 :rev_matches[n] = fwd_matches[n]-offset
+                          012  5 :rev_matches[n] = fwd_matches[n]+offset
     '''
     __slots__ = ['fwd_matches', '_offset', 'num_matches',
                  'conversion_degree', 'dG', 'K',

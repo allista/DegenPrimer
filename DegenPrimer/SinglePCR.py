@@ -23,14 +23,13 @@ Created on Feb 24, 2014
 
 from abc import ABCMeta
 from copy import deepcopy
-from Equilibrium import Equilibrium, Reaction
-from BioUtils.Tools.AbortableBase import AbortableBase
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase
-from WorkCounter import WorkCounter
-import TD_Functions as tdf
 
+from .Equilibrium import Equilibrium, Reaction
+from .WorkCounter import WorkCounter
+from . import TD_Functions as tdf
 
-class PCR_Base(AbortableBase):
+class PCR_Base(MultiprocessingBase):
     '''Base class for PCR simulations'''
     __metaclass__ = ABCMeta
     
@@ -43,7 +42,7 @@ class PCR_Base(AbortableBase):
                   with_exonuclease,
                   num_cycles,
                   ):
-        AbortableBase.__init__(self, abort_event)
+        MultiprocessingBase.__init__(self, abort_event)
         self._polymerase       = polymerase
         self._with_exonuclease = with_exonuclease
         self._num_cycles       = num_cycles
@@ -52,7 +51,7 @@ class PCR_Base(AbortableBase):
 #end class
 
 
-class SinglePCR(PCR_Base, MultiprocessingBase):
+class SinglePCR(PCR_Base):
     '''Simulates a single PCR'''
     def __init__(self, 
                   abort_event,
@@ -64,7 +63,6 @@ class SinglePCR(PCR_Base, MultiprocessingBase):
                   side_reactions,
                   side_concentrations,
                   ):
-        MultiprocessingBase.__init__(self, abort_event)
         PCR_Base.__init__(self, abort_event, polymerase, with_exonuclease, num_cycles)
         self._elongation_time        = elongation_time
         self._primers_concentrations = primers_concentrations

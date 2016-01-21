@@ -10,8 +10,6 @@ from time import sleep, time
 from datetime import timedelta
 import errno
 import cProfile
-from DegenPrimer.StringTools import print_exception
-    
     
 class PrimerAction(argparse.Action):
     def __init__(self, **kwargs):

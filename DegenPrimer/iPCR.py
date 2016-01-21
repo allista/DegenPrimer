@@ -21,12 +21,15 @@ Created on Feb 27, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from BioUtils.Tools.Debug import Pstats #test
+
+from BioUtils.Tools.Output import simple_timeit
 from BioUtils.Tools.UMP import FuncManager, at_manager
 from BioUtils.Tools.Multiprocessing import raise_tb_on_error
+from BioUtils.Tools.Text import wrap_text, hr
 
 from .PCR_ProductsFinder import PPFManager
 from .SearchEngine import mp_better
-from .StringTools import wrap_text, hr
 from .iPCR_Base import iPCR_Base
 
 
@@ -49,72 +52,91 @@ class iPCR(iPCR_Base):
         self._searcher.start()
     #end def
     
-    
-    def _find_products_in_templates(self, counter, t_ids, products_finder):
-        templates   = self._seq_db.get_seqs(t_ids)
-        if len(t_ids) < 2:
-            return self._searcher.find(counter, self._seq_names[t_ids[0]],
-                                       templates[0][2], 
+    @Pstats('iPCR._find_products_in_templates')#test
+    def _find_products_in_templates(self, counter, templates, P_Finder):
+        if not templates: return None
+        if len(templates) == 1:
+            return self._searcher.find(counter,
+                                       templates[0], 
                                        self._max_mismatches, 
-                                       products_finder)
+                                       P_Finder)
         else:
-            return self._searcher.batch_find(counter, self._seq_names, 
-                                             templates,  
+            return self._searcher.batch_find(counter, 
+                                             templates,
                                              self._max_mismatches, 
-                                             products_finder)
+                                             P_Finder, copy_data=True)
     #end def
     
     
-    def _find_products_in_db(self, counter, PCR_Sim, P_Finder, seqs_info):
-        print '\nPSR Simulation: searching for annealing sites in provided sequences...'
+    def _find_products_in_db(self, counter, PCR_Sim, P_Finder):
         #sort templates into short, suitable for plain search and long -- for mp
+        seq_lengths = dict()
         short_templates = []
         long_templates  = []
-        for t_id, t_len in seqs_info.iteritems():
-            if mp_better(t_len):
-                long_templates.append(t_id)
-            else: short_templates.append(t_id)
+        with simple_timeit('PCR Simulation: sorting templates'):
+            for t_id in self._seq_db.keys():
+                t_len = len(self._seq_db[t_id])
+                seq_lengths[t_id] = t_len
+                if mp_better(t_len): long_templates.append(t_id)
+                else: short_templates.append(t_id)
+            if self.aborted(): return False
+        if len(short_templates) == 1: 
+            long_templates += short_templates
+            short_templates = []
         #setup work counters
-        if short_templates and long_templates: 
-            counter.set_subwork(2, (sum(seqs_info[t_id] for t_id in short_templates),
-                                    sum(seqs_info[t_id] for t_id in long_templates)))
-            short_counter  = counter[0]
-            long_counter   = counter[1]
-        else: long_counter = short_counter = counter
-        if long_templates: long_counter.set_subwork(len(long_templates), [seqs_info[t_id] for t_id in long_templates])
+        with simple_timeit('PCR Simulation: counting work to be done'):
+            if short_templates and long_templates: 
+                counter.set_subwork(2, (sum(seq_lengths[t_id] for t_id in short_templates),
+                                        sum(seq_lengths[t_id] for t_id in long_templates)))
+                short_counter  = counter[0]
+                long_counter   = counter[1]
+            else: long_counter = short_counter = counter
+            if long_templates: 
+                long_counter.set_subwork(len(long_templates), 
+                                         [seq_lengths[t_id] for t_id in long_templates])
+            if short_templates:
+                short_counter.set_subwork(len(short_templates))
+        print '\nPCR Simulation: searching for annealing sites in provided sequences...'
         #search short templates in batch
         if short_templates:
-            short_counter.set_subwork(len(short_templates))
+            templates = self._seq_db if not long_templates else self._seq_db.subview(short_templates)
             results = self._find_products_in_templates(short_counter, 
-                                                       short_templates, 
+                                                       templates, 
                                                        P_Finder)
             if not results or self.aborted(): return False
-            for t_name, m_path in results.iteritems():
-                PCR_Sim.add_mixture(t_name, m_path)
+            for t_id, m_path in results.iteritems():
+                PCR_Sim.add_mixture(t_id, m_path)
         #if there're long templates, search sequentially
         for i, t_id in enumerate(long_templates):
-            result = self._find_products_in_templates(long_counter[i], (t_id,), P_Finder)
+            result = self._find_products_in_templates(long_counter[i], [self._seq_db[t_id]], P_Finder)
             if result is None:
                 if self.aborted(): return False
                 else: continue
-            PCR_Sim.add_mixture(self._seq_names[t_id], result)
+            PCR_Sim.add_mixture(*result.items()[0])
         return PCR_Sim.not_empty()
     #end def
     
     
-    def _find_products(self, counter, PCR_Sim, P_Finder, seq_files, seq_ids=None):
-        #try to connect to a database
-        if not seq_files or not self._try_connect_db(seq_files): return False
-        #get names and legths of sequences
-        self._seq_names = self._get_names(seq_ids)
-        if not self._seq_names:
-            self._seq_db.close() 
-            return False
-        seq_lengths = self._seq_db.get_lengths(seq_ids)
-        #find primer annealing sites
-        result = self._find_products_in_db(counter, PCR_Sim, P_Finder, seq_lengths)
-        self._seq_db.close()
-        return result
+    def _find_products(self, counter, PCR_Sim, P_Finder, seq_files, seq_ids):
+        with simple_timeit('PCR Simulation: loading templates'):
+            if not seq_files or not self._load_db(seq_files):
+                print 'No templates were loaded from: %s' % str(seq_files) 
+                return False
+            if self.aborted(): return False
+        if not seq_ids: seq_ids = self._seq_db.keys()
+#            @iPCR.data_mapper
+#            def worker(k, db): return (k, len(db.get(k, '')))
+#            @iPCR.results_assembler
+#            def assembler(index, result, seq_lengths):
+#                seq_lengths[result[0]] = result[1]
+#            seq_lengths = {}
+#            work = self.Work()
+#            work.prepare_jobs(worker, seq_ids, None, self._seq_db, 
+#                              init_args=lambda db: (deepcopy(db),))
+#            work.set_assembler(assembler, seq_lengths)
+#            work.start()
+#            if not work.wait(): return False
+        return self._find_products_in_db(counter, PCR_Sim, P_Finder)
     #end def
     
     @raise_tb_on_error
@@ -124,6 +146,7 @@ class iPCR(iPCR_Base):
                                self._PCR_Simulation, 
                                self._ProductsFinder, 
                                seq_files, seq_ids):
+            if self.aborted(): return False
             self._PCR_Simulation.run(counter[1])
             self._have_results = bool(self._PCR_Simulation)
             return self._have_results

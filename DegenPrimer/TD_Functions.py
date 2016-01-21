@@ -31,12 +31,13 @@ deoxynucleotide triphosphate, and dimethyl sulfoxide concentrations with
 comparison to alternative empirical formulas. Clinical chemistry, 47(11), 1956-61.
 '''
 
+from contextlib import contextmanager
 from copy import deepcopy
 from math import sqrt, log, exp
 
 from .PCR_Parameters import PCR_Parameters
 from .UnifiedNN import UnifiedNN
-from . import StringTools
+from BioUtils.Tools import Text
 
 
 ###############################################################################
@@ -46,19 +47,16 @@ if not NN: raise RuntimeError('TD_Functions: Unable to initialize UnifiedNN.')
 PCR_P  = PCR_Parameters()
 _PCR_P = None
 
-
-def aquire_parameters():
+@contextmanager
+def PCR_parameters():
     global _PCR_P, PCR_P
     assert _PCR_P is None, 'TD_Functions: PCR parameters are already aquired.'
-    _PCR_P, PCR_P = PCR_P, deepcopy(PCR_P)
-#end def
-
-def release_parameters():
-    global _PCR_P, PCR_P
-    assert isinstance(_PCR_P, PCR_Parameters), 'TD_Functions: PCR parameters were not aquired. %s'
-    PCR_P, _PCR_P = _PCR_P, None
-#end def
-
+    try: 
+        _PCR_P, PCR_P = PCR_P, deepcopy(PCR_P)
+        yield
+    finally: 
+        PCR_P, _PCR_P = _PCR_P, None
+        
 def primer_template_Tr(sequence, concentration, conversion_degree):
     '''Calculate temperature for primer-template annealing equilibrium 
     with a given conversin_degree using two-state equilibrium model and 
@@ -104,7 +102,7 @@ def primer_template_Tm(sequence, concentration):
 
 
 def format_concentration(concentration):
-    return StringTools.format_quantity(concentration, 'M') 
+    return Text.format_quantity(concentration, 'M') 
     
     
 def format_PCR_conditions(primers, polymerase=None):
@@ -117,9 +115,9 @@ def format_PCR_conditions(primers, polymerase=None):
             conditions.append(['C(%s)' % primer.id,]+format_concentration(primer.total_concentration).split())
     conditions.append(['C(DMSO)', '%.1f' % PCR_P.DMSO, '%'])
     if polymerase:
-        conditions.append(['C(Poly)', ]+StringTools.format_quantity(polymerase*1e-6, 'u/ul').split())
+        conditions.append(['C(Poly)', ]+Text.format_quantity(polymerase*1e-6, 'u/ul').split())
     conditions.append(['T', '%.1f' % PCR_P.PCR_T, 'C'])
-    return StringTools.print_table(conditions, delimiter='')
+    return Text.print_table(conditions, delimiter='')
 #end_def
 
 

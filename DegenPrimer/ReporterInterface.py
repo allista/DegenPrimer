@@ -23,15 +23,17 @@ Created on Feb 27, 2013
 
 from abc import ABCMeta, abstractmethod
 
-
 class ReporterInterface(object):
     '''Provides common interface to register reports if DegenPrimerConfig'''
     __metaclass__ = ABCMeta
     
     def __init__(self):
+        self._name = self.__class__.name
         self._reports = []
         self._have_results = False
     #end def
+    
+    def name(self): return self._name
     
     def have_results(self): return self._have_results
     

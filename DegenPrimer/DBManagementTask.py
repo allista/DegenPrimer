@@ -20,7 +20,7 @@ Created on Mar 10, 2013
 
 from PipelineTaskBase import PipelineTaskBase
 from SeqDB import SeqDB
-from StringTools import print_dict
+from BioUtils.Tools.Text import print_dict
 
 
 class DBManagmentTask(PipelineTaskBase):

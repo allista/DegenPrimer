@@ -95,7 +95,7 @@ class PCR_Mixture(object):
     
     
     def save(self):
-        d = tmpDict(persistent=True)
+        d = tmpDict()
         d['reaction_id']   = self.reaction_id
         d['fwd_templates'] = self.templates[1]
         d['rev_templates'] = self.templates[0]
@@ -198,8 +198,8 @@ class MixtureFactory(AbortableBase):
 #        print 'PCR Simulation: searching for possible PCR products in %s...' % hit
         if self._include_side_annealings: counter.set_work(3)
         else: counter.set_work(2)
-        mixture = PCR_Mixture(hit)        
         hit = str(hit) #if hit is unicode
+        mixture = PCR_Mixture(hit)        
         #sort annealings into good (ones that are suitable for product generation) 
         #and bad (ones that are not)
         good_annealings = ([], []) #0 is reverse strand, 1 is forward

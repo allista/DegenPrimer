@@ -20,10 +20,15 @@ Created on Mar 1, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from PCR_Mixture import MixtureFactory
-from SearchEngine import SearchEngine
+from BioUtils.Tools.Debug import Pstats #test
+
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase
-from WorkCounter import WorkCounter
+from BioUtils.Tools.tmpStorage import from_shelf, cleanup_files
+from BioUtils.SeqUtils import pretty_rec_name 
+
+from .PCR_Mixture import MixtureFactory
+from .SearchEngine import SearchEngine
+from .WorkCounter import WorkCounter
 
 class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
     
@@ -40,17 +45,28 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
     def searcher(self): return self._searcher
     
     @staticmethod
-    def _combine_annealings(*annealings_list):
+    def _extract_annealings(*annealings_list):
         fwd_annealings = []
         rev_annealings = []
-        for fwd, rev in annealings_list:
-            fwd_annealings.extend(fwd)
-            rev_annealings.extend(rev)
+        for filename in annealings_list:
+            ann = from_shelf(filename)
+            if not ann: continue
+            if ann[0]: fwd_annealings.extend(ann[0]) 
+            if ann[1]: rev_annealings.extend(ann[1])
         return fwd_annealings,rev_annealings
     #end def
     
+    @staticmethod
+    def _combine_annealings(*annealings_list):
+        fwd_annealings = []
+        rev_annealings = []
+        for ann in annealings_list:
+            if ann[0]: fwd_annealings.extend(ann[0])
+            if ann[1]: rev_annealings.extend(ann[1])
+        return fwd_annealings,rev_annealings
+    #end def
     
-    def matches_to_mixture(self, counter, t_name, matches_list):
+    def matches_to_mixture(self, counter, t_id, matches_list):
         all_annealings = []
         m_weights = [len(m) for m in matches_list]
         counter.set_subwork(len(matches_list)+1,
@@ -60,14 +76,13 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
             annealings = self._searcher.compile_duplexes_mp(counter[i], *matches)
             if annealings is None: return None
             all_annealings.append(annealings)
-        mixture = self.create_PCR_mixture(counter[-1], t_name, 
-                                          *self._combine_annealings(*all_annealings))
+        mixture = self.create_PCR_mixture(counter[-1], t_id, 
+                                          *self._extract_annealings(*all_annealings))
         counter.done()
-        return mixture
+        return mixture.save()
     #end def
     
-    
-    def find_matches(self, counter, t_name, template, mismatches):
+    def find_matches(self, counter, template, mismatches):
         all_matches = []
         counter.set_subwork(self._num_p, self._p_weights)
         for i, primer in enumerate(self._primers):
@@ -78,51 +93,50 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
         return all_matches
     #end def
     
-    
-    def find(self, counter, t_name, template, mismatches):
+    @Pstats('ProductsFinder.find')#test
+    def find(self, counter, template, mismatches):
         all_annealings = []
         counter.set_subwork(self._num_p+1,
                             self._p_weights+[0.01*self._pw_sum])
         for i, primer in enumerate(self._primers):
             if self.aborted(): return None
             annealings = self._searcher.find(counter[i], template, primer, mismatches)
-            if annealings is None: return None
+            if annealings is None: continue
             all_annealings.append(annealings)
-        mixture = self.create_PCR_mixture(counter[-1], t_name, 
-                                          *self._combine_annealings(*all_annealings))
+        if not all_annealings: return None
+        tname = pretty_rec_name(template)
+        mixture = self.create_PCR_mixture(counter[-1], tname, 
+                                          *self._extract_annealings(*all_annealings))
+        cleanup_files(all_annealings)
         counter.done()
-        return mixture
+        if not mixture: return None
+        return {tname: mixture.save()}
     #end def
     
-    
-    def batch_find(self, counter, t_names, templates, mismatches):
-        results        = dict()
-        search_results = dict()
-        counter.set_subwork(2)
-        counter[0].set_subwork(self._num_p)
-        for i, primer in enumerate(self._primers):
-            if self.aborted(): return None
-            result = self._searcher.batch_find(counter[0][i], templates, primer, mismatches)
-            if result is None: return None
-            for t_id, annealings in result.iteritems():
-                if t_id in search_results:
-                    search_results[t_id] = self._combine_annealings(search_results[t_id], annealings)
-                else: search_results[t_id] = annealings
-        print '\nPSR Simulation: creating PCR mixtures...\n'
+    @Pstats('ProductsFinder.batch_find')#test
+    def batch_find(self, counter, templates, mismatches, **kwargs):
         @MultiprocessingBase.data_mapper
-        def _worker(i, factory, search_results, t_names):
-            t_id, (fwd_annealings, rev_annealings) = search_results[i]
-            t_name = t_names[t_id]
-            mixture = factory.create_PCR_mixture(WorkCounter(), t_name, fwd_annealings, rev_annealings)
-            if not mixture: return t_name, None
-            return t_name, mixture.save()
+        def worker(template):
+            search_results = []
+            for primer in self._primers:
+                matches = self._searcher.find_matches(WorkCounter(), template, primer, mismatches)
+                if not matches: continue
+                duplexes = self._searcher.compile_duplexes(WorkCounter(), *matches)
+                if duplexes: search_results.append(duplexes)
+            if not search_results: return None
+            all_annealings = self._combine_annealings(*search_results)
+            tname = pretty_rec_name(template)
+            mixture = self.create_PCR_mixture(WorkCounter(), tname, all_annealings[0], all_annealings[1])
+            if not mixture: return None
+            return tname, mixture.save()
         @MultiprocessingBase.results_assembler
-        def _assembler(index, result, results):
-            if result[1]: results[result[0]] = result[1]
-        work = self.Work(counter=counter[1])
-        work.prepare_jobs(_worker, range(len(search_results)), None,
-                          self, search_results.items(), t_names)
-        work.set_assembler(_assembler, results)
+        def assembler(index, result, results):
+            if result: results[result[0]] = result[1]
+        results = dict()
+        counter.set_subwork(1)
+        work = self.Work(counter=counter[0])
+        work.prepare_jobs(worker, templates, None, **kwargs)
+        work.set_assembler(assembler, results)
         self.start_work(work)
         if not self.wait(work): return None
         if not results: return None
@@ -132,23 +146,23 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
 
 
 #ProductsFnder wrapped in a Manager
-def _find_matches(counter, t_name, template, mismatches, products_finder):
-    return products_finder.find_matches(counter, t_name, template, mismatches)
+def _find_matches(counter, template, mismatches, products_finder):
+    return products_finder.find_matches(counter, template, mismatches)
 
 def _matches_to_mixture(counter, t_name, matches_list, products_finder):
     mixture = products_finder.matches_to_mixture(counter, t_name, matches_list)
     if mixture is None: return None
-    return mixture.save()
+    return mixture
 #end def
 
-def _find(counter, t_name, template, mismatches, products_finder):
-    mixture = products_finder.find(counter, t_name, template, mismatches)
+def _find(counter, template, mismatches, products_finder):
+    mixture = products_finder.find(counter, template, mismatches)
     if mixture is None: return None
-    return mixture.save()
+    return mixture
 #end def
 
-def _batch_find(counter, t_names, templates, mismatches, products_finder):
-    return products_finder.batch_find(counter, t_names, templates, mismatches)
+def _batch_find(counter, templates, mismatches, products_finder, **kwargs):
+    return products_finder.batch_find(counter, templates, mismatches, **kwargs)
 #end def
         
 #mp computations

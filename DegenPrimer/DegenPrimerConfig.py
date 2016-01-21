@@ -29,7 +29,7 @@ from itertools import chain
 from .Option import Option, OptionGroup
 from .Primer import Primer
 from .SeqUtils import load_sequence
-from .StringTools import random_text
+from BioUtils.Tools.Text import random_text
 
 
 class DegenPrimerConfig(object):

@@ -21,7 +21,7 @@ Created on Jun 26, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from BioUtils.Tools.Multiprocessing import MultiprocessingBase
+from BioUtils.Tools.Multiprocessing import MultiprocessingBase, raise_tb_on_error
 from ConfigParser import SafeConfigParser
 import os, re
 
@@ -31,7 +31,7 @@ from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
 from .SecStructures import Dimer, Duplex, max_dimer_dG
-from .StringTools import hr, wrap_text, time_hr, print_exception
+from BioUtils.Tools.Text import hr, wrap_text, time_hr
 from .WorkCounter import WorkCounter
 from .iPCR_Interface import iPCR_Interface
 from . import TD_Functions as tdf
@@ -162,7 +162,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
             counter.count()
         except Exception, e:
             print '\nFailed to obtain BLAST query results from NCBI.'
-            print_exception(e)
+            print e
             return False
         self._have_blast_results = (len(self._blast_results) > 0 
                                     and max(len(record.alignments) 
@@ -221,7 +221,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         except Exception, e:
             print '\nFailed to load blast results:\n   %s\n   %s' \
                 % (self._results_filename, self._query_filename)
-            print_exception(e)
+            print e
             return False
         print '\nPreviously saved BLAST results were loaded:\n   %s\n   %s' \
               % (self._results_filename, self._query_filename)
@@ -473,6 +473,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
         self._add_report('BLAST hits', self._hits_report_filename)
     #end def
     
+    @raise_tb_on_error
     def write_reports(self):
         self.write_hits_report()
         iPCR_Interface.write_reports(self)
