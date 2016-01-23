@@ -355,39 +355,42 @@ class Duplex(object):
         duplex_string = ''
         if not dimer:
             duplex_string += fwd_sequence + '\n'
-            duplex_string += rev_sequence + '\n'
+            duplex_string += rev_sequence[::-1] + '\n'
             return duplex_string
         fwd_matches = dimer.fwd_matches
-        rev_matches = dimer.rev_matches
+        fwd_matches0 = fwd_matches[0]
+        rev_matches0 = dimer.rev_min
         #construct matches string
+        #NOTE: to test for spacer length then to set string is a little faster
+        #then just use += ' '*num
         matches = ''
         for m in xrange(dimer.num_matches):
-            if matches: matches += ' '*(fwd_matches[m]-fwd_matches[m-1]-1)
+            if matches:
+                s = (fwd_matches[m]-fwd_matches[m-1]-1)
+                if s: matches += ' '*s
             matches += '|'            
         #calculate spacers
-        if fwd_matches[0] > rev_matches[0]:
+        if fwd_matches0 > rev_matches0:
             spacer1 = ''
-            spacerM = ' '*(fwd_matches[0]+3)
-            spacer2 = ' '*(fwd_matches[0]-rev_matches[0])
+            m = (fwd_matches0+3)
+            spacerM = ' '*m if m else ''
+            s2 = (fwd_matches0-rev_matches0)
+            spacer2 = ' '*s2 if s2 else ''
         else:
-            spacer1 = ' '*(rev_matches[0]-fwd_matches[0])
-            spacerM = ' '*(rev_matches[0]+3)
+            s1 = (rev_matches0-fwd_matches0)
+            spacer1 = ' '*s1 if s1 else ''
+            m = (rev_matches0+3)
+            spacerM = ' '*m if m else ''
             spacer2 = ''
         #construct structures string
-        duplex_string += "%(spacer1)s5' %(seq1)s 3'\n" \
-            % {'spacer1':spacer1,
-               'seq1'   :fwd_sequence}
-        duplex_string += "%(spacerM)s%(matches)s\n"    \
-            % {'spacerM':spacerM,
-               'matches':matches}
-        duplex_string += "%(spacer2)s3' %(seq2)s 5'\n" \
-            % {'spacer2':spacer2,
-               'seq2'   :rev_sequence[::-1]}
+        duplex_string += "%s5' %s 3'\n" % (spacer1, fwd_sequence)
+        duplex_string += "%s%s\n" % (spacerM, matches)
+        duplex_string += "%s3' %s 5'\n" % (spacer2, rev_sequence[::-1])
         #dG
-        if dimer.dG != None:
+        if dimer.dG is not None:
             duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (tdf.PCR_P.PCR_T, dimer.dG)
         #conversion degree
-        if dimer.conversion_degree != None:
+        if dimer.conversion_degree is not None:
             duplex_string += 'conversion degree = %.4f%%\n' % (dimer.conversion_degree*100)
         return duplex_string
     #end def
