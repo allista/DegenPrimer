@@ -105,11 +105,13 @@ def test():
     tdf.PCR_P.PCR_T = 60
     
     searcher = SearchEngine(abort_event)
+    
+    cProfile.runctx('for x in xrange(10): searcher._find(WorkCounter(), template, primer, len(template), len(primer), 6)', 
+                    globals(), locals(), 'SearchEngine._find.profile')
+    
     matches = searcher._find_mp(WorkCounter(), template[:2000], primer, len(template), len(primer), 6)
-#    cProfile.runctx('for x in xrange(10): searcher._find(WorkCounter(), template, primer, len(template), len(primer), 6)', 
-#                    globals(), locals(), 'SearchEngine.find.profile')
-#    cProfile.runctx('for x in xrange(1): print searcher.compile_duplexes(WorkCounter(), *matches)', 
-#                    globals(), locals(), 'SearchEngine.find.profile')
+    cProfile.runctx('for x in xrange(1): print searcher.compile_duplexes(WorkCounter(), *matches)', 
+                    globals(), locals(), 'SearchEngine.compile_duplexes.profile')
     
     def mem_test(num):
         for _n in xrange(num):
