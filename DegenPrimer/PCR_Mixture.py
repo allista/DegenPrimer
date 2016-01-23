@@ -157,12 +157,12 @@ class MixtureFactory(AbortableBase):
     def _sort_annealings(self, hit, strand, annealings, good, bad):
         for _pos, _duplexes in annealings:
             if strand:
-                _template = Region(hit, _pos-_duplexes[0][0].fwd_len+1, _pos, strand)
+                _template = Region(hit, _pos-_duplexes[0].fwd_len+1, _pos, strand)
             else:
-                _template = Region(hit, _pos, _pos+_duplexes[0][0].fwd_len-1, strand)
+                _template = Region(hit, _pos, _pos+_duplexes[0].fwd_len-1, strand)
             good_annealings = (_pos, [], _template)
             bad_annealings  = (_pos, [], _template)
-            for _duplex, _id in _duplexes:
+            for _duplex in _duplexes:
                 #check if there are such primers in the system at all
                 duplex_with_primer = False
                 for primer in self._primers:
@@ -172,11 +172,11 @@ class MixtureFactory(AbortableBase):
                 if not duplex_with_primer: continue
                 #check 3' mismatches
                 if self._with_exonuclease: #if poly has 3'-5'-exonuclease, add to the good annealings
-                    good_annealings[1].append((_duplex, _id))
+                    good_annealings[1].append(_duplex)
                 elif _duplex.have_3_matches: #if not, check 3' annealing
-                    good_annealings[1].append((_duplex, _id))
+                    good_annealings[1].append(_duplex)
                 else:
-                    bad_annealings[1].append((_duplex, _id))
+                    bad_annealings[1].append(_duplex)
             #add annealings
             if good_annealings[1]: good[strand].append(good_annealings)
             if bad_annealings[1]:  bad.append(bad_annealings)

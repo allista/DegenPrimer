@@ -24,8 +24,7 @@ Created on Mar 15, 2013
 from copy import deepcopy
 
 from BioUtils.Tools.Text import hr
-import TD_Functions as tdf
-
+from . import TD_Functions as tdf
 
 class Region(object):
     '''Region of a sequence.'''
@@ -41,7 +40,7 @@ class Region(object):
         self.end     = end
         self.forward = forward
     #end def
-
+    
     def pretty_print(self, with_name=True):
         rep  = ''
         if with_name:
@@ -90,21 +89,18 @@ class Product(Region):
     region bounded by start and end positions which correspond to 3' ends of 
     primers (forward and reverse) which produce this product.'''
     __slots__ = ['quantity', 'cycles',
-                 '_fwd_ids', '_rev_ids', 
                  'fwd_primers', 'rev_primers', 
                  '_fwd_margin', '_rev_margin',
                  'fwd_template', 'rev_template',
                  ]
     
     def __init__(self, template_name, start, end, 
-                 fwd_primers=None, rev_primers=None):
+                 fwd_primers=(), rev_primers=()):
         Region.__init__(self, template_name, start, end, forward=True)
         #quantity and number of cycles
         self.quantity     = 0
         self.cycles       = 0
         #primers and templates
-        self._fwd_ids     = set()
-        self._rev_ids     = set()
         self.fwd_primers  = set()
         self.rev_primers  = set()
         self._fwd_margin  = self.start-1
@@ -118,7 +114,14 @@ class Product(Region):
             self.add_rev_primer(primer)
     #end def
     
-    
+    @staticmethod
+    def _rep_primers(primers, tostr=repr):
+        rep = ''
+        primers = sorted(primers, key=lambda x: x.name)
+        for primer in primers:
+            rep += primer.name + ':\n' + tostr(primer) + '\n'
+        return rep
+            
     def pretty_print(self, with_name=True, include_fwd_3_mismatch=True):
         rep  = Region.pretty_print(self, with_name=with_name)
         rep += '\n'
@@ -132,19 +135,12 @@ class Product(Region):
         rep += self.rev_template.pretty_print(with_name=False)
         rep += '\n'
         rep += hr(' forward primers ')
-        fwd_primers = list(self.fwd_primers)
-        fwd_primers.sort(key=lambda x: x[1])
-        for primer, _id in fwd_primers:
-            rep += _id + ':\n' + primer.print_most_stable(include_fwd_3_mismatch) + '\n'
+        rep += self._rep_primers(self.fwd_primers, lambda p: p.print_most_stable(include_fwd_3_mismatch))
         rep += '\n'
         rep += hr(' reverse primers ')
-        rev_primers = list(self.rev_primers)
-        rev_primers.sort(key=lambda x: x[1])
-        for primer, _id in rev_primers:
-            rep += _id + ':\n' + primer.print_most_stable(include_fwd_3_mismatch) + '\n'
+        rep += self._rep_primers(self.rev_primers, lambda p: p.print_most_stable(include_fwd_3_mismatch))
         return rep
     #end def
-    
     
     def __str__(self):
         rep  = Region.pretty_print(self)
@@ -155,18 +151,11 @@ class Product(Region):
         rep += '\nreverse annealing site:\n'
         rep += str(self.rev_template)
         rep += '\nforward primers:\n'
-        fwd_primers = list(self.fwd_primers)
-        fwd_primers.sort(key=lambda x: x[1])
-        for primer, _id in fwd_primers:
-            rep += _id + ':\n' + repr(primer) + '\n'
+        rep += self._rep_primers(self.fwd_primers)
         rep += '\nreverse primers:\n'
-        rev_primers = list(self.rev_primers)
-        rev_primers.sort(key=lambda x: x[1])
-        for primer, _id in rev_primers:
-            rep += _id + ':\n' + repr(primer) + '\n'
+        rep += self._rep_primers(self.rev_primers)
         return rep
     #end def
-    
     
     def __iadd__(self, T):
         if self.name != T.name \
@@ -190,16 +179,15 @@ class Product(Region):
         return self
     #end def
     
-    
     @property
     def fwd_ids(self):
-        _ids = [primer[1] for primer in self.fwd_primers]
+        _ids = [primer.name for primer in self.fwd_primers]
         _ids.sort() 
         return _ids
     
     @property
     def rev_ids(self): 
-        _ids = [primer[1] for primer in self.rev_primers]
+        _ids = [primer.name for primer in self.rev_primers]
         _ids.sort() 
         return _ids
 
@@ -207,7 +195,7 @@ class Product(Region):
         if primer in self.fwd_primers: return
         self.fwd_primers.add(primer)
         self.fwd_template += Region(self.name, 
-                                    max(self.start-primer[0].fwd_len, 1), 
+                                    max(self.start-primer.fwd_len, 1), 
                                     max(self.start-1, 1), forward=True)
     #end def
         
@@ -216,6 +204,6 @@ class Product(Region):
         self.rev_primers.add(primer)
         self.rev_template += Region(self.name, 
                                     self.end+1, 
-                                    self.end+primer[0].fwd_len, forward=False)
+                                    self.end+primer.fwd_len, forward=False)
     #end def
 #end class

@@ -121,8 +121,8 @@ class SearchEngine(MultiprocessingBase):
         unambiguous components of the primer'''
         duplexes = []
         for var in primer.seq_records:
-            dup = Duplex(str(var.seq), str(template[position:position+p_len]), revcomp=True)
-            if dup: duplexes.append((dup, var.id))
+            dup = Duplex(str(var.seq), str(template[position:position+p_len]), name=var.id, revcomp=True)
+            if dup: duplexes.append(dup)
         if reverse: return t_len+1-(position+p_len), tuple(duplexes)
         else: return position+p_len, tuple(duplexes)
     #end def
@@ -146,7 +146,7 @@ class SearchEngine(MultiprocessingBase):
         if len(fwd_matches): counter[0].set_work(len(fwd_matches))
         if len(rev_matches): counter[1].set_work(len(rev_matches))
         #prepare and start two sets of jobs
-        with tdf.PCR_parameters():
+        with tdf.AcquireParameters():
             fwd_work = self.Work(timeout=0.1, counter=counter[0])
             rev_work = self.Work(timeout=0.1, counter=counter[1])
             fwd_work.prepare_jobs(self._compile_duplexes_mapper, 
@@ -176,7 +176,7 @@ class SearchEngine(MultiprocessingBase):
         '''Compile duplexes for both strands of a template'''
         if not len(fwd_matches)+len(rev_matches): return None
         counter.set_work(len(fwd_matches)+len(rev_matches))
-        with tdf.PCR_parameters():
+        with tdf.AcquireParameters():
             fwd_results = []
             for pos in fwd_matches:
                 if self.aborted(): break

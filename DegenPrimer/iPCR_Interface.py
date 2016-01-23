@@ -29,6 +29,7 @@ from BioUtils.Tools.Output import simple_timeit
 from .PCR_ProductsFinder import PCR_ProductsFinder
 from .PCR_Simulation import PCR_Simulation_Interface, PCR_Simulation
 from .ReporterInterface import ReporterInterface
+from . import TD_Functions as tdf
 
 class iPCR_Interface(PCR_Simulation_Interface, ReporterInterface):
     '''Interface class to create facilities which use PCR_Simulation'''
@@ -108,9 +109,10 @@ class iPCR_Interface(PCR_Simulation_Interface, ReporterInterface):
     
     @raise_tb_on_error
     def write_reports(self):
-        with simple_timeit('write products'):#test
-            self.write_products_report()
-        with simple_timeit('write PCR report'):#test
-            self.write_report()
+        with tdf.AcquireParameters():
+            with simple_timeit('write products'):#test
+                self.write_products_report()
+            with simple_timeit('write PCR report'):#test
+                self.write_report()
     #end def
 #end class

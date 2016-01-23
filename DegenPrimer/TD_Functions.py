@@ -48,9 +48,9 @@ PCR_P  = PCR_Parameters()
 _PCR_P = None
 
 @contextmanager
-def PCR_parameters():
+def AcquireParameters():
     global _PCR_P, PCR_P
-    assert _PCR_P is None, 'TD_Functions: PCR parameters are already aquired.'
+    assert _PCR_P is None, 'TD_Functions: PCR parameters are already acquired.'
     try: 
         _PCR_P, PCR_P = PCR_P, deepcopy(PCR_P)
         yield

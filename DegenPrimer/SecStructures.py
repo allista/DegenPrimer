@@ -19,9 +19,9 @@ Created on Jun 23, 2012
 '''
 
 from .Equilibrium import Reaction
+
 from BioUtils.Tools.Text import hr
 from . import TD_Functions as tdf
-
 
 #default filtration parameters
 max_dimer_dG   = -3  #kcal/mol #corresponds to equilibrium constant ~100  and conversion degree ~1e-3
@@ -92,6 +92,7 @@ class Dimer(object):
         self.fwd_mismatch = None
     #end def
     
+    
     def __hash__(self):
         return hash((self.fwd_matches, self._offset))
     
@@ -157,7 +158,7 @@ class Dimer(object):
             dimers.append(l_dimer)
         return dimers
     #end def
-       
+    
     
     def add(self, fwd, rev):
         if self._offset is None:
@@ -177,7 +178,7 @@ class Dimer(object):
         as an anchor; if anchor is not provided, sequences are left-aligned.
         The forward sequence should be 5'->3' oriented.
         The revcom sequence should be 3'->5' oriented'''
-        dimer    = cls()
+        dimer = cls()
         dimer._offset = offset
         dimer.fwd_matches = []
         if offset > 0: _range = range(offset, min(len(forward), len(revcomp)+offset))
@@ -223,18 +224,19 @@ class Hairpin(object):
 class Duplex(object):
     '''Representation of a particular DNA:DNA duplex'''
     __slots__ = ['_fwd_sequence', '_rev_sequence',
-                 'fwd_len', 'rev_len', 
+                 'fwd_len', 'rev_len', 'name',
                  '_dimers',
                  '_nonzero',
                  '_fwd_matches', '_fwd_mismatches', 'fwd_3_overhang']
     
-    def __init__(self, fwd_seq, rev_seq, dimer=None, revcomp=False):
+    def __init__(self, fwd_seq, rev_seq, name='', dimer=None, revcomp=False):
         '''
         fwd_seq -- string, 5'->3' sequence of forward strand
         rev_seq -- string, 5'->3' or 3'->5' sequence of reverse strand
         dimer, optinal -- an initial Dimer structure
         revcom  -- indicates rev_seq orientation: False means 5'->3' 
         '''
+        self.name            = name
         self.fwd_len         = len(fwd_seq)
         self.rev_len         = len(rev_seq)
         self._fwd_sequence   = fwd_seq
@@ -250,7 +252,7 @@ class Duplex(object):
         self._recalculate()
     #end def
     
-    
+        
     def __nonzero__(self): return self._nonzero
     
     def __hash__(self):

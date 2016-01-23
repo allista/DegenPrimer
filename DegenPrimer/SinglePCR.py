@@ -85,7 +85,7 @@ class SinglePCR(PCR_Base):
         _duplexes, _template = annealing
         template = SinglePCR._find_template(_template, templates)
         template_hash = hash(template)
-        for _duplex, _id in _duplexes:
+        for _duplex in _duplexes:
             for _dimer in _duplex.dimers:
                 r_hash = hash((_duplex.fwd_seq, _dimer, template))
                 reactions[r_hash] = Reaction(_dimer.K, 
@@ -134,7 +134,7 @@ class SinglePCR(PCR_Base):
     def _calculate_first_cycle(self, primers, template, product_len, 
                                   equilibrium, cur_state):
         strand_products = dict()
-        for primer, _id in primers:
+        for primer in primers:
             strand_products[primer.fwd_seq] = [0, 0]
             for dimer in primer.dimers:
                 if dimer.fwd_mismatch and not self._with_exonuclease: continue
