@@ -110,7 +110,7 @@ def test():
                     globals(), locals(), 'SearchEngine._find.profile')
     
     matches = searcher._find_mp(WorkCounter(), template[:2000], primer, len(template), len(primer), 6)
-    cProfile.runctx('for x in xrange(1): print searcher.compile_duplexes(WorkCounter(), *matches)', 
+    cProfile.runctx('for x in xrange(10): print searcher.compile_duplexes(WorkCounter(), *matches)', 
                     globals(), locals(), 'SearchEngine.compile_duplexes.profile')
     
     def mem_test(num):
