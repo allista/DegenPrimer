@@ -121,7 +121,11 @@ def test():
         sys.exit()
     else:
         with open(f, 'r') as inp:
-            assert str(dups) == inp.read()
+            if str(dups) != inp.read():
+                with open(f+'.wrong', 'w') as out:
+                    out.write(str(dups))
+                raise RuntimeError('compiled duplexes differ from the standard')
+            
     
     def mem_test(num):
         for _n in xrange(num):
