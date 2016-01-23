@@ -18,6 +18,7 @@ Created on Jun 23, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+import numpy as np
 from .Equilibrium import Reaction
 
 from BioUtils.Tools.Text import hr
@@ -58,18 +59,15 @@ class Dimer(object):
     Structure of a dimer without bulges (i.e. asymmetrical loops):
     forward matches is a list of nucleotide indices of forward sequence 
     directed 5'->3' that are paired to reverse strand.
-    offset is a shift of forward indexes relative to the corresponding 
-    reverse indexes: positive offset means that forward strand is shifted to 
-    the right relative to the reverse strand; negative offset means shift to the left.
-    
-    Thus, for example:
+    The offset is a forward-strand index of the reverse strand 3'-end. 
+    For example:
                           234  7 :fwd_matches 
-                        ATGCACGA :offset=-2
+                        ATGCACGA :offset=2
                           |||  |
                           CGTTATGT
-                          012  5 :rev_matches[n] = fwd_matches[n]+offset
+                          012  5 :rev_matches[n] = fwd_matches[n]-offset
     '''
-    __slots__ = ['fwd_matches', '_offset', 'num_matches',
+    __slots__ = ['fwd_matches', 'offset', 'num_matches',
                  'conversion_degree', 'dG', 'K',
                  'fwd_mismatch']
     
@@ -78,11 +76,11 @@ class Dimer(object):
         #a Duplex may have several associated dimers, it's convenient to store them here 
         if fwd_matches:
             self.fwd_matches  = tuple(sorted(fwd_matches))
-            self._offset      = offset
+            self.offset       = offset
             self.num_matches  = len(self.fwd_matches)
         else:
             self.fwd_matches  = tuple()
-            self._offset      = None
+            self.offset       = None
             self.num_matches  = 0    
         #thermodynamic parameters
         self.conversion_degree = None
@@ -92,9 +90,8 @@ class Dimer(object):
         self.fwd_mismatch = None
     #end def
     
-    
     def __hash__(self):
-        return hash((self.fwd_matches, self._offset))
+        return hash((self.fwd_matches, self.offset))
     
     def __eq__(self, other):
         return self.__hash__() == other.__hash__()
@@ -102,33 +99,27 @@ class Dimer(object):
     def __ne__(self, other):
         return self.__hash__() != other.__hash__()
     
-    def __nonzero__(self):
-        if self.num_matches > 0: return True
-        else: return False
-    
-    
-    @property
-    def offset(self): return self._offset
+    def __nonzero__(self): return self.num_matches > 0
     
     @property
     def rev_matches(self):
-        return tuple(sorted(i - self._offset for i in self.fwd_matches))
+        return np.array(self.fwd_matches)-self.offset
     
     @property
     def fwd_min(self):
-        return min(self.fwd_matches)
+        return self.fwd_matches[0]
     
     @property
     def rev_min(self):
-        return min(self.fwd_matches)-self._offset
+        return self.fwd_matches[0]-self.offset
     
     @property
     def fwd_max(self):
-        return max(self.fwd_matches)
+        return self.fwd_matches[-1]
     
     @property
     def rev_max(self):
-        return max(self.fwd_matches)-self._offset
+        return self.fwd_matches[-1]-self.offset
     
     
     @property
@@ -152,22 +143,28 @@ class Dimer(object):
         for l in xrange(num_loops):
             r_dimer = l_dimer
             for r in xrange(num_loops,l,-1):
-                r_dimer = Dimer(set(r_dimer.fwd_matches)-margins[r], self._offset)
+                r_dimer = Dimer(set(r_dimer.fwd_matches)-margins[r], self.offset)
                 dimers.append(r_dimer)
-            l_dimer = Dimer(set(l_dimer.fwd_matches)-margins[l], self._offset)
+            l_dimer = Dimer(set(l_dimer.fwd_matches)-margins[l], self.offset)
             dimers.append(l_dimer)
         return dimers
     #end def
     
+    def __enter__(self):
+        self.fwd_matches = list(self.fwd_matches)
+        return self
+    
+    def __exit__(self, *ext_info):
+        self.fwd_matches = tuple(sorted(self.fwd_matches))
     
     def add(self, fwd, rev):
-        if self._offset is None:
-            self._offset = fwd-rev
-        elif self._offset != fwd-rev:
+        if self.offset is None:
+            self.offset = fwd-rev
+        elif self.offset != fwd-rev:
             raise ValueError('Dimer.add: fwd and rev indexes should be at the '
                              'same distance as all other match pairs. '
                              'Asymmetrical loops are not allowed.')
-        self.fwd_matches += (fwd,)
+        self.fwd_matches.append(fwd)
         self.num_matches += 1
     #end def
     
@@ -179,10 +176,10 @@ class Dimer(object):
         The forward sequence should be 5'->3' oriented.
         The revcom sequence should be 3'->5' oriented'''
         dimer = cls()
-        dimer._offset = offset
+        dimer.offset = offset
         dimer.fwd_matches = []
-        if offset > 0: _range = range(offset, min(len(forward), len(revcomp)+offset))
-        else: _range = range(0, min(len(forward)-offset, len(revcomp)+offset))
+        if offset > 0: _range = xrange(offset, min(len(forward), len(revcomp)+offset))
+        else: _range = xrange(0, min(len(forward)-offset, len(revcomp)+offset))
         for i in _range:
             if forward[i] == revcomp[i-offset]:
                 #add indexes directly is much faster than to call Dimer.add method
@@ -192,7 +189,6 @@ class Dimer(object):
         return dimer
     #end def
 #end class
-
 
 class Hairpin(object):
     '''
@@ -646,9 +642,10 @@ class SecStructures(object):
                 rev_right = rev_len
             #scan for matches
             dimer = Dimer()
-            for fwd,rev in zip(xrange(fwd_left,fwd_right),xrange(rev_left,rev_right)):
-                if(fwd_str[fwd] == rev_str[rev]):
-                    dimer.add(fwd, rev)
+            with dimer:
+                for fwd,rev in zip(xrange(fwd_left,fwd_right),xrange(rev_left,rev_right)):
+                    if(fwd_str[fwd] == rev_str[rev]):
+                        dimer.add(fwd, rev)
             #if found some
             if dimer:
                 #add a copy to the hairpins dict to search for hairpin structures later
