@@ -21,8 +21,6 @@ Created on Nov 16, 2012
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from BioUtils.Tools.Debug import Timeit #test
-
 from BioUtils.Tools.Multiprocessing import Parallelizer
 from BioUtils.Tools.UMP import FuncManager, at_manager
 from BioUtils.Tools.tmpStorage import register_tmp_file, from_shelf
@@ -203,7 +201,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
     
     
     @classmethod
-    @Timeit()
     def _construct_histogram(cls, main_title, products, reaction_ends=None, with_titles=True, sort=True):
         #construct histogram
         histogram  = []
@@ -244,7 +241,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
     
     
     @classmethod
-    @Timeit()
     def _format_histogram(cls, title, histogram):
         #maximum column name width and value
         max_value = max(c[1] for c in histogram)
@@ -275,7 +271,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return histogram_string
     #end def
     
-    @Timeit()
     def _construct_electrophoresis(self, products):
         max_len      = max(len(p) for p in products)
         window       = int(max_len*self._window_percent)
@@ -296,7 +291,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return self._format_electrophoresis(window, phoresis)
     #end def
     
-    @Timeit()
     def _format_electrophoresis(self, window, phoresis):
         text_width  = Text.text_width
         max_line    = max(min(p.concentration for p in self._primers)*self._max_amplicon, 
@@ -323,7 +317,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return phoresis_text
     #end def
     
-    @Timeit()
     def per_hit_header(self, hit):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -351,7 +344,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
         header_string += '\n'
         return header_string
 
-    @Timeit()
     def all_products_histogram(self):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -366,7 +358,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
                                          None, with_titles=True, sort=False)
     #end def
     
-    @Timeit()
     def per_hit_histogram(self, hit):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -375,7 +366,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
                                          self._reaction_ends, with_titles=False)
     #end def
     
-    @Timeit()
     def per_hit_electrophoresis(self, hit):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -383,7 +373,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return self._construct_electrophoresis(products)
     #end def
     
-    @Timeit()
     def all_graphs_grouped_by_hit(self):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
@@ -400,7 +389,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
             all_graphs += '\n\n'
         return all_graphs
     
-    @Timeit()
     def format_report_header(self):
         header_string  = ''
         header_string += hr(' PCR conditions ')
@@ -421,7 +409,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return header_string
     #end def
     
-    @Timeit()
     def format_quantity_explanation(self):
         expl_string  = ''
         expl_string += hr(' estimation of PCR products concentrations ')
@@ -442,7 +429,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return expl_string
     #end def
     
-    @Timeit()
     def format_products_report(self):
         prod_string  = ''
         prod_string += wrap_text('For each target sequence a list of possible '
