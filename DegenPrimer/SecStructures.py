@@ -19,16 +19,15 @@ Created on Jun 23, 2012
 '''
 
 import numpy as np
-from .Equilibrium import Reaction
 
 from BioUtils.Tools.Text import hr
-from . import TD_Functions as tdf
 
+from .Equilibrium import Reaction
+from . import TD_Functions as tdf
 #default filtration parameters
 max_dimer_dG   = -3  #kcal/mol #corresponds to equilibrium constant ~100  and conversion degree ~1e-3
 max_hairpin_dG =  3  #kcal/mol #corresponds to equilibrium constant ~0.01 and conversion degree ~1e-2
 min_K          = 100 #minimum equilibrium constant: annealing reactions with EC less than this will not be taken into account
-
 
 rc_map = {'A':'T',
           'T':'A',
@@ -247,7 +246,6 @@ class Duplex(object):
         self._nonzero        = False 
         self._recalculate()
     #end def
-    
         
     def __nonzero__(self): return self._nonzero
     
@@ -271,7 +269,6 @@ class Duplex(object):
     
     def __repr__(self): return str(self)
     
-    
     def print_most_stable(self, include_fwd_3_mismatch=True):
         '''Print the most stable duplex variant.
         If include_fwd_3_mismatch is False, the most stable variant *without*
@@ -285,7 +282,6 @@ class Duplex(object):
         return duplex_str+self.print_dimer(self._fwd_sequence, self._rev_sequence, 
                                            self._dimers[0])
     #end def
-    
     
     def _recalculate(self):
         filtered_dimers = []
@@ -319,7 +315,6 @@ class Duplex(object):
             else: self._fwd_matches.append(i)
     #end def
     
-    
     @property
     def fwd_seq(self): return self._fwd_sequence
     
@@ -348,7 +343,6 @@ class Duplex(object):
     
     @property
     def have_3_matches(self): return bool(self._fwd_matches)
-
     
     @classmethod
     def print_dimer(cls, fwd_sequence, rev_sequence, dimer):
@@ -672,8 +666,8 @@ class SecStructures(object):
                     if dimer_hash not in dimers:
                         dimers[dimer_hash] = min_dG_dimer
                         #check for 3' dimer
-                        if max(min_dG_dimer.fwd_matches) > fwd_len-4 \
-                        or min(min_dG_dimer.rev_matches) < 3:
+                        if min_dG_dimer.fwd_matches[-1] > fwd_len-4 \
+                        or min_dG_dimer.rev_min < 3:
                             self._3prim_dimers += 1
                             if self._min_3prim_dimer_dG == None \
                             or self._min_3prim_dimer_dG > min_dG:
@@ -716,7 +710,7 @@ class SecStructures(object):
                     if h_hash not in hairpins:
                         hairpins[h_hash] = min_dG_hairpin
                         #check for 3' structure
-                        if max(min_dG_hairpin.rev_matches) > seq_len-4:
+                        if min_dG_hairpin.rev_matches[0] > seq_len-4:
                             self._3prim_hairpins += 1
                             if self._min_3prim_hairpin_dG == None \
                             or self._min_3prim_hairpin_dG > min_dG:
@@ -732,7 +726,7 @@ class SecStructures(object):
         dimer_string = str(Duplex.print_dimer(seq1, seq2, dimer))
         #check for 3' dimer
         if dimer.fwd_matches[-1] > len(seq1)-4 or \
-           dimer.rev_matches[0]  < 3:
+           dimer.rev_min < 3:
             dimer_string += '(3\'-dimer)\n'
         dimer_string += '\n'
         return dimer_string
@@ -791,12 +785,12 @@ class SecStructures(object):
         hairpin_string = ''
         fwd_matches = hairpin.fwd_matches
         rev_matches = hairpin.rev_matches
-        loop        = (min(rev_matches) - max(fwd_matches)) - 1
+        loop        = (rev_matches[-1] - fwd_matches[-1]) - 1
         odd_loop    = loop%2
         half_loop   = (loop-odd_loop)/2
-        fwd_tail    = min(fwd_matches) 
-        rev_tail    = len(seq) - max(rev_matches) - 1
-        break_pos   = max(fwd_matches) + half_loop + 1
+        fwd_tail    = fwd_matches[0] 
+        rev_tail    = len(seq) - rev_matches[0] - 1
+        break_pos   = fwd_matches[-1] + half_loop + 1
         #construct matches string
         matches = ''
         for m in xrange(len(fwd_matches)):
