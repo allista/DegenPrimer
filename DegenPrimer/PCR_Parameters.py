@@ -20,7 +20,7 @@ Created on Mar 13, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from math import sqrt
+from math import sqrt, log
 from multiprocessing import Value
 from textwrap import dedent
 
@@ -65,7 +65,7 @@ class PCR_Parameters_Base(object):
 class PCR_Parameters_Copy(PCR_Parameters_Base): pass
 class PCR_Parameters(PCR_Parameters_Base):
     __metaclass__ = PCR_P_Meta
-    parameters    = ['Mg', 'Na', 'dNTP', 'DNA', 'DMSO', 'PCR_T', 'Na_eq']
+    parameters    = ['Mg', 'Na', 'dNTP', 'DNA', 'DMSO', 'PCR_T', 'Na_eq', 'Na_eq_log']
     
     def __init__(self):
         #standard PCR conditions
@@ -83,6 +83,7 @@ class PCR_Parameters(PCR_Parameters_Base):
         all concentrations should be in mM (Ahsen et al., 2001)'''
         self._Na_eq.value = (self._Na.value + 
                              sqrt((self._Mg.value - self._dNTP.value)*14.4))
+        self._Na_eq_log.value = log(self._Na_eq.value)
     #end def
     
     def __deepcopy__(self, memo):
