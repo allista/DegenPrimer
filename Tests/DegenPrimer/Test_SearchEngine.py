@@ -110,8 +110,18 @@ def test():
                     globals(), locals(), 'SearchEngine._find.profile')
     
     matches = searcher._find_mp(WorkCounter(), template[:2000], primer, len(template), len(primer), 6)
-    cProfile.runctx('for x in xrange(10): print searcher.compile_duplexes(WorkCounter(), *matches)', 
+    cProfile.runctx('for x in xrange(10): searcher.compile_duplexes(WorkCounter(), *matches)', 
                     globals(), locals(), 'SearchEngine.compile_duplexes.profile')
+    
+    f = 'test_search_results.txt'
+    dups = searcher.compile_duplexes(WorkCounter(), *matches)
+    if not os.path.isfile(f):
+        with open(f, 'w') as out:
+            out.write(str(dups))
+        sys.exit()
+    else:
+        with open(f, 'r') as inp:
+            assert str(dups) == inp.read()
     
     def mem_test(num):
         for _n in xrange(num):
