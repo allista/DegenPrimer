@@ -19,7 +19,6 @@ Created on Jan 1, 2013
 '''
 
 from BioUtils.Tools.Debug import Pstats #test
-
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase, aborted, cpu_count
 from BioUtils.Tools.tmpStorage import to_shelf
 from array import array
@@ -43,9 +42,9 @@ class SearchEngine(MultiprocessingBase):
     _unambiguous = array('b','ATGC')  #ATGC characters as byte array
     
     #alphabet mappings to the 3d roots of unity for templates and patterns
-    _T_AT_mapping = dict(zip(_unambiguous, (_w_3_1,_w_3_2,0,0))) 
+    _T_AT_mapping = tuple(zip(_unambiguous, (_w_3_1,_w_3_2,0,0))) 
     
-    _T_GC_mapping = dict(zip(_unambiguous, (0,0,_w_3_1,_w_3_2)))
+    _T_GC_mapping = tuple(zip(_unambiguous, (0,0,_w_3_1,_w_3_2)))
 
     _P_AT_mapping = {'A':_w_3_2,
                      'T':_w_3_1,
@@ -91,14 +90,7 @@ class SearchEngine(MultiprocessingBase):
     def set_max_chunk(cls, chunk_size):
         cls._max_chunk_size = chunk_size
     
-
-    @staticmethod
-    def _map_letter(letter, _map):
-        try: return _map[letter]
-        except KeyError: return 0
-    #end def
-    
-    
+   
     @classmethod
     def _map_pattern(cls, pattern, map_len):
         '''Map pattern sequence to an alphabet of 3d roots of unity.'''
@@ -107,8 +99,8 @@ class SearchEngine(MultiprocessingBase):
         AT_map = np.zeros(map_len, dtype=complex)
         GC_map = np.zeros(map_len, dtype=complex)
         for i,letter in enumerate(pattern):
-            AT_map[i] = cls._map_letter(letter, cls._P_AT_mapping)
-            GC_map[i] = cls._map_letter(letter, cls._P_GC_mapping)
+            AT_map[i] = cls._P_AT_mapping[letter]
+            GC_map[i] = cls._P_GC_mapping[letter]
         return (AT_map, GC_map)
     #end def
     
@@ -191,7 +183,6 @@ class SearchEngine(MultiprocessingBase):
                                                                t_len, p_len, reverse=True)
                 if duplexes[1]: rev_results.append(duplexes)
                 counter.count()
-        #if aborted or no results, return None
         if self.aborted(): return None
         if not fwd_results: fwd_results = None
         if not rev_results: rev_results = None
@@ -213,14 +204,12 @@ class SearchEngine(MultiprocessingBase):
         t_AT_map = np.fromiter(array('b',t_chunk), dtype=complex) 
         t_AT_map.resize(c_size)
         t_GC_map = t_AT_map.copy()
-        for k,v in cls._T_AT_mapping.iteritems():
-            t_AT_map[t_AT_map == k] = v
-        for k,v in cls._T_GC_mapping.iteritems():
-            t_GC_map[t_GC_map == k] = v
+        for k,v in cls._T_AT_mapping: t_AT_map[t_AT_map == k] = v
+        for k,v in cls._T_GC_mapping: t_GC_map[t_GC_map == k] = v
         AT_score = ifft(fft(t_AT_map[::-1])*p_fft[0])[::-1][:c_stride]
         GC_score = ifft(fft(t_GC_map[::-1])*p_fft[1])[::-1][:c_stride]
         score    = AT_score.real + GC_score.real
-        score    = (score + correction - score/3.0)
+        score    = (score*(2.0/3.0) + correction)
         return score
     #end def
     
