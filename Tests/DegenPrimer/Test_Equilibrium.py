@@ -20,53 +20,31 @@ Created on 2016-01-14
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import os
-from time import sleep
-_pid = -1
-abort_event = None
-def sig_handler(signal, frame):
-    if _pid != os.getpid(): return
-    abort_event.set()
-    sleep(0.1)
-#end def
+from BioUtils.Tools.Multiprocessing import MPMain
 
-
-def test():
-    from DegenPrimer.WorkCounter import WorkCounter
-    from DegenPrimer.Equilibrium import Equilibrium
-    #setup signal handler
-    import signal
-    signal.signal(signal.SIGINT,  sig_handler)
-    signal.signal(signal.SIGTERM, sig_handler)
-    signal.signal(signal.SIGQUIT, sig_handler)
+class Equilibrium_Test(MPMain):
+    def test(self): self()
     
-    import cProfile, sys
-    from multiprocessing import Event
-    import shelve
+    def _main(self):
+        from DegenPrimer.WorkCounter import WorkCounter
+        from DegenPrimer.Equilibrium import Equilibrium, EquilibriumSolver, EquilibriumBase
+        import cProfile
+        import shelve
+        
+        db = shelve.open('../data/reactions.shelve', 'r', protocol=-1)
+        reactions = db['reactions']
+        concentrations = db['concentrations']
+        
+        print len(reactions)
+        print len(concentrations)
+        
+        cProfile.runctx('''for i in xrange(1):
+        eq = EquilibriumSolver(self.abort_event, reactions, concentrations, 1e-10)
+        eq.calculate()''', 
+        globals(), locals(),
+        'EquilibriumSolver.profile')
     
-    abort_event = Event()
-    _pid = os.getpid()
-#    os.chdir('../')
-    
-    db = shelve.open('../results/Equilibrium-test.new', 'r', protocol=-1)
-    reactions = db['reactions']
-    concentrations = db['concentrations']
-    
-    print len(reactions)
-    print len(concentrations)
-    
-    eq = Equilibrium(abort_event, reactions, concentrations, 1e-10)
-    eq.calculate(WorkCounter())
-    print eq.objective_value
-    print eq.solution
-    
-    sys.exit(0)
-    
-    cProfile.run('''
-for i in xrange(size):
-    eq_system = Equilibrium(reactions, C_dict, 1e-10)
-    solutions.append(eq_system.calculate())
-''',
-'equilibrium.profile')
-
-    print 'Done'
+        print 'Done'
+        
+if __name__ == '__main__':
+    Equilibrium_Test()
