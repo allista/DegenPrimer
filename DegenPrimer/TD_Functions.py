@@ -185,22 +185,20 @@ def dimer_dG_corrected(dimer, seq1, seq2):
         f_next  = fwd_matches[i+1]
         r_match = f_match-offset
         r_next  = f_next-offset
+        gap     = f_next-f_match
         #if either || or |x| or |xx|
-        if f_next-f_match < 4:
+        if gap < 4:
             pair    = seq_str[f_match:f_match+2]
             reverse = rev_str[r_match:r_match+2]
             #dH and salt-corrected dS
             dP  = NN.int_dPar_37(pair, reverse)
             dH += dP.dH; dS += dP.dS
-            #if ||
-            if f_next-f_match == 1: continue
             #if |x| or |xx|
-            elif f_next-f_match < 4:
+            if gap > 1:
                 pair1    = rev_str[r_next-1:r_next+1][::-1]
                 reverse1 = seq_str[f_next-1:f_next+1][::-1]
                 dP  = NN.int_dPar_37(pair1, reverse1)
                 dH += dP.dH; dS += dP.dS
-                continue
         #loop
         else:
             loop_seq = seq_str[f_match:f_next+1]
@@ -252,22 +250,20 @@ def hairpin_dG_corrected(hairpin, seq):
         f_next  = fwd_matches[i+1]
         r_match = rev_matches[i]
         r_next  = rev_matches[i+1]
+        gap     = f_next-f_match
         #if either || or |x| or |xx|
-        if f_next-f_match < 4:
+        if gap < 4:
             pair    = seq_str[f_match:f_match+2]
             reverse = seq_str[r_match-1:r_match+1][::-1]
             #dH and salt-corrected dS
             dP  = NN.int_dPar_37(pair, reverse)
             dH += dP.dH; dS += dP.dS
-            #if ||
-            if f_next-f_match == 1: continue
             #if |x| or |xx|
-            elif f_next-f_match < 4:
+            if gap > 1:
                 pair1    = seq_str[r_next:r_next+2]
                 reverse1 = seq_str[f_next-1:f_next+1][::-1]
                 dP  = NN.int_dPar_37(pair1, reverse1)
                 dH += dP.dH; dS += dP.dS
-                continue
         #loop
         else:
             loop_seq = seq_str[f_match:f_next+1]
