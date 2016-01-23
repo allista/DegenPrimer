@@ -33,47 +33,62 @@ import os
 from .SeqUtils import unambiguous_sequences
 
 ###############################################################################
-def _load_csv(filenames):
-    '''Load a csv (tab delimited, quoting character ") file into a dictionary of 
-    dicts, assuming that the first row and first column define names, and each cell 
-    contains float value. The file is loaded from the first existing file in the 
-    given list of paths'''
-    #check filepaths provided
-    csv_file = None
-    csv_filename = None
-    for filename in filenames:
-        if os.path.isfile(filename):
-            csv_file = open(filename, 'rb')
-            csv_filename = filename
-            break
-    if not csv_file:
-        raise ImportError('UnifiedNN._load_csv: file %s not found in the system.' \
-                          % os.path.basename(filenames[0]))
-    #try to load csv
-    try:
-        csv_reader = list(csv.reader(csv_file, delimiter='\t', quotechar='"'))
-    except:
-        print 'UnifiedNN._load_csv: exception occured while trying to load %s' \
-        % csv_filename
-        raise
-    #read csv and fill the dict
-    table_dict = dict()
-    #dictionary of column names
-    row_dict   = dict()
-    for ci in xrange(1,len(csv_reader[0])):
-        row_dict[ci] = csv_reader[0][ci]
-    #read row by row
-    for row in csv_reader[1:]: #skip the first row
-        table_dict[row[0]] = dict()
-        for ci in row_dict:
-            table_dict[row[0]][row_dict[ci]] = float(row[ci])
-    return table_dict
-#end def
-
 
 def _install_paths(possible_paths, filename):
-    return tuple(path+name for path,name in zip(possible_paths, (filename,)*len(possible_paths)))
+    return tuple(os.path.join(path, filename) for path in possible_paths)
 
+class Pars(object):
+    __slots__ = ['dH', 'dS', 'dG']
+    
+    def __init__(self, dH=0, dS=0, dG=0):
+        self.dH = dH
+        self.dS = dS
+        self.dG = dG
+        
+    def __str__(self):
+        return ', '.join('%s=%f' % (s, getattr(self, s)) for s in self.__slots__)
+    
+    def __repr__(self, ): return str(self)
+        
+    def __add__(self, pars):
+        return Pars(self.dH + pars.dH,
+                    self.dS + pars.dS,
+                    self.dG + pars.dG)
+        
+    def __iadd__(self, pars):
+        self.dH += pars.dH
+        self.dS += pars.dS
+        self.dG += pars.dG
+        return self
+    
+    def __div__(self, den):
+        return Pars(self.dH/den,
+                    self.dS/den,
+                    self.dG/den)
+    
+    def __idiv__(self, den):
+        self.dH /= den
+        self.dS /= den
+        self.dG /= den
+        return self
+    
+    def __mul__(self, m):
+        return Pars(self.dH*m,
+                    self.dS*m,
+                    self.dG*m)
+    
+    def __imul__(self, m):
+        self.dH *= m
+        self.dS *= m
+        self.dG *= m
+        return self
+    
+class Loops(object):
+    __slots__ = ['internal', 'hairpin']
+    
+    def __init__(self, internal=0, hairpin=0):
+        self.internal = internal
+        self.hairpin = hairpin
 
 class UnifiedNN(object):
     '''
@@ -109,6 +124,9 @@ class UnifiedNN(object):
     dS_Na_coefficient       =  0.368   #e.u.
     T_DMSO_coefficient      =  0.75
     Loop_coefficient        =  2.44
+    
+    iK37                    = -1000.0/K37
+    LRK37                   = Loop_coefficient * R * K37/1000.0
     #The NN stabilities at 37◦ C range from −1.23 to −0.21 kcal/mol 
     #for CG/GA and AC/TC, respectively
     Terminal_mismatch_mean  = (-1.23 + -0.21)/2
@@ -132,47 +150,104 @@ class UnifiedNN(object):
     def __nonzero__(self):
         return self._inited
     
+    @staticmethod
+    def _load_csv(filenames):
+        '''Load a csv (tab delimited, quoting character ") file into a dictionary of 
+        dicts, assuming that the first row and first column define names, and each cell 
+        contains float value. The file is loaded from the first existing file in the 
+        given list of paths'''
+        #check filepaths provided
+        csv_file = None
+        csv_filename = None
+        for filename in filenames:
+            if os.path.isfile(filename):
+                csv_file = open(filename, 'rb')
+                csv_filename = filename
+                break
+        if not csv_file:
+            raise ImportError('UnifiedNN._load_csv: file %s not found in the system.' \
+                              % os.path.basename(filenames[0]))
+        #try to load csv
+        try:
+            csv_reader = list(csv.reader(csv_file, delimiter='\t', quotechar='"'))
+        except:
+            print 'UnifiedNN._load_csv: exception occured while trying to load %s' \
+            % csv_filename
+            raise
+        #read csv and fill the dict
+        table_dict = dict()
+        #dictionary of column names
+        row_dict   = dict()
+        for ci in xrange(1,len(csv_reader[0])):
+            row_dict[ci] = csv_reader[0][ci]
+        #read row by row
+        for row in csv_reader[1:]: #skip the first row
+            table_dict[row[0]] = dict()
+            for ci in row_dict:
+                table_dict[row[0]][row_dict[ci]] = float(row[ci])
+        return table_dict
+    #end def
+    
+    @staticmethod
+    def _load_cls(filenames, cls):
+        table = UnifiedNN._load_csv(filenames)
+        for k in table: table[k] = cls(**table[k])
+        return table
+    #end def
     
     @classmethod    
     def load_tables(cls):
         '''load thermodynamic tables'''
-        cls.tri_tetra_hairpin_loops = _load_csv(cls._tri_tetra_hairpin_loops_paths)
-        cls.loops         = dict((int(k), v) for k, v 
-                                 in _load_csv(cls._loops_paths).iteritems())
-        cls.internal_NN   = _load_csv(cls._internal_NN_paths)
+        cls.tri_tetra_hairpin_loops = cls._load_cls(cls._tri_tetra_hairpin_loops_paths, Pars)
+        cls.loops = dict((int(k), v) for k, v in cls._load_cls(cls._loops_paths, Loops).iteritems())
+        cls.internal_NN = cls._load_cls(cls._internal_NN_paths, Pars)
         for nn in cls.internal_NN.keys():
             cls.internal_NN[nn[::-1]] = cls.internal_NN[nn]
-        cls.dangling_ends = _load_csv(cls._dangling_ends_paths)
-        cls._inited       = True
+        cls.dangling_ends = cls._load_cls(cls._dangling_ends_paths, Pars)
+        cls.ter = cls.internal_NN.get('ter', Pars())
+        cls.ini = cls.internal_NN.get('ini', Pars())
+        cls.sym = cls.internal_NN.get('sym', Pars())
+        print cls.internal_NN
+        print cls.ter
+        print cls.ini
+        cls._inited = True
     #end def
     
     #'standard' enthalpy, enthropy and Gibbs energy
     @classmethod
-    def pair_dPar_37(cls, seq, rev):
+    def int_dPar_37(cls, seq, rev):
         '''return 'standard' parameter (enthalpy, enthropy and Gibbs energy) 
         for the given dinucleotide duplex'''
-        key = '%s/%s' % (seq, rev)
-        if '-' in key: pars = cls.dangling_ends.get(key, None)
-        else: pars = cls.internal_NN.get(key, None)
+        key = seq+'/'+rev
+        pars = cls.internal_NN.get(key, None)
         if pars: return pars
         #if not found anywhere, try to unambiguate sequences
         seqs = unambiguous_sequences(seq)
         revs = unambiguous_sequences(rev)
-        pars = dict(dH=0, dS=0, dG=0)
         if len(seqs) == 1 and len(revs) == 1:
-            print 'UnifiedNN.dPar: sequence is not in the database: %s' % key
-            return pars
+            raise ValueError('UnifiedNN.int_dPar_37: sequence is not in the database: %s' % key)
+        pars = Pars()
         for s in seqs:
             for r in revs:
-                p = cls.pair_dPar_37(s, r)
-                for par in pars: pars[par] += p[par]
+                pars += cls.int_dPar_37(s, r)
         numpars = float(len(seqs)*len(revs))
-        for par in pars: pars[par] /= numpars
+        pars /= numpars
         #cache results
         cls.internal_NN[key] = pars
         cls.internal_NN[key[::-1]] = pars
         return pars
     #end def
+    
+    #constants
+    ter = Pars()
+    ini = Pars()
+    sym = Pars()
+    
+    @classmethod
+    def end_dPar_37(cls, seq, rev):
+        '''return 'standard' parameter (enthalpy, enthropy and Gibbs energy) 
+        for the given dangling end dinucleotide duplex'''
+        return cls.dangling_ends[seq+'/'+rev]
 
     @classmethod
     def _extrapolate_loop_dG_37(cls, length, loop_type):
@@ -180,7 +255,7 @@ class UnifiedNN(object):
             exp_len = length
             while exp_len not in cls.loops: exp_len += 1
         else: exp_len = 30
-        return cls.loops[exp_len][loop_type] + cls.Loop_coefficient * cls.R * cls.K37/1000 * log(float(length)/exp_len)
+        return getattr(cls.loops[exp_len], loop_type) + cls.LRK37 * log(float(length)/exp_len)
     #end def
     
     
@@ -191,7 +266,7 @@ class UnifiedNN(object):
             print 'Warning: thermodynamic parameters for loops of length 30 and \
             more are extrapolated from experimental data and may be erroneous.'
         #if loop length is in the table
-        try: loop_dG = cls.loops[length]['internal'] 
+        try: loop_dG = cls.loops[length].internal 
         except KeyError: #interpolate loop dG
             loop_dG = cls._extrapolate_loop_dG_37(length, 'internal')
         loop_dG += 2*cls.Terminal_mismatch_mean
@@ -208,17 +283,17 @@ class UnifiedNN(object):
             more are extrapolated from experimental data and may be erroneous.'
         #if loop length is in the table
         if length in cls.loops:
-            loop_dG = cls.loops[length]['hairpin']
+            loop_dG = cls.loops[length].hairpin
             if   length == 3:
                 if seq in cls.tri_tetra_hairpin_loops:
                     #special tri-loop correction
-                    loop_dG += cls.tri_tetra_hairpin_loops[seq]['dG']
+                    loop_dG += cls.tri_tetra_hairpin_loops[seq].dG
                 if seq[0] in 'AT':
                     loop_dG += 0.5 #kcal/mol; AT-closing penalty
             elif length == 4:
                 if seq in cls.tri_tetra_hairpin_loops:
                     #special tri-loop correction
-                    loop_dG += cls.tri_tetra_hairpin_loops[seq]['dG']
+                    loop_dG += cls.tri_tetra_hairpin_loops[seq].dG
                 loop_dG += cls.Terminal_mismatch_mean
             else: loop_dG += cls.Terminal_mismatch_mean
             return loop_dG
@@ -232,20 +307,20 @@ class UnifiedNN(object):
     @classmethod
     def hairpin_loop_dH_37(cls, seq):
         if len(seq)-2 > 4: #two boundary nucleotides are not included 
-            return 0 # All loop dH◦ parameters are assumed to equal zero. [1]
-        try: return cls.tri_tetra_hairpin_loops[seq]['dH']
+            return 0 # All loop dH◦ parameters are assumed to be zero. [1]
+        try: return cls.tri_tetra_hairpin_loops[seq].dH
         except KeyError: return 0
     #end def
     
     @classmethod
     def internal_loop_dS_37(cls, seq):
-        return cls.internal_loop_dG_37(len(seq)-2)*-1000.0/cls.K37
+        return cls.internal_loop_dG_37(len(seq)-2)*cls.iK37
     
     @classmethod
     def hairpin_loop_dS_37(cls, seq):
         loop_dG = cls.hairpin_loop_dG_37(seq)
         loop_dH = cls.hairpin_loop_dH_37(seq)
-        return (loop_dG-loop_dH)*-1000.0/cls.K37
+        return (loop_dG-loop_dH)*cls.iK37
     #end def
     
     

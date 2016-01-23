@@ -76,23 +76,23 @@ def primer_template_Tr(sequence, concentration, conversion_degree):
     #equilibrium constant 
     K   = DUP/((P-DUP)*(D-DUP))
     #initial corrections
-    dP = NN.pair_dPar_37('ini', 'ini')
-    dH = dP['dH']; dS = dP['dS']
+    dP = NN.ini
+    dH = dP.dH; dS = dP.dS
     #test for AT terminals
     if seq_str[0]  in 'AT':
-        dP  = NN.pair_dPar_37('ter', 'ter')
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.ter
+        dH += dP.dH; dS += dP.dS
     if seq_str[-1] in 'AT':
-        dP  = NN.pair_dPar_37('ter', 'ter')
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.ter
+        dH += dP.dH; dS += dP.dS
     #stacking interactions
     for n in xrange(len(seq_str)-1):
         pair    = seq_str[n:n+2]
         reverse = rev_str[n:n+2]
-        dP  = NN.pair_dPar_37(pair, reverse)
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.int_dPar_37(pair, reverse)
+        dH += dP.dH; dS += dP.dS
     #salt concentration correction
-    dS = dS + NN.dS_Na_coefficient * len(seq_str) * log(PCR_P.Na_eq) #C_Na qM
+    dS = dS + NN.dS_Na_coefficient * len(seq_str) * PCR_P.Na_eq_log #C_Na qM
     #final temperature calculation
     return NN.K0 + dH * 1000/(dS - NN.R * log(K)) - NN.T_DMSO_coefficient * PCR_P.DMSO #DMSO correction from [2]
 #end def
@@ -134,27 +134,27 @@ def dimer_dG_corrected(dimer, seq1, seq2):
     rev_len = len(rev_str)
     #initial dG of annealing
     dG = 0
-    dP = NN.pair_dPar_37('ini', 'ini')
-    dH = dP['dH']
-    dS = dP['dS']
+    dP = NN.ini
+    dH = dP.dH
+    dS = dP.dS
     #check for 'left' dangling end
     fwd0 = fwd_matches[0] 
     if fwd0 == 0 and offset < 0: #3' dangling
         rev0    = fwd0-offset
         pair    = rev_str[rev0]+rev_str[rev0-1]
         reverse = seq_str[0]+'-' 
-        dP  = NN.pair_dPar_37(pair, reverse)
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.end_dPar_37(pair, reverse)
+        dH += dP.dH; dS += dP.dS
     #check for 'left' terminal AT
     elif fwd0 == 0 and offset == 0:
         if seq_str[0] in 'AT':
-            dP  = NN.pair_dPar_37('ter', 'ter')
-            dH += dP['dH']; dS +=  dP['dS']
+            dP  = NN.ter
+            dH += dP.dH; dS += dP.dS
     elif fwd0 == offset: #5' dangling
         pair    = seq_str[fwd0-1]+seq_str[fwd0]
         reverse = '-'+rev_str[0]
-        dP  = NN.pair_dPar_37(pair, reverse)
-        dH += dP['dH']; dS +=  dP['dS'] 
+        dP  = NN.end_dPar_37(pair, reverse)
+        dH += dP.dH; dS += dP.dS 
     #check for 'left' terminal mismatch
     elif fwd0 > offset:
         dG += NN.Terminal_mismatch_mean
@@ -164,21 +164,21 @@ def dimer_dG_corrected(dimer, seq1, seq2):
     if fwd_1 == seq_len-1 and rev_1 < rev_len-1: #5' dangling
         pair    = rev_str[rev_1+1]+rev_str[rev_1]
         reverse = '-'+seq_str[-1] 
-        dP  = NN.pair_dPar_37(pair, reverse)
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.end_dPar_37(pair, reverse)
+        dH += dP.dH; dS += dP.dS
     elif rev_1 == rev_len-1 and fwd_1 < seq_len-1: #3' dangling
         pair    = seq_str[fwd_1]+seq_str[fwd_1+1]
         reverse = rev_str[-1]+'-' 
-        dP  = NN.pair_dPar_37(pair, reverse)
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.end_dPar_37(pair, reverse)
+        dH += dP.dH; dS += dP.dS
     #check for 'right' terminal mismatch
     elif fwd_1 < seq_len-1 and rev_1 < rev_len-1:
         dG += NN.Terminal_mismatch_mean
     #check for 'right' terminal AT
     elif fwd_1 == seq_len-1 and rev_1 == rev_len-1:
         if seq_str[-1] in 'AT':
-            dP  = NN.pair_dPar_37('ter', 'ter')
-            dH += dP['dH']; dS +=  dP['dS']
+            dP  = NN.ter
+            dH += dP.dH; dS += dP.dS
     #stacking and mismatches
     for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
@@ -190,23 +190,23 @@ def dimer_dG_corrected(dimer, seq1, seq2):
             pair    = seq_str[f_match:f_match+2]
             reverse = rev_str[r_match:r_match+2]
             #dH and salt-corrected dS
-            dP  = NN.pair_dPar_37(pair, reverse)
-            dH += dP['dH']; dS +=  dP['dS']
+            dP  = NN.int_dPar_37(pair, reverse)
+            dH += dP.dH; dS += dP.dS
             #if ||
             if f_next-f_match == 1: continue
             #if |x| or |xx|
             elif f_next-f_match < 4:
                 pair1    = rev_str[r_next-1:r_next+1][::-1]
                 reverse1 = seq_str[f_next-1:f_next+1][::-1]
-                dP  = NN.pair_dPar_37(pair1, reverse1)
-                dH += dP['dH']; dS +=  dP['dS']
+                dP  = NN.int_dPar_37(pair1, reverse1)
+                dH += dP.dH; dS += dP.dS
                 continue
         #loop
         else:
             loop_seq = seq_str[f_match:f_next+1]
             dS += NN.internal_loop_dS_37(loop_seq)
     #dS salt correction
-    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(PCR_P.Na_eq)
+    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * PCR_P.Na_eq_log
     return dG + dH - (PCR_P.PCR_T-NN.K0)*dS/1000.0
 #end def
 
@@ -224,28 +224,28 @@ def hairpin_dG_corrected(hairpin, seq):
     seq_len = len(seq_str)
     #initial dG of annealing
     dG = 0
-    dP = NN.pair_dPar_37('ini', 'ini')
-    dH = dP['dH']
-    dS = dP['dS']
+    dP = NN.ini
+    dH = dP.dH
+    dS = dP.dS
     #check for 'left' dangling end
     if   fwd_matches[0] == 0 and rev_matches[0] < seq_len-1: #3'-end
         pair    = seq_str[rev_matches[0]]+seq_str[rev_matches[0]+1]
         reverse = seq_str[0] + '-'
-        dP  = NN.pair_dPar_37(pair, reverse)
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.end_dPar_37(pair, reverse)
+        dH += dP.dH; dS +=  dP.dS
     elif fwd_matches[0] > 0 and rev_matches[0] == seq_len-1: #5'-end
         pair    = seq_str[fwd_matches[0]-1]+seq_str[fwd_matches[0]]
         reverse = '-' + seq_str[-1]
-        dP  = NN.pair_dPar_37(pair, reverse)
-        dH += dP['dH']; dS +=  dP['dS']
+        dP  = NN.end_dPar_37(pair, reverse)
+        dH += dP.dH; dS += dP.dS
     #check for 'left' terminal mismatch
     elif fwd_matches[0] > 0 and rev_matches[0] < seq_len-1:
         dG += NN.Terminal_mismatch_mean
     #check for 'left' terminal AT
     elif fwd_matches[0] == 0 and rev_matches[0] == seq_len-1:
         if seq_str[0] in 'AT':
-            dP  = NN.pair_dPar_37('ter', 'ter')
-            dH += dP['dH']; dS +=  dP['dS']
+            dP  = NN.ter
+            dH += dP.dH; dS += dP.dS
     #stacking and mismatches
     for i in xrange(len(fwd_matches)-1):
         f_match = fwd_matches[i]
@@ -257,16 +257,16 @@ def hairpin_dG_corrected(hairpin, seq):
             pair    = seq_str[f_match:f_match+2]
             reverse = seq_str[r_match-1:r_match+1][::-1]
             #dH and salt-corrected dS
-            dP  = NN.pair_dPar_37(pair, reverse)
-            dH += dP['dH']; dS +=  dP['dS']
+            dP  = NN.int_dPar_37(pair, reverse)
+            dH += dP.dH; dS += dP.dS
             #if ||
             if f_next-f_match == 1: continue
             #if |x| or |xx|
             elif f_next-f_match < 4:
                 pair1    = seq_str[r_next:r_next+2]
                 reverse1 = seq_str[f_next-1:f_next+1][::-1]
-                dP  = NN.pair_dPar_37(pair1, reverse1)
-                dH += dP['dH']; dS +=  dP['dS']
+                dP  = NN.int_dPar_37(pair1, reverse1)
+                dH += dP.dH; dS += dP.dS
                 continue
         #loop
         else:
@@ -277,7 +277,7 @@ def hairpin_dG_corrected(hairpin, seq):
     dH += NN.hairpin_loop_dH_37(hp_str)
     dS += NN.hairpin_loop_dS_37(hp_str)
     #dS salt correction
-    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * log(PCR_P.Na_eq)
+    dS += NN.dS_Na_coefficient * (fwd_matches[-1]-fwd_matches[0]) * PCR_P.Na_eq_log
     return dG + dH - (PCR_P.PCR_T-NN.K0)*dS/1000.0
 #end def
 
