@@ -22,6 +22,6 @@ Created on 2016-01-14
 
 from DegenPrimer.UnifiedNN import UnifiedNN
 
-if __name__ == '__main__':
+def test():
     UnifiedNN.load_tables()
     print UnifiedNN.loops

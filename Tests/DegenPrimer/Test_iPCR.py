@@ -22,7 +22,9 @@ Created on 2016-01-14
 
 from BioUtils.Tools.Multiprocessing import MPMain
 
-class _Main(MPMain):
+class Test(MPMain):
+    def test(self): return self()
+    
     def _main(self):
         import time
         import DegenPrimer.TD_Functions as tdf
@@ -33,6 +35,7 @@ class _Main(MPMain):
         from BioUtils.Tools import WaitingThread
         from DegenPrimer.iPCR import iPCR
         from threading import Lock
+        import cProfile
         
         mgr = Manager()
         abort_event = mgr.Event()
@@ -60,6 +63,13 @@ class _Main(MPMain):
         cmgr.start()
         counter = cmgr.WorkCounter()
         
+#        ipcr.simulate_PCR(counter, 
+#                                  (
+#                                   '../data/ThGa.fa', #single sequence
+#                                   '../data/Ch5_gnm.fa', '../data/ThDS1.fa', '../data/ThES1.fa', #long sequences 
+#                                   '../data/ThDS1-FC.fa', '../data/ThDS1-850b-product.fa', #short sequences
+#                                  ))
+        
         plock = Lock()
             
         job = WaitingThread(plock, 1, target=ipcr.simulate_PCR, 
@@ -67,7 +77,7 @@ class _Main(MPMain):
                             args=(counter, 
                                   (
                                    '../data/ThGa.fa', #single sequence
-    #                               '../data/Ch5_gnm.fa', '../data/ThDS1.fa', '../data/ThES1.fa', #long sequences 
+#                                   '../data/Ch5_gnm.fa', '../data/ThDS1.fa', '../data/ThES1.fa', #long sequences 
                                    '../data/ThDS1-FC.fa', '../data/ThDS1-850b-product.fa', #short sequences
                                   ),))
         job.start(); print ''
@@ -79,11 +89,25 @@ class _Main(MPMain):
         with plock: print counter
         
         ipcr.write_report()
+        
+#        cProfile.runctx('for i in xrange(100): ipcr.write_reports()', globals(), locals(), 'iPCR.write_reports.profile')
 
 if __name__ == '__main__':
     import sys
-    main = _Main()
+    main = Test()
     sys.exit(main())
+    
+    #baseline
+#    Task #1 has finished:
+#    simulate_PCR
+#    Elapsed time: 0:00:35.210426
+
+    #baseline "working"
+#    Task #1 has finished:
+#    simulate_PCR
+#    Elapsed time: 0:00:36.408558
+
+
     
 ############################## statistics ######################################
 #TD_Functions.PCR_P.PCR_T = 53

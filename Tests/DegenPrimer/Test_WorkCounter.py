@@ -23,7 +23,7 @@ Created on 2016-01-14
 from time import sleep
 from DegenPrimer.WorkCounter import WorkCounter, WorkCounterManager
 
-if __name__ == '__main__':
+def test():
     cmgr = WorkCounterManager(); cmgr.start()
     c = WorkCounter(10)
     c.add_subwork(10, weights=(1.1,2.2,3,4,5,6,7,8,9,10))

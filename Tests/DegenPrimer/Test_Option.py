@@ -22,7 +22,7 @@ Created on 2016-01-14
 
 from DegenPrimer.Option import Option
 
-if __name__ == '__main__':
+def test():
     opt = Option(name='optimization_parameter', 
                 desc='PCR parameter to optimize. Optimization is performed '
                 'in terms of maximization of an objective function which is: '

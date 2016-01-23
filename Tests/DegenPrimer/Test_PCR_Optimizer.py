@@ -20,15 +20,16 @@ Created on 2016-01-14
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-if __name__ == '__main__':
+def test():
     from multiprocessing import Manager
+    from threading import Lock
+    from BioUtils.Tools import WaitingThread
+    
     from DegenPrimer.Primer import Primer
     from DegenPrimer.SeqUtils import load_sequence
     from DegenPrimer.WorkCounter import WorkCounterManager
-    from DegenPrimer.WaitingThread import WaitingThread
     from DegenPrimer.PCR_Optimizer import PCR_Optimizer
     from DegenPrimer import TD_Functions as tdf
-    from threading import Lock
     
     mgr = Manager()
     abort_event = mgr.Event()

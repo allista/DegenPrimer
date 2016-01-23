@@ -22,7 +22,7 @@ Created on 2016-01-14
 
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 
-if __name__ == '__main__':
+def test():
     class TestConfig(DegenPrimerConfig):
         def _override_option(self, option):
             return DegenPrimerConfig._override_option(self, option)

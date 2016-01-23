@@ -22,7 +22,7 @@ Created on 2016-01-14
 
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
 
-if __name__ == '__main__':
+def test():
     conf = DegenPrimerConfigCLI()
     conf.parse_configuration()
     print conf

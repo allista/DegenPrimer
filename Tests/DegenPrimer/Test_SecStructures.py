@@ -20,16 +20,26 @@ Created on 2016-01-14
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import DegenPrimer.TD_Functions as tdf
-from DegenPrimer.SecStructures import Duplex
+def test():
+    import cProfile
+    import DegenPrimer.TD_Functions as tdf
+    from DegenPrimer.SecStructures import Duplex, reverse_complement
 
-if __name__ == '__main__':
     tdf.PCR_P.Na = 50.0e-3
     tdf.PCR_P.Mg = 3.0e-3
     tdf.PCR_P.dNTP = 0.15e-6
     tdf.PCR_P.DNA = 1.0e-9
     tdf.PCR_P.DMSO = 0.0
     tdf.PCR_P.PCR_T = 60.0
-    du = Duplex('GAACGCAAAGATCGGGAAC', 'CTTGCGTTTCTAACCCTTG'[::-1])
-    print du
+    with tdf.AcquireParameters():
+        du = Duplex('GAACGCAAAGATCGGGAAC', 'CTTGCGTTTCTAACCCTTG'[::-1])
+        print du
+        cProfile.runctx('for x in xrange(100000): du.print_most_stable()', 
+                        globals(), locals(), 'Duplex.print_stable.profile')
     
+    seq = 'ATGCGTCACTACCAGT'*10000
+    cProfile.runctx('''for x in xrange(100): 
+    reverse_complement(seq)''', 
+                    globals(), locals(), 'reverse_complement.profile')
+
+test()

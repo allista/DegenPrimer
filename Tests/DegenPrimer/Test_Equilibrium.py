@@ -20,6 +20,7 @@ Created on 2016-01-14
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+import os
 from time import sleep
 _pid = -1
 abort_event = None
@@ -30,7 +31,7 @@ def sig_handler(signal, frame):
 #end def
 
 
-if __name__ == '__main__':
+def test():
     from DegenPrimer.WorkCounter import WorkCounter
     from DegenPrimer.Equilibrium import Equilibrium
     #setup signal handler
@@ -39,7 +40,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGQUIT, sig_handler)
     
-    import cProfile, os, sys
+    import cProfile, sys
     from multiprocessing import Event
     import shelve
     

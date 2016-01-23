@@ -22,7 +22,7 @@ Created on 2016-01-14
 
 import DegenPrimer.TD_Functions as tdf
 
-if __name__ == '__main__':
+def test():
     from copy import deepcopy
     print tdf.PCR_P
     tdf.PCR_P.set({'PCR_T': 30})

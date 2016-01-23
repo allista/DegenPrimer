@@ -20,21 +20,19 @@ Created on 2016-01-14
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-if __name__ == '__main__':
+def test():
     #tests
     import signal
-    import cProfile
-    import gc
     from time import time
-    import sys, os, csv, timeit
+    import sys, os, csv
     from Bio import SeqIO
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
     from Bio.Alphabet import IUPAC
     from DegenPrimer.Primer import Primer
     from multiprocessing import Event
+    import cProfile
     
-    searcher = None
     ppid     = -1
     data1    = []
     data2    = []
@@ -107,7 +105,11 @@ if __name__ == '__main__':
     tdf.PCR_P.PCR_T = 60
     
     searcher = SearchEngine(abort_event)
-    searcher.find(WorkCounter(), template, primer, 6)
+    matches = searcher._find_mp(WorkCounter(), template[:2000], primer, len(template), len(primer), 6)
+#    cProfile.runctx('for x in xrange(10): searcher._find(WorkCounter(), template, primer, len(template), len(primer), 6)', 
+#                    globals(), locals(), 'SearchEngine.find.profile')
+#    cProfile.runctx('for x in xrange(1): print searcher.compile_duplexes(WorkCounter(), *matches)', 
+#                    globals(), locals(), 'SearchEngine.find.profile')
     
     def mem_test(num):
         for _n in xrange(num):
@@ -203,3 +205,6 @@ if __name__ == '__main__':
 #    print 're mean: %f sec' % (sum(rt)/float(len(rt)))
     
     print 'Done.'
+    
+if __name__ == '__main__':
+    test()

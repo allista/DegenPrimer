@@ -24,7 +24,7 @@ from DegenPrimer.Primer import Primer
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 
-if __name__ == '__main__':
+def test():
 #    import cProfile
 #    primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCTATKCAGNCTGGGANGGNTACGNGGGTAAANAAACG'),id='primer1'), 0.9e-6)
     primer = Primer(SeqRecord(Seq('ATARTCTYCGAMGGCNATKCAGGNCTGRGGA'),id='primer1'), 0.9e-6)

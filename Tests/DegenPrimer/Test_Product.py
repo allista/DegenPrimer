@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # coding=utf-8
 #
 # Copyright (C) 2012 Allis Tauri <allista@gmail.com>
@@ -15,21 +16,28 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
-Created on 2016-01-14
+Created on Jan 22, 2016
 
-@author: Allis Tauri <allista@gmail.com>
+@author: allis
 '''
 
-from DegenPrimer.StringTools import wrap_text
+from DegenPrimer.SecStructures import reverse_complement, Duplex
+from DegenPrimer.Product import Product
+
+def test():
+    fwd_primer = 'ATARTCTYCGAMGGCTATCC'
+    rev_primer = 'NAAGGYTTAGAKGCGGAAG'
+    d1 = Duplex(fwd_primer, reverse_complement(fwd_primer))
+    d2 = Duplex(rev_primer, reverse_complement(rev_primer))
+    f = 'Product_test.json.gz'
+    p = Product('test_template', 50, 150, (d1,), (d2,))
+    p.save(f)
+    p1 = Product.load(f)
+    print p
+    print '-'*80
+    print p1
+    assert str(p) == str(p1)
 
 if __name__ == '__main__':
-    txt = '''If true, TextWrapper attempts to detect sentence endings and ensure 
-    that sentences are always separated by exactly two spaces. This is generally 
-    desired for text in a monospaced font. However, the sentence detection 
-    algorithm is imperfect: it assumes that a sentence ending consists of a 
-    lowercase letter followed by one of '.', '!', or '?', possibly followed by 
-    one of '"' or "'", followed by a space. One problem with this is algorithm 
-    is that it is unable to detect the difference between “Dr.” in'''
-    print wrap_text(txt)
-    print '='*80
-    
+    import nose
+    nose.main()
