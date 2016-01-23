@@ -22,7 +22,6 @@ Tool to compute degenerate primer parameters using BioPython
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-import sys
 from DegenPrimer.StringTools import hr, wrap_text
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
@@ -30,7 +29,7 @@ from DegenPrimer.Pipeline import Pipeline
 from DegenPrimer.AnalysisTask import AnalysisTask
 from DegenPrimer.DBManagementTask import DBManagmentTask
 from DegenPrimer.OptimizationTask import OptimizationTask
-from BioUtils.Tools import MPMain
+from BioUtils.Tools.Multiprocessing import MPMain
 ###############################################################################
 
 class DP_Main(MPMain):
@@ -75,5 +74,4 @@ class DP_Main(MPMain):
         return exit_code
 
 if __name__ == '__main__':
-    main = DP_Main()
-    sys.exit(main())
+    DP_Main()

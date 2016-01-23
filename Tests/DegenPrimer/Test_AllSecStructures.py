@@ -54,5 +54,4 @@ class AllSecStructurs_Test(MPMain):
         print all_structs.print_structures()
         
 if __name__ == '__main__':
-    import nose
-    nose.main()
+    AllSecStructurs_Test()

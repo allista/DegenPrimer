@@ -93,9 +93,7 @@ class Test(MPMain):
 #        cProfile.runctx('for i in xrange(100): ipcr.write_reports()', globals(), locals(), 'iPCR.write_reports.profile')
 
 if __name__ == '__main__':
-    import sys
-    main = Test()
-    sys.exit(main())
+    Test()
     
     #baseline
 #    Task #1 has finished:
