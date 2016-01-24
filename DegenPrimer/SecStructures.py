@@ -19,6 +19,7 @@ Created on Jun 23, 2012
 '''
 
 import numpy as np
+from array import array
 
 from BioUtils.Tools.Text import hr
 
@@ -351,35 +352,25 @@ class Duplex(object):
             duplex_string += fwd_sequence + '\n'
             duplex_string += rev_sequence[::-1] + '\n'
             return duplex_string
-        fwd_matches = dimer.fwd_matches
+        fwd_matches  = dimer.fwd_matches
         fwd_matches0 = fwd_matches[0]
         rev_matches0 = dimer.rev_min
         #construct matches string
         #NOTE: to test for spacer length then to set string is a little faster
         #then just use += ' '*num
-        matches = ''
-        for m in xrange(dimer.num_matches):
-            if matches:
-                s = (fwd_matches[m]-fwd_matches[m-1]-1)
-                if s: matches += ' '*s
-            matches += '|'            
+        matches = array('c', ' '*len(fwd_sequence))
+        for m in fwd_matches: matches[m] = '|'
         #calculate spacers
         if fwd_matches0 > rev_matches0:
-            spacer1 = ''
-            m = (fwd_matches0+3)
-            spacerM = ' '*m if m else ''
-            s2 = (fwd_matches0-rev_matches0)
-            spacer2 = ' '*s2 if s2 else ''
+            duplex_string += "5' "+fwd_sequence+" 3'\n   "
+            duplex_string += matches.tostring()+'\n'
+            duplex_string += ' '*(fwd_matches0-rev_matches0)+"3' "+rev_sequence[::-1]+" 5'\n"
         else:
-            s1 = (rev_matches0-fwd_matches0)
-            spacer1 = ' '*s1 if s1 else ''
-            m = (rev_matches0+3)
-            spacerM = ' '*m if m else ''
-            spacer2 = ''
-        #construct structures string
-        duplex_string += "%s5' %s 3'\n" % (spacer1, fwd_sequence)
-        duplex_string += "%s%s\n" % (spacerM, matches)
-        duplex_string += "%s3' %s 5'\n" % (spacer2, rev_sequence[::-1])
+            if rev_matches0 > fwd_matches0:
+                duplex_string += ' '*(rev_matches0-fwd_matches0)
+            duplex_string += "5' "+fwd_sequence+" 3'\n   "
+            duplex_string += matches.tostring()+'\n'
+            duplex_string += "3' "+rev_sequence[::-1]+" 5'\n"
         #dG
         if dimer.dG is not None:
             duplex_string += 'dG(%.1fC) = %.2f kcal/mol\n' % (tdf.PCR_P.PCR_T, dimer.dG)
