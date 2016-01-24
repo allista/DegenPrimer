@@ -71,7 +71,7 @@ class EquilibriumBase(object):
         self._precision      = precision
         #indexed reactants and concentrations
         self._reactants_ids  = concentrations.keys() #reactant index to ID 
-        self._reactants_idx  = dict([(r, i) for i, r in enumerate(self._reactants_ids)]) #reactant ID to index
+        self._reactants_idx  = dict((r, i) for i, r in enumerate(self._reactants_ids)) #reactant ID to index
         #output values
         self.consumptions    = None #dict of reactants' consumptions
         self.solution        = None #dict of conversion degrees of reactions at equilibrium
@@ -80,10 +80,10 @@ class EquilibriumBase(object):
     
     
     def _indexed_reaction(self, R):
-        return [R.constant, 
+        return (R.constant, 
                 self._reactants_idx[R.Ai], 
-                self._reactants_idx[R.Bi] if R.Bi is not None else None,
-                R.type]
+                None if R.Bi is None else self._reactants_idx[R.Bi], 
+                R.type)
     #end def
 #end class
 
@@ -127,7 +127,8 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
                     C_B = self._concentrations[r_Ai]
                 C_AB = C_A if C_A < C_B else C_B
                 _A_list.append((C_AB, ri))
-            else: _A_list.append((C_A, ri)) 
+            else: _A_list.append((C_A, ri))
+        _A_list = tuple(_A_list) 
         #consumption function for indexed reactant Ai
         def _reactant_consumption(r):
             _A = 0
@@ -152,19 +153,19 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
             def func(r, consumptions):
                 return (C_AB*r[i] - 
                         (C_A - consumptions[Ai])*
-                        (C_B - consumptions[Bi])*K)/self._min_C
+                        (C_B - consumptions[Bi])*K)
             return func
         elif r_type == '2A':
             C_A_2 = C_A/2.0
             def func(r, consumptions):
-                return (C_A_2*r[i] - 
-                        ((C_A - consumptions[Ai])**2)*K)/self._min_C
+                C_A_C = (C_A - consumptions[Ai])
+                return (C_A_2*r[i] - C_A_C*C_A_C*K)
             return func
         elif r_type == 'A':
             C_A_K = C_A*K
             def func(r, consumptions):
                 return (C_A*r[i] - 
-                        C_A_K + consumptions[Ai]*K)/self._min_C
+                        C_A_K + consumptions[Ai]*K)
             return func
     #end def
     
@@ -201,15 +202,21 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         l_funcs  = [self._function_factory(ri) 
                     for ri in xrange(n_reactions)]
         #reactant consumption functions
+        n_reactants = len(self._concentrations)
         rc_funcs = [self._reactants_consumption_factory(Ai) 
-                     for Ai in xrange(len(self._concentrations))]
+                    for Ai in xrange(n_reactants)]
         #initial evaluation point
         r0 = np.repeat(1e-6, n_reactions)
         #system function and objective function for solver
         def sys_func(r):
-            consumptions = [func(r) for func in rc_funcs]
-            return tuple(l_func(r, consumptions) for l_func in l_funcs)
-        obj_func = lambda(r): sum(sf**2 for sf in sys_func(r))
+            consumptions = np.zeros(n_reactants, dtype=float)
+            for i in xrange(n_reactants): consumptions[i] = rc_funcs[i](r)
+            new_r = np.zeros(n_reactions, dtype=float)
+            for i in xrange(n_reactions): new_r[i] = l_funcs[i](r, consumptions)
+            return new_r/self._min_C 
+        def obj_func(r):
+            new_r = sys_func(r)
+            return np.sum(new_r*new_r)
         #choose the solver
         if n_reactions < 100: 
             solver = self._fsolve #fsole is fast for small systems
