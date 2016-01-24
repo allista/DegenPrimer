@@ -20,11 +20,11 @@ Created on Jul 25, 2012
 
 import errno
 from time import time
-from datetime import timedelta
+from datetime import timedelta, datetime
 from Queue import Empty
 from threading import Lock
 from Bio import SeqIO
-from BioUtils.Tools.Output import OutQueue, simple_timeit
+from BioUtils.Tools.Output import OutQueue
 from BioUtils.Tools import EchoLogger
 from BioUtils.Tools.UMP import UManager
 from BioUtils.Tools import WaitingThread
@@ -231,10 +231,15 @@ class AnalysisTask(PrimerTaskBase):
                 if p_entry['counter'].last_checked() < self._counter_threshold: continue
                 percent = p_entry['counter'].changed_percent()
                 if percent is None: continue
-                counters += ('[%d] [%6.2f%%] elapsed: %s\n' % 
-                             (p_entry['id'], percent, self._elapsed()))
+                counters += self._fmt_msg(p_entry['id'], percent, 'elapsed: %s\n' % self._elapsed()) 
             if counters: self._print('\n'+counters)
     #end def
+    
+    def _fmt_msg(self, p_id, percent, msg):
+        return '[%d] [%6.2f%%] [%s] %s' % \
+                (p_id, percent, 
+                 datetime.now().strftime('%d.%m.%Y %H:%M:%S'), 
+                 msg)
     
     def _listen_subroutines(self):
         processes_alive = True
@@ -255,8 +260,7 @@ class AnalysisTask(PrimerTaskBase):
                             lines   = message[1].strip('\n').split('\n')
                             if len(lines) > 1 or prev_id != p_id: self._print() 
                             for line in lines:
-                                if line: self._print('[%d] [%6.2f%%] %s' % 
-                                                     (p_id, percent, unicode(line)))
+                                if line: self._print(self._fmt_msg(p_id, percent, unicode(line)))
                                 else: self._print()
                             if len(lines) > 1: self._print() 
                             prev_id = p_id 
@@ -308,8 +312,7 @@ class AnalysisTask(PrimerTaskBase):
             with self._print_lock: self._print('\nWriting analysis reports...')
             for routine in analysis_routines:
                 if routine.have_results():
-                    with simple_timeit(str(routine)): #test
-                        routine.write_reports()
+                    routine.write_reports()
                     args.register_reports(routine.reports())
             #print last messages
             self._print_out_queue()
