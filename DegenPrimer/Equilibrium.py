@@ -115,7 +115,7 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         
     def _reactants_consumption_factory(self, Ai):
         C_A = self._concentrations[Ai]
-        _A_list = []
+        C_max = []; ris = []
         for ri, R in self._Ri_reactions[Ai]:
             r_type   = R[3]
             if   r_type == 'AB':
@@ -126,15 +126,14 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
                 else:
                     C_B = self._concentrations[r_Ai]
                 C_AB = C_A if C_A < C_B else C_B
-                _A_list.append((C_AB, ri))
-            else: _A_list.append((C_A, ri))
-        _A_list = tuple(_A_list) 
+                C_max.append(C_AB)
+            else: 
+                C_max.append(C_A)
+            ris.append(ri)
+        C_max = np.array(C_max)
         #consumption function for indexed reactant Ai
         def _reactant_consumption(r):
-            _A = 0
-            for _C_max, ri in _A_list:
-                _A += _C_max*r[ri]
-            return _A
+            return np.sum(C_max*r[ris])
         #end def
         return _reactant_consumption
     
@@ -185,11 +184,11 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         #if failed for the first time, iterate solver while jitter r0 a little
         r0_obj = obj_func(sol)
         while r0_obj > self._precision \
-        or    min(sol) < 0 \
-        or    max(sol) > 1:
+        or    np.min(sol) < 0 \
+        or    np.max(sol) > 1:
             if self.aborted(): return None
             sol = solver(sys_func, r0 + (random(r0.shape)-r0)*0.3, self._precision)
-            if  min(sol) >= 0 and max(sol) <= 1: 
+            if  np.min(sol) >= 0 and np.max(sol) <= 1: 
                 r0 = sol
                 r0_obj = obj_func(sol)
         return sol
