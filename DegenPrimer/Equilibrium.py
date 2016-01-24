@@ -78,7 +78,6 @@ class EquilibriumBase(object):
         self.objective_value = -1 #value of the objective function of the system at equilibrium
     #end def
     
-    
     def _indexed_reaction(self, R):
         return (R.constant, 
                 self._reactants_idx[R.Ai], 
@@ -115,21 +114,21 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         
     def _reactants_consumption_factory(self, Ai):
         C_A = self._concentrations[Ai]
-        C_max = []; ris = []
-        for ri, R in self._Ri_reactions[Ai]:
-            r_type   = R[3]
-            if   r_type == 'AB':
+        reactions = self._Ri_reactions[Ai]
+        n_reactions = len(reactions)
+        C_max = np.zeros(n_reactions, dtype=float)
+        ris = [0]*n_reactions
+        for i, (ri, R) in enumerate(reactions):
+            if R[3] == 'AB':
                 r_Ai = R[1]
-                r_Bi = R[2]
                 if Ai == r_Ai:
-                    C_B = self._concentrations[r_Bi]
+                    C_B = self._concentrations[R[2]]
                 else:
                     C_B = self._concentrations[r_Ai]
-                C_AB = C_A if C_A < C_B else C_B
-                C_max.append(C_AB)
+                C_max[i] = C_A if C_A < C_B else C_B
             else: 
-                C_max.append(C_A)
-            ris.append(ri)
+                C_max[i] = C_A
+            ris[i] = ri
         C_max = np.array(C_max)
         #consumption function for indexed reactant Ai
         def _reactant_consumption(r):
@@ -187,6 +186,7 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         or    np.min(sol) < 0 \
         or    np.max(sol) > 1:
             if self.aborted(): return None
+            print '%d._solve.objf = %f > %f: %s' % (id(self), r0_obj, self._precision, r0_obj > self._precision)#test
             sol = solver(sys_func, r0 + (random(r0.shape)-r0)*0.3, self._precision)
             if  np.min(sol) >= 0 and np.max(sol) <= 1: 
                 r0 = sol
@@ -228,6 +228,7 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
             warnings.simplefilter("ignore")
             try: sol = self._solve(sys_func, obj_func, r0, solver)
             except: 
+                print '\nFailed to solve with %s, trying with %s' % (solver, altsolv)#test
                 try: sol = self._solve(sys_func, obj_func, r0, altsolv)
                 except Exception, e:
                     print '\nUnable to calculate equilibrium.'
