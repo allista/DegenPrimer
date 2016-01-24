@@ -207,9 +207,6 @@ class UnifiedNN(object):
         cls.ter = cls.internal_NN.get('ter', Pars())
         cls.ini = cls.internal_NN.get('ini', Pars())
         cls.sym = cls.internal_NN.get('sym', Pars())
-        print cls.internal_NN
-        print cls.ter
-        print cls.ini
         cls._inited = True
     #end def
     
