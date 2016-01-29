@@ -1,0 +1,3 @@
+[submodule "BioUtils"]
+	path = BioUtils
+	url = git@github.com:allista/BioUtils.git
