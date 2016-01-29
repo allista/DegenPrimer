@@ -21,7 +21,6 @@ Created on 2016-01-14
 '''
 
 def test():
-    #tests
     import signal
     from time import time
     import sys, os, csv

@@ -37,9 +37,9 @@ def test():
         cProfile.runctx('for x in xrange(100000): du.print_most_stable()', 
                         globals(), locals(), 'Duplex.print_stable.profile')
     
-    seq = 'ATGCGTCACTACCAGT'*10000
-    cProfile.runctx('''for x in xrange(100): 
-    reverse_complement(seq)''', 
-                    globals(), locals(), 'reverse_complement.profile')
+#    seq = 'ATGCGTCACTACCAGT'*10000
+#    cProfile.runctx('''for x in xrange(100): 
+#    reverse_complement(seq)''', 
+#                    globals(), locals(), 'reverse_complement.profile')
 
 test()

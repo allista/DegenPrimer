@@ -30,7 +30,7 @@ from DegenPrimer.WorkCounter import WorkCounter
 
 class AllSecStructurs_Test(MPMain):
 
-    def test(self): return self()
+    def test(self): return self(sys_exit=False)
     
     def _main(self):
         TD_Functions.PCR_P.PCR_T = 53
@@ -54,4 +54,4 @@ class AllSecStructurs_Test(MPMain):
         print all_structs.print_structures()
         
 if __name__ == '__main__':
-    AllSecStructurs_Test()
+    AllSecStructurs_Test(run=True)

@@ -23,7 +23,7 @@ Created on 2016-01-14
 from BioUtils.Tools.Multiprocessing import MPMain
 
 class Equilibrium_Test(MPMain):
-    def test(self): self()
+    def test(self): self(sys_exit=False)
     
     def _main(self):
         from DegenPrimer.WorkCounter import WorkCounter
@@ -38,13 +38,20 @@ class Equilibrium_Test(MPMain):
         print len(reactions)
         print len(concentrations)
         
+#        cProfile.runctx('''for i in xrange(1):
+#        eq = EquilibriumSolver(self.abort_event, reactions, concentrations, 1e-10)
+#        eq.calculate()
+#        print eq.objective_value''', 
+#        globals(), locals(),
+#        'EquilibriumSolver.profile')
+        
         cProfile.runctx('''for i in xrange(1):
-        eq = EquilibriumSolver(self.abort_event, reactions, concentrations, 1e-10)
-        eq.calculate()''', 
+        eq = Equilibrium(self.abort_event, reactions, concentrations, 1e-10)
+        eq.calculate(WorkCounter())''', 
         globals(), locals(),
-        'EquilibriumSolver.profile')
+        'Equilibrium.profile')
     
         print 'Done'
         
 if __name__ == '__main__':
-    Equilibrium_Test()
+    Equilibrium_Test(run=True)
