@@ -28,6 +28,8 @@ from scipy.optimize import fsolve, newton_krylov
 from scipy.sparse import csr_matrix, csgraph
 import warnings
 
+import csv#test
+
 import numpy as np
 
 class Reaction(object):
@@ -186,7 +188,8 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         or    np.min(sol) < 0 \
         or    np.max(sol) > 1:
             if self.aborted(): return None
-            print '%d._solve.objf = %f > %f: %s' % (id(self), r0_obj, self._precision, r0_obj > self._precision)#test
+            if r0_obj > self._precision:
+                print '%d.%s.objv = %f > %f' % (id(self), solver, r0_obj, self._precision)#test
             sol = solver(sys_func, r0 + (random(r0.shape)-r0)*0.3, self._precision)
             if  np.min(sol) >= 0 and np.max(sol) <= 1: 
                 r0 = sol
@@ -204,8 +207,6 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         n_reactants = len(self._concentrations)
         rc_funcs = [self._reactants_consumption_factory(Ai) 
                     for Ai in xrange(n_reactants)]
-        #initial evaluation point
-        r0 = np.repeat(1e-6, n_reactions)
         #system function and objective function for solver
         def sys_func(r):
             consumptions = np.zeros(n_reactants, dtype=float)
@@ -216,8 +217,10 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         def obj_func(r):
             new_r = sys_func(r)
             return np.sum(new_r*new_r)
+        #initial evaluation point
+        r0 = np.repeat(1e-6, n_reactions)
         #choose the solver
-        if n_reactions < 100: 
+        if n_reactions < 1000: 
             solver = self._fsolve #fsole is fast for small systems
             altsolv = self._nksolve
         else: 
@@ -227,8 +230,10 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try: sol = self._solve(sys_func, obj_func, r0, solver)
-            except: 
-                print '\nFailed to solve with %s, trying with %s' % (solver, altsolv)#test
+            except Exception, e: 
+                print '\n%d: failed to solve with %s' % (id(self), solver)#test
+                print e
+                print '\n%d: trying with %s' % (id(self), altsolv)#test
                 try: sol = self._solve(sys_func, obj_func, r0, altsolv)
                 except Exception, e:
                     print '\nUnable to calculate equilibrium.'
@@ -270,7 +275,9 @@ class Equilibrium(EquilibriumBase, MultiprocessingBase):
     def _index_reaction(self, reaction):
         rid, R = reaction
         iR = self._indexed_reaction(R)
-        Ai = iR[1]; Bi = iR[2] if iR[2] is not None else Ai
+        iR2 = iR[2]
+        Ai = iR[1]
+        Bi = Ai if iR2 is None else iR2
         return rid, iR, (Ai,Bi)
     #end def
     

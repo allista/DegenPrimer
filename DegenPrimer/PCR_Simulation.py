@@ -131,31 +131,24 @@ class PCR_Simulation(PCR_Simulation_Interface):
     
     def __nonzero__(self): return self._nonzero
     
-    
     def not_empty(self): return bool(self._PCR_mixtures)
 
-
     def hits(self): return list(self._reactions_ids)
-
+    def products(self): return self._products
     
     def add_side_concentrations(self, concentrations):
         if concentrations: self._side_concentrations.update(concentrations)
-        
         
     def add_side_reactions(self, reactions):
         if not reactions: return 
         self._side_reactions.update(dict([R for R in reactions.items() 
                                           if R[1].constant >= min_K
                                           or R[1].type == 'A']))
-    #end def
-    
     
     def add_mixture(self, reaction_id, mixture_path):
         self._reactions_ids.add(reaction_id)
         self._PCR_mixtures[reaction_id] = mixture_path
         register_tmp_file(mixture_path)
-    #end def
-    
     
     def _new_PCR(self):
         return SinglePCR(self._abort_event, 
@@ -166,8 +159,6 @@ class PCR_Simulation(PCR_Simulation_Interface):
                    self._num_cycles, 
                    self._side_reactions, 
                    self._side_concentrations)
-    #end def
-    
 
     def run(self, counter):
         if not self._PCR_mixtures: return
@@ -297,23 +288,24 @@ class PCR_Simulation(PCR_Simulation_Interface):
                           max(l[1] for l in phoresis))
         max_mark    = max(len(str(l[2]+window)) for l in phoresis)*2
         line_width  = text_width - max_mark - 7 #mark b :###   :
+        tab         = ' '*(max_mark+5)+':'
+        line1       = tab+'-'*line_width+':\n'
+        line2       = tab+' '*line_width+':\n'
         #format phoresis
-        phoresis_text = ''
-        phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
-        phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-        for l in xrange(len(phoresis)):
-            line = phoresis[l]
-            prev_mark   = phoresis[l-1][2] if l > 0 else line[2]+window
-            mark_spacer = max_mark - len(str(line[2])) - len(str(prev_mark))
+        prev_mark = str(phoresis[0][2]+window)
+        phoresis_text = line1+line2
+        for line in phoresis:
+            mark = str(line[2])
+            mark_spacer = max_mark - len(mark) - len(prev_mark)
             line_value  = int(round((line_width*line[1])/max_line))
             line_spacer = line_width - line_value 
-            phoresis_text += '%d-%d%s bp :%s%s:\n' % (prev_mark,
-                                                      line[2], 
+            phoresis_text += '%s-%s%s bp :%s%s:\n' % (prev_mark,
+                                                      mark, 
                                                       ' '*mark_spacer,
                                                       '#'*line_value,
-                                                      ' '*line_spacer) 
-        phoresis_text += ' '*(max_mark+5)+':'+' '*line_width+':\n'
-        phoresis_text += ' '*(max_mark+5)+':'+'-'*line_width+':\n'
+                                                      ' '*line_spacer)
+            prev_mark = mark 
+        phoresis_text += line2+line1
         return phoresis_text
     #end def
     
@@ -344,13 +336,11 @@ class PCR_Simulation(PCR_Simulation_Interface):
         header_string += '\n'
         return header_string
 
-    def all_products_histogram(self):
+    def all_products_histogram(self, products):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
         all_products = []
-        prods_list = self._products.values()
-        prods_list.sort(key=lambda(d): max(p.quantity for p in d.values()), reverse=True)
-        for p_dict in prods_list:
+        for _hit, p_dict in products:
             prods = p_dict.values()
             prods.sort(key=len, reverse=True)
             all_products += prods
@@ -373,21 +363,22 @@ class PCR_Simulation(PCR_Simulation_Interface):
         return self._construct_electrophoresis(products)
     #end def
     
-    def all_graphs_grouped_by_hit(self):
+    def all_graphs_grouped_by_hit(self, products):
         if not self._nonzero: 
             return '\nNo PCR products have been found.\n'
-        all_graphs = ''
-        prods = self._products.items()
-        prods.sort(key=lambda(d): max(p.quantity for p in d[1].values()), reverse=True)
-        hits = [p[0] for p in prods]
-        for hit in hits:
-            all_graphs += self.per_hit_histogram(hit)
-            all_graphs += self.per_hit_header(hit)
-            all_graphs += hr(' electrophorogram of PCR products ')
-            all_graphs += self.per_hit_electrophoresis(hit)
-            all_graphs += hr('')
-            all_graphs += '\n\n'
-        return all_graphs
+        def worker(hit_products):
+            hit = hit_products[0]
+            graphs = self.per_hit_histogram(hit)
+            graphs += self.per_hit_header(hit)
+            graphs += hr(' electrophorogram of PCR products ')
+            graphs += self.per_hit_electrophoresis(hit)
+            graphs += hr('')
+            graphs += '\n\n'
+            return graphs
+        all_graphs = self.parallelize_work(1, worker, products)
+        if not all_graphs: 
+            return '\nFailed to compile PCR report. See the log for errors.'
+        return ''.join(all_graphs)
     
     def format_report_header(self):
         header_string  = ''
@@ -430,8 +421,7 @@ class PCR_Simulation(PCR_Simulation_Interface):
     #end def
     
     def format_products_report(self):
-        prod_string  = ''
-        prod_string += wrap_text('For each target sequence a list of possible '
+        header = wrap_text('For each target sequence a list of possible '
                                  'PCR products which were predicted by the '
                                  'simulation is given. ' 
                                  'Information about each product includes:\n'
@@ -447,8 +437,8 @@ class PCR_Simulation(PCR_Simulation_Interface):
                                  'it means that primers producing the product were depleted.\n'
                                  '-lists of forward and reverse primers which produced the product'
                                  '\n\n\n')
-        for hit in self._products:
-            prod_string += hr(' %s ' % hit, '*')
+        def worker(hit):
+            prod_string  = hr(' %s ' % hit, '*')
             prod_string += hr(' %d products have been found ' % len(self._products[hit]), '*')
             products = self._products[hit].values()
             products.sort(key=lambda x: x.start)
@@ -457,6 +447,9 @@ class PCR_Simulation(PCR_Simulation_Interface):
                 prod_string += product.pretty_print(with_name=False, include_fwd_3_mismatch=self._with_exonuclease)
                 prod_string += hr('', '=')
             prod_string += hr('', '*')
-        prod_string += '\n'
-        return prod_string
+            return prod_string
+        prod_strings = self.parallelize_work(1, worker, self._products.keys())
+        if not prod_strings:
+            return 'Failed to compile products report. See the log for errors.'
+        return header+''.join(prod_strings)+'\n'
 #end class

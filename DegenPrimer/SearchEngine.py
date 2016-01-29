@@ -139,19 +139,17 @@ class SearchEngine(MultiprocessingBase):
         if len(rev_matches): counter[1].set_work(len(rev_matches))
         #prepare and start two sets of jobs
         with tdf.AcquireParameters():
+            fwd_results = []; rev_results = []
             fwd_work = self.Work(timeout=0.1, counter=counter[0])
-            rev_work = self.Work(timeout=0.1, counter=counter[1])
-            fwd_work.prepare_jobs(self._compile_duplexes_mapper, 
+            fwd_work.start_work(self._compile_duplexes_mapper, 
                                   fwd_matches, num_jobs, 
                                   fwd_seq, primer, t_len, p_len, False)
-            rev_work.prepare_jobs(self._compile_duplexes_mapper, 
+            fwd_work.assemble(self._duplexes_assembler, fwd_results)
+            rev_work = self.Work(timeout=0.1, counter=counter[1])
+            rev_work.start_work(self._compile_duplexes_mapper, 
                                   rev_matches, num_jobs, 
                                   rev_seq, primer, t_len, p_len, True)
-            self.start_work(fwd_work, rev_work)
-            #allocate results containers and get results
-            fwd_results = []; rev_results = []
-            fwd_work.set_assembler(self._duplexes_assembler, fwd_results)
-            rev_work.set_assembler(self._duplexes_assembler, rev_results)
+            rev_work.assemble(self._duplexes_assembler, rev_results)
             if not self.wait(fwd_work, rev_work): return None
         if self.aborted() or not fwd_results and not rev_results: return None
         #sort duplexes by position and return them
@@ -201,7 +199,7 @@ class SearchEngine(MultiprocessingBase):
         of unity chunk to build. It's a power of 2 integer for fft to work fast.
         c_stride -- a part of chunk for which matches are calculated 
         (it is less than map_len, so chunks overlap each other)'''
-        t_AT_map = np.fromiter(array('b',t_chunk), dtype=complex) 
+        t_AT_map = np.fromiter(array('b',t_chunk), dtype=complex)
         t_AT_map.resize(c_size)
         t_GC_map = t_AT_map.copy()
         for k,v in cls._T_AT_mapping: t_AT_map[t_AT_map == k] = v
@@ -309,18 +307,17 @@ class SearchEngine(MultiprocessingBase):
             job.start()
             work.add_job(job, queue)
             pos += slice_stride
+        work.start_jobs()
         #if scores arrays are allocated beforehand, the memory
         #is returned upon deletion
         scores_len = slice_stride*len(work)
         scores = [np.zeros(scores_len), np.zeros(scores_len)]
-        def assemble_scores(out, scores):
+        def assembler(out, scores):
             if out:
                 scores[0][out[0]:out[0]+slice_stride] = out[1]
                 scores[1][out[0]:out[0]+slice_stride] = out[2]
-        work.set_assembler(assemble_scores, scores)
-        if not self.wait(work): return None
-        #if search was aborted, return empty results
-        if self.aborted(): return None
+        work.assemble(assembler, scores)
+        if not work.wait() or self.aborted(): return None
         #compute match indices
         matches     = max(1, p_len - mismatches)-0.5
         fwd_matches = np.where(scores[0][:t_len-p_len+1] >= matches)[0]
@@ -404,14 +401,13 @@ class SearchEngine(MultiprocessingBase):
         It uses multiprocessing to parallelize searches, each of which does 
         not use parallelization. Use it to search in many short sequences.'''
         work = self.Work(0.1, counter=counter)
-        work.prepare_jobs(self._batch_find, templates, None,
+        work.start_work(self._batch_find, templates, None,
                           primer, len(primer), mismatches, **kwargs)
         @MultiprocessingBase.results_assembler
         def assembler(index, result, results):
             if result: results[result[0]] = result[1]
         results = {}
-        work.set_assembler(assembler, results)
-        work.start()
+        work.assemble(assembler, results)
         if not work.wait(): return None
         return results
     #end def

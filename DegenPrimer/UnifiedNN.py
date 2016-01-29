@@ -138,13 +138,16 @@ class UnifiedNN(object):
     loops         = None
     tri_tetra_hairpin_loops = None
     
+    #constants
+    ter = Pars()
+    ini = Pars()
+    sym = Pars()
     
     #constructor
     def __init__(self):
         if self._inited: return
         self.load_tables()
     #end def
-    
     
     #bool value of an instance
     def __nonzero__(self):
@@ -234,11 +237,6 @@ class UnifiedNN(object):
         cls.internal_NN[key[::-1]] = pars
         return pars
     #end def
-    
-    #constants
-    ter = Pars()
-    ini = Pars()
-    sym = Pars()
     
     @classmethod
     def end_dPar_37(cls, seq, rev):

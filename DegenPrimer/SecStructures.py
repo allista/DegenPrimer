@@ -356,8 +356,6 @@ class Duplex(object):
         fwd_matches0 = fwd_matches[0]
         rev_matches0 = dimer.rev_min
         #construct matches string
-        #NOTE: to test for spacer length then to set string is a little faster
-        #then just use += ' '*num
         matches = array('c', ' '*len(fwd_sequence))
         for m in fwd_matches: matches[m] = '|'
         #calculate spacers

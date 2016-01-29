@@ -102,11 +102,10 @@ class SinglePCR(PCR_Base):
     def _construct_annealing_reactions(self, pcr_mixture, counter):
         reactions = dict()
         work = self.Work(timeout=0.1, counter=counter)
-        work.prepare_jobs(self._construct_annealing_reaction, 
+        work.start_work(self._construct_annealing_reaction, 
                           pcr_mixture.annealings, None, 
                           pcr_mixture.templates)
-        work.set_assembler(self._reactions_assembler, reactions)
-        work.start()
+        work.assemble(self._reactions_assembler, reactions)
         if not work.wait(): return None
         return reactions
     #end def

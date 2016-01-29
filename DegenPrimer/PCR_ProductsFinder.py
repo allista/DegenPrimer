@@ -20,8 +20,6 @@ Created on Mar 1, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from BioUtils.Tools.Debug import Pstats #test
-
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase
 from BioUtils.Tools.tmpStorage import from_shelf, cleanup_files
 from BioUtils.SeqUtils import pretty_rec_name 
@@ -93,7 +91,6 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
         return all_matches
     #end def
     
-    @Pstats('ProductsFinder.find')#test
     def find(self, counter, template, mismatches):
         all_annealings = []
         counter.set_subwork(self._num_p+1,
@@ -113,7 +110,6 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
         return {tname: mixture.save()}
     #end def
     
-    @Pstats('ProductsFinder.batch_find')#test
     def batch_find(self, counter, templates, mismatches, **kwargs):
         @MultiprocessingBase.data_mapper
         def worker(template):
@@ -135,9 +131,8 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
         results = dict()
         counter.set_subwork(1)
         work = self.Work(counter=counter[0])
-        work.prepare_jobs(worker, templates, None, **kwargs)
-        work.set_assembler(assembler, results)
-        self.start_work(work)
+        work.start_work(worker, templates, None, **kwargs)
+        work.assemble(assembler, results)
         if not self.wait(work): return None
         if not results: return None
         return results

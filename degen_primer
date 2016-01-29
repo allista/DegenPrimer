@@ -74,4 +74,4 @@ class DP_Main(MPMain):
         return exit_code
 
 if __name__ == '__main__':
-    DP_Main()
+    DP_Main(run=True)

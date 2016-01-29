@@ -95,8 +95,10 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
             self._all_primers.extend(primer.seq_records)
             #self structure work
             work = self.Work()
-            work.prepare_jobs(self._self_structures, primer.seq_records, None)
+            work.start_work(self._self_structures, primer.seq_records, None)
             self_works.append(work)
+            self._self.append([None]*len(primer.seq_records))
+            work.assemble(self._structure_assembler, self._self[-1])
         #cross structures jobs
         num_primers = len(self._all_primers)
         pair_index  = []
@@ -104,16 +106,11 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
             for j in xrange(i+1, num_primers):
                 pair_index.append((i,j))
         cross_work = self.Work()
-        cross_work.prepare_jobs(self._cross_structures, 
-                               pair_index, None, self._all_primers)
-        #run jobs
-        self.start_work(cross_work, *self_works)
-        #allocate result containers, get results
-        for primer, work in zip(self._primers, self_works):
-            self._self.append([None]*len(primer.seq_records))
-            work.set_assembler(self._structure_assembler, self._self[-1])
+        cross_work.start_work(self._cross_structures, 
+                              pair_index, None, self._all_primers)
         self._cross = [None]*len(pair_index)
-        cross_work.set_assembler(self._structure_assembler, self._cross)
+        cross_work.assemble(self._structure_assembler, self._cross)
+        #wait for all works to be finisheds
         if not self.wait(cross_work, *self_works): return False
         #prepare primer concentrations dictionary
         for primer in self._primers:
