@@ -3,17 +3,20 @@ It calculates melting temperatures, finds stable dimers, hairpins
 and crossdimers, uses BLAST search and full-fledged PCR simulation 
 cycle by cycle to provide accurate predictions of possible PCR 
 products and their quantities.
-It is written in python using SciPy and BioPython libraries.
 
 All calculations of thermodynamic parameters are made using 
 Nearest Neighbor model and the latest thermodynamic tables 
 with corrections for particular PCR conditions. PCR simulation 
-supports multiplex PCR.
+supports multiplex PCR with arbitrary number of primers.
 
-The program has simple command line interface as well as a GUI 
-(which is a separate package: https://launchpad.net/degenprimergui). 
-PBS is also supported with PBS-utils package at PyPi (https://pypi.python.org/pypi/PBS-utils)
+The program has simple command line interface as well as a 
+[separate GUI](https://github.com/allista/DegenPrimerGUI).
+PBS is also supported with [PBS-utils](https://pypi.python.org/pypi/PBS-utils) package at PyPi.
 
-Dependecies: python2 >= 2.7,
-             Biopython >= 1.58,
-             SciPy >= 0.9
+Dependecies: 
+
+         python2 >= 2.7
+         SciPy >= 0.16
+         Biopython >= 1.66
+         DendroPy >= 4.0
+         BioUtils >= 1.4
