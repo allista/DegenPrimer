@@ -64,7 +64,7 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
         return fwd_annealings,rev_annealings
     #end def
     
-    def matches_to_mixture(self, counter, t_id, matches_list):
+    def matches_to_mixture(self, counter, tname, matches_list):
         all_annealings = []
         m_weights = [len(m) for m in matches_list]
         counter.set_subwork(len(matches_list)+1,
@@ -74,8 +74,8 @@ class PCR_ProductsFinder(MixtureFactory, MultiprocessingBase):
             annealings = self._searcher.compile_duplexes_mp(counter[i], *matches)
             if annealings is None: return None
             all_annealings.append(annealings)
-        mixture = self.create_PCR_mixture(counter[-1], t_id, 
-                                          *self._extract_annealings(*all_annealings))
+        mixture = self.create_PCR_mixture(counter[-1], tname, 
+                                          *self._combine_annealings(*all_annealings))
         counter.done()
         return mixture.save()
     #end def
