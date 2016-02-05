@@ -86,6 +86,18 @@ class DegenPrimerConfig(object):
                                  scale=1e-6,
                                  ),
                           )),
+     OptionGroup('iPCR',
+                    'In silica PCR simulation parameters',
+                    options=(Option(name='fasta_files', 
+                                    desc='Path(s) to fasta file(s) containing '
+                                    'target sequences for iPCR simulation.',
+                                    nargs='+',
+                                    py_type=str,
+                                    value_required=False,
+                                    field_type='file',
+                                    ),
+                             )),
+     
     ]
     
     
@@ -274,60 +286,23 @@ class DegenPrimerConfig(object):
                                     py_type=bool,
                                     default=False,
                                     ),
-                             Option(name='fasta_files', 
-                                    desc='Path(s) to fasta file(s) containing '
-                                    'target sequences for iPCR simulation.',
+                             Option(name='template_files', 
+                                    desc='Path(s) to file(s) containing '
+                                    'target sequences for iPCR simulation. '
+                                    'Should be of the same type (genbank, fasta, embl).',
                                     nargs='+',
-                                    py_type=str,
-                                    value_required=False,
-                                    field_type='file',
-                                    ),
-                             Option(name='sequence_db', 
-                                    desc='Path to an sqlite database containing '
-                                    'target sequences for iPCR simulation. If provided, '
-                                    '--fasta-files option will be ignored.',
-                                    nargs=1,
                                     py_type=str,
                                     value_required=False,
                                     field_type='file',
                                     ),
                              Option(name='use_sequences', 
-                                    desc='ID(s) of the sequence(s) from the database '
-                                    'specified by --sequence-db option to be used as target '
-                                    'sequences for iPCR cimulation. If empty, all the sequences '
-                                    'in the database will be used.',
+                                    desc='ID(s) of the sequence(s) from the provided '
+                                    'fasta files to be used as target sequences for '
+                                    'iPCR cimulation. If empty, all the sequences '
+                                    'in the files will be used.',
                                     nargs='+',
                                     py_type=str,
                                     value_required=False,
-                                    ),
-                             )),
-        OptionGroup('seq_db',
-                    'Management of a sequence database',
-                    value_required=False,
-                    options=(Option(name='list_db', 
-                                    desc='List contents of a sequence database '
-                                    'specified.',
-                                    nargs=1,
-                                    py_type=str,
-                                    field_type='file',
-                                    save=False,
-                                    ),
-                             Option(name='add_sequences', 
-                                    desc='Path(s) to fasta file(s) containing '
-                                    'sequences to be included into the database specified '
-                                    'by --sequence-db option. The database itself is '
-                                    'created if nesessary.',
-                                    nargs='+',
-                                    py_type=str,
-                                    field_type='file',
-                                    save=False,
-                                    ),
-                             Option(name='del_sequences', 
-                                    desc='ID(s) of the sequence(s) to be excluded '
-                                    'from the database specified by --sequence-db option.',
-                                    nargs='+',
-                                    py_type=str,
-                                    save=False,
                                     ),
                              )),
         OptionGroup('optimize',
@@ -614,6 +589,8 @@ class DegenPrimerConfig(object):
     def _convert_obsolete_options(self):
         for option in chain(*(grp.options for grp in self._obsolete_options)):
             self._fill_option(option)
+        if self.fasta_files and not self.template_files:
+            self.template_files = self.fasta_files
         if not self.primer_list:
             try:
                 if self.sense_primer:

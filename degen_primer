@@ -27,7 +27,6 @@ from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
 from DegenPrimer.Pipeline import Pipeline
 from DegenPrimer.AnalysisTask import AnalysisTask
-from DegenPrimer.DBManagementTask import DBManagmentTask
 from DegenPrimer.OptimizationTask import OptimizationTask
 from BioUtils.Tools.Multiprocessing import MPMain
 ###############################################################################
@@ -36,7 +35,6 @@ class DP_Main(MPMain):
     def _main(self):
         #initialize pipeline
         pipeline = Pipeline(self.abort_event)
-        pipeline.register_task(DBManagmentTask(self.abort_event))
         pipeline.register_task(OptimizationTask(self.abort_event))
         pipeline.register_task(AnalysisTask(self.abort_event))
         #get commandline arguments

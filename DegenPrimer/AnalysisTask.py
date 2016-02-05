@@ -34,14 +34,12 @@ from .BlastPrimers import BlastPrimers
 from .AllSecStructures import AllSecStructures
 
 from .WorkCounter import WorkCounterManager
-from .SeqDB import SeqDB
 from .iPCR import iPCR
 from . import TD_Functions as tdf
 
 
 class SubroutineManager(UManager): pass
 SubroutineManager.register('AllSecStructures', AllSecStructures)
-SubroutineManager.register('SeqDB', SeqDB)
 SubroutineManager.register('iPCR', iPCR)
 SubroutineManager.register('BlastPrimers', BlastPrimers)
 
