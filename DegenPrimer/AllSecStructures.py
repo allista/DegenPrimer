@@ -143,33 +143,32 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
     #end def
     
     
-    @classmethod
-    def _print_structures(cls, structures, full=True):
-        structures_string = ''
-        for struct in structures:
-            if not struct: continue
-            if full: structures_string += struct.formatFull()
-            else: structures_string += struct.formatShort()
-        return structures_string
+    def _print_structures(self, structures, full):
+        def worker(struct):
+            if not struct: return ''
+            if full: return struct.formatFull()
+            else: return struct.formatShort()
+        strings = self.parallelize_work(1, worker, structures)
+        return ''.join(strings)
     #end def
     
     
     def print_structures(self, full=True):
-        structures_string = ''
+        strings = []
         for i, primer in enumerate(self._primers):
             structs = self._print_structures(self._self[i], full)
             if structs:
-                structures_string += hr(' secondary structures of %s primers ' % primer.id, '#')
-                structures_string += structs 
+                strings.append(hr(' secondary structures of %s primers ' % primer.id, '#'))
+                strings.append(structs) 
         if self._cross:
             cross_structs = self._print_structures(self._cross, full)
             if cross_structs:
-                structures_string += hr(' cross-dimers ', '#')
-                structures_string += cross_structs
-        if structures_string:
-            structures_string = hr(' stable secondary structures ', symbol='#') + structures_string
-        else: structures_string = hr(' no stable secondary structures found ', symbol='#')
-        return structures_string
+                strings.append(hr(' cross-dimers ', '#'))
+                strings.append(cross_structs)
+        if strings:
+            strings.insert(0, hr(' stable secondary structures ', symbol='#'))
+        else: strings.append(hr(' no stable secondary structures found ', symbol='#'))
+        return ''.join(strings)
     #end def
     
     def print_structures_short(self):
