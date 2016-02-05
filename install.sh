@@ -14,3 +14,6 @@ inst
 
 popd
 inst
+
+pushd ../DegenPrimerGUI
+inst
