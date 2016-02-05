@@ -1,4 +1,9 @@
 eclipse.preferences.version=1
+encoding//BioUtils/BioUtils/SeqUtils.py=utf-8
+encoding//BioUtils/BioUtils/Tools/Debug.py=utf-8
+encoding//BioUtils/BioUtils/Tools/Multiprocessing.py=utf-8
+encoding//BioUtils/BioUtils/Tools/Output.py=utf-8
+encoding//BioUtils/BioUtils/Tools/UMP.py=utf-8
 encoding//DegenPrimer/BlastPrimers.py=utf-8
 encoding//DegenPrimer/DegenPrimerConfig.py=utf-8
 encoding//DegenPrimer/DegenPrimerConfigCLI.py=utf-8
