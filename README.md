@@ -11,7 +11,7 @@ supports multiplex PCR with arbitrary number of primers.
 
 The program has simple command line interface as well as a 
 [separate GUI](https://github.com/allista/DegenPrimerGUI).
-PBS is also supported with [PBS-utils](https://pypi.python.org/pypi/PBS-utils) package at PyPi.
+PBS is also supported with [PBS-utils](https://github.com/allista/PBS-utils).
 
 Dependecies: 
 
