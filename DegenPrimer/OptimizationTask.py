@@ -86,9 +86,9 @@ class OptimizationTask(PrimerTaskBase):
             seq_file = args.sequence_db or args.fasta_files[0]
             seq_id   = args.use_sequences[0] if args.use_sequences else None
             if optimizer.optimize_PCR_parameters(seq_file, 
-                                                       args.target_product_list,
-                                                       parameters,
-                                                       seq_id):
+                                                 args.target_product_list,
+                                                 parameters,
+                                                 seq_id):
                 if optimizer.have_results():
                     optimizer.write_reports()
                     args.register_reports(optimizer.reports())

@@ -18,13 +18,14 @@ Created on Mar 15, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
+from scipy.optimize import fmin_l_bfgs_b
+import numpy as np
+
 from BioUtils.Tools.Multiprocessing import Parallelizer
 from BioUtils.Tools.UMP import FuncManager, at_manager
 from BioUtils.Tools.tmpStorage import register_tmp_file, cleanup_file
-from scipy.optimize import fmin_l_bfgs_b
-
+from BioUtils.SeqUtils import pretty_rec_name
 from BioUtils.Tools.Output import OutIntercepter
-import numpy as np
 
 from . import TD_Functions as tdf
 from .AllSecStructures import AllSecStructures
@@ -229,27 +230,22 @@ class PCR_Optimizer(iPCR_Base):
     #end def
 
     def _find_matches(self, seq_file, seq_id=None):
-        #try to connect to a database
-        if not self._try_connect_db((seq_file,)): return False
-        #get names of the sequences
-        self._seq_infos = self._get_names((seq_id,) if seq_id else None)
-        if not self._seq_infos:
-            self._seq_db.close() 
+        if not self._load_db([seq_file]):
+            print 'No templates were loaded from: %s' % str(seq_file) 
             return False
-        self._seq_name = self._seq_infos.values()[0]
-        #get sequences
-        templates = self._seq_db.get_seqs(self._seq_infos.keys())
-        self._seq_db.close()
-        #find match positions
+        if self.aborted(): return False
+        if not seq_id: seq_id = 0
+        template = self._seq_db[seq_id]
+        self._seq_name = pretty_rec_name(template)
         self._matches_list = self._searcher.find_matches(WorkCounter(), 
-                                                         self._seq_name, templates[0][2], 
+                                                         template, 
                                                          self._max_mismatches, 
                                                          self._PCR_ProductsFinder)
         return self._matches_list is not None
     #end def
 
     def optimize_PCR_parameters(self, seq_file, product_bounds, 
-                                   parameters, seq_id=None):
+                                parameters, seq_id=None):
         self._optimized = False
         #prepare parameters and matchers
         if not (seq_file and product_bounds and parameters): return False
