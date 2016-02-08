@@ -33,7 +33,7 @@ setup(name='degen-primer',
       version='2.8-rc3',
       description='Degenerate primer characterization and '
                   'in silico PCR simulation software.',
-      long_description=read('README'),
+      long_description=read('README.md'),
       license='GPL-3',
       author='Allis Tauri',
       author_email='allista@gmail.com',
