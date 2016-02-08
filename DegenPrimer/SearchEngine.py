@@ -18,7 +18,6 @@ Created on Jan 1, 2013
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from BioUtils.Tools.Debug import Pstats #test
 from BioUtils.Tools.Multiprocessing import MultiprocessingBase, aborted, cpu_count
 from BioUtils.Tools.tmpStorage import to_shelf
 from array import array
@@ -394,7 +393,6 @@ class SearchEngine(MultiprocessingBase):
         return (template.id, to_shelf(duplexes)) if duplexes else None 
     #end def
     
-    @Pstats('SearchEngine.batch_find')#test
     def batch_find(self, counter, templates, primer, mismatches, **kwargs):
         '''Find occurrences of a degenerate primer in each of the provided 
         templates. Return dictionary of results using template IDs as keys.

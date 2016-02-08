@@ -28,8 +28,6 @@ from scipy.optimize import fsolve, newton_krylov
 from scipy.sparse import csr_matrix, csgraph
 import warnings
 
-import csv#test
-
 import numpy as np
 
 class Reaction(object):
@@ -188,8 +186,8 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
         or    np.min(sol) < 0 \
         or    np.max(sol) > 1:
             if self.aborted(): return None
-            if r0_obj > self._precision:
-                print '%d.%s.objv = %f > %f' % (id(self), solver, r0_obj, self._precision)#test
+#            if r0_obj > self._precision:
+#                print '%d.%s.objv = %f > %f' % (id(self), solver, r0_obj, self._precision)#test
             sol = solver(sys_func, r0 + (random(r0.shape)-r0)*0.3, self._precision)
             if  np.min(sol) >= 0 and np.max(sol) <= 1: 
                 r0 = sol
@@ -231,9 +229,9 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
             warnings.simplefilter("ignore")
             try: sol = self._solve(sys_func, obj_func, r0, solver)
             except Exception, e: 
-                print '\n%d: failed to solve with %s' % (id(self), solver)#test
+                print '\n%d: failed to solve with %s' % (id(self), solver)
                 print e
-                print '\n%d: trying with %s' % (id(self), altsolv)#test
+                print '\n%d: trying with %s' % (id(self), altsolv)
                 try: sol = self._solve(sys_func, obj_func, r0, altsolv)
                 except Exception, e:
                     print '\nUnable to calculate equilibrium.'

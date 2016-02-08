@@ -110,9 +110,7 @@ class iPCR_Interface(PCR_Simulation_Interface, ReporterInterface):
     @raise_tb_on_error
     def write_reports(self):
         with tdf.AcquireParameters():
-            with simple_timeit('write products'):#test
-                self.write_products_report()
-            with simple_timeit('write PCR report'):#test
-                self.write_report()
+            self.write_products_report()
+            self.write_report()
     #end def
 #end class

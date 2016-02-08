@@ -78,7 +78,7 @@ def primer_template_Tr(sequence, concentration, conversion_degree):
     #initial corrections
     dP = NN.ini
     dH = dP.dH; dS = dP.dS
-    #test for AT terminals
+    #check for AT terminals
     if seq_str[0]  in 'AT':
         dP  = NN.ter
         dH += dP.dH; dS += dP.dS
