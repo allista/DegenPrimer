@@ -24,7 +24,7 @@ from datetime import timedelta, datetime
 from Queue import Empty
 from threading import Lock
 from Bio import SeqIO
-from BioUtils.Tools.Output import OutQueue
+from BioUtils.Tools.Output import OutQueueWithID
 from BioUtils.Tools import EchoLogger
 from BioUtils.Tools.UMP import UManager
 from BioUtils.Tools import WaitingThread
@@ -55,7 +55,7 @@ class AnalysisTask(PrimerTaskBase):
     def __init__(self, abort_event):
         PrimerTaskBase.__init__(self, abort_event)
         self._print_lock   = Lock()
-        self._out_queue    = OutQueue()
+        self._out_queue    = OutQueueWithID()
         self._counter_mgr  = WorkCounterManager()
         self._counter_mgr.start()
         self._subroutines  = []
@@ -128,7 +128,7 @@ class AnalysisTask(PrimerTaskBase):
         #----------------------------------------------------------------------#
         #in-silico PCR simulation. This is only available if sequence database #
         #is provided in some form                                              #
-        if args.fasta_files or args.sequence_db:
+        if args.template_files:
             p_entry = self._generate_subroutine_entry()
             ipcr = p_entry['manager'].iPCR(self._abort_event,
                                            args.max_mismatches,
@@ -144,11 +144,8 @@ class AnalysisTask(PrimerTaskBase):
                                            args.analyse_all_annealings)
             analysis_routines.append(ipcr)
             #connect to sequence database
-            seq_files = []
-            if args.sequence_db: seq_files.append(args.sequence_db)
-            else: seq_files = args.fasta_files
             self._run_subroutine(ipcr.simulate_PCR, 
-                                 (seq_files, 
+                                 (args.template_files, 
                                   args.use_sequences), p_entry,
                                  'Simulate PCR using provided sequences as DNA templates.')
         #-----------------test for primers specificity by BLAST----------------#

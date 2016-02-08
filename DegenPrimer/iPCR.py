@@ -65,13 +65,13 @@ class iPCR(iPCR_Base):
     #end def
     
     
-    def _find_products_in_db(self, counter, PCR_Sim, P_Finder):
+    def _find_products_in_db(self, counter, seq_ids, PCR_Sim, P_Finder):
         #sort templates into short, suitable for plain search and long -- for mp
         seq_lengths = dict()
         short_templates = []
         long_templates  = []
         with simple_timeit('PCR Simulation: sorting templates'):
-            for t_id in self._seq_db.keys():
+            for t_id in seq_ids:
                 t_len = len(self._seq_db[t_id])
                 seq_lengths[t_id] = t_len
                 if mp_better(t_len): long_templates.append(t_id)
@@ -121,7 +121,7 @@ class iPCR(iPCR_Base):
                 return False
             if self.aborted(): return False
         if not seq_ids: seq_ids = self._seq_db.keys()
-        return self._find_products_in_db(counter, PCR_Sim, P_Finder)
+        return self._find_products_in_db(counter, seq_ids, PCR_Sim, P_Finder)
     #end def
     
     @raise_tb_on_error

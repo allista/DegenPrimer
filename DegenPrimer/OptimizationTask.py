@@ -51,8 +51,7 @@ class OptimizationTask(PrimerTaskBase):
                     has_parameters = True
                     break
         if not has_parameters: return False
-        return (bool(args.fasta_files) or 
-                bool(args.sequence_db) and bool(args.use_sequences))
+        return bool(args.template_files) 
     #end def
         
     
@@ -83,9 +82,8 @@ class OptimizationTask(PrimerTaskBase):
                                       None, 
                                       None,
                                       args.analyse_all_annealings)
-            seq_file = args.sequence_db or args.fasta_files[0]
-            seq_id   = args.use_sequences[0] if args.use_sequences else None
-            if optimizer.optimize_PCR_parameters(seq_file, 
+            seq_id = args.use_sequences[0] if args.use_sequences else 0
+            if optimizer.optimize_PCR_parameters(args.template_files, 
                                                  args.target_product_list,
                                                  parameters,
                                                  seq_id):

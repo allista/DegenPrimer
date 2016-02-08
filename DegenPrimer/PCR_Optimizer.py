@@ -229,12 +229,11 @@ class PCR_Optimizer(iPCR_Base):
         self._num_params = len(self._iparams)
     #end def
 
-    def _find_matches(self, seq_file, seq_id=None):
-        if not self._load_db([seq_file]):
-            print 'No templates were loaded from: %s' % str(seq_file) 
+    def _find_matches(self, seq_files, seq_id):
+        if not self._load_db(seq_files):
+            print 'No templates were loaded from: %s' % str(seq_files) 
             return False
         if self.aborted(): return False
-        if not seq_id: seq_id = 0
         template = self._seq_db[seq_id]
         self._seq_name = pretty_rec_name(template)
         self._matches_list = self._searcher.find_matches(WorkCounter(), 
@@ -244,12 +243,13 @@ class PCR_Optimizer(iPCR_Base):
         return self._matches_list is not None
     #end def
 
-    def optimize_PCR_parameters(self, seq_file, product_bounds, 
+    def optimize_PCR_parameters(self, seq_files, product_bounds, 
                                 parameters, seq_id=None):
         self._optimized = False
+        if seq_id is None: seq_id = 0
         #prepare parameters and matchers
-        if not (seq_file and product_bounds and parameters): return False
-        if not self._find_matches(seq_file, seq_id): return False
+        if not (seq_files and product_bounds and parameters): return False
+        if not self._find_matches(seq_files, seq_id): return False
         self._prepare_parameters(product_bounds, parameters)
         #optimize parameters
         print ''
