@@ -1,6 +1,8 @@
 eclipse.preferences.version=1
+encoding//BioUtils/BioUtils/NCBI/__init__.py=utf-8
 encoding//BioUtils/BioUtils/SeqUtils.py=utf-8
 encoding//BioUtils/BioUtils/Tools/Debug.py=utf-8
+encoding//BioUtils/BioUtils/Tools/Misc.py=utf-8
 encoding//BioUtils/BioUtils/Tools/Multiprocessing.py=utf-8
 encoding//BioUtils/BioUtils/Tools/Output.py=utf-8
 encoding//BioUtils/BioUtils/Tools/UMP.py=utf-8
