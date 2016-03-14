@@ -30,6 +30,7 @@ from .Option import Option, OptionGroup
 from .Primer import Primer
 from .SeqUtils import load_sequence
 from BioUtils.Tools.Text import random_text
+from BioUtils.Tools import tmpStorage
 
 
 class DegenPrimerConfig(object):
@@ -103,6 +104,18 @@ class DegenPrimerConfig(object):
     
     _option_groups = \
     [
+        OptionGroup('system',
+                    'Miscellaneous options related to program itself',
+                    options=(Option(name='tmp_dir', 
+                                    desc='Temporary directory to use for intermediate results. '
+                                    'Leave empty to use system default.',
+                                    nargs='?',
+                                    py_type=str,
+                                    field_type='directory',
+                                    default='',
+                                    save=True,
+                                    ),
+                             )),
         OptionGroup('primers',
                     'Primers with IDs and concentrations',
                     options=(Option(name='primer', 
@@ -640,6 +653,9 @@ class DegenPrimerConfig(object):
             if primer.id:
                 self.job_id += primer.id
         self.job_id += '_%s' % str(hash(self))
+        #set tmpdir if provided
+        if self.tmp_dir:
+            tmpStorage.TMPDIR = self.tmp_dir
     #end def
     
     
