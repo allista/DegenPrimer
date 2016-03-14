@@ -23,7 +23,7 @@ Created on 2016-01-14
 def test():
     import cProfile
     import DegenPrimer.TD_Functions as tdf
-    from DegenPrimer.SecStructures import Duplex, reverse_complement
+    from DegenPrimer.SecStructures import Duplex, reverse_complement, Dimer
 
     tdf.PCR_P.Na = 50.0e-3
     tdf.PCR_P.Mg = 3.0e-3
@@ -32,7 +32,7 @@ def test():
     tdf.PCR_P.DMSO = 0.0
     tdf.PCR_P.PCR_T = 60.0
     with tdf.AcquireParameters():
-        du = Duplex('GAACGCAAAGATCGGGAAC', 'CTTGCGTTTCTAACCCTTG'[::-1])
+        du = Duplex('AGAGAACGCAAAGATCGGGAAC', 'CTTGCGTTTCTAACCCTTG'[::-1], dimer=Dimer((3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21), 3))
         print du
         cProfile.runctx('for x in xrange(100000): du.print_most_stable()', 
                         globals(), locals(), 'Duplex.print_stable.profile')
