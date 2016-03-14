@@ -22,12 +22,12 @@ Tool to compute degenerate primer parameters using BioPython
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from DegenPrimer.StringTools import hr, wrap_text
 from DegenPrimer.DegenPrimerConfig import DegenPrimerConfig
 from DegenPrimer.DegenPrimerConfigCLI import DegenPrimerConfigCLI
 from DegenPrimer.Pipeline import Pipeline
 from DegenPrimer.AnalysisTask import AnalysisTask
 from DegenPrimer.OptimizationTask import OptimizationTask
+from BioUtils.Tools.Text import hr, wrap_text
 from BioUtils.Tools.Multiprocessing import MPMain
 ###############################################################################
 
