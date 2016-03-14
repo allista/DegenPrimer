@@ -275,6 +275,7 @@ class Duplex(object):
         If include_fwd_3_mismatch is False, the most stable variant *without*
         3' mismatches on forward strand will be printed'''
         duplex_str = ''
+        if not self._dimers: return duplex_str
         if not include_fwd_3_mismatch:
             if self._fwd_matches:
                 return self.print_dimer(self._fwd_sequence, self._rev_sequence, 
@@ -353,21 +354,21 @@ class Duplex(object):
             duplex_string += rev_sequence[::-1] + '\n'
             return duplex_string
         fwd_matches  = dimer.fwd_matches
-        fwd_matches0 = fwd_matches[0]
-        rev_matches0 = dimer.rev_min
         #construct matches string
         matches = array('c', ' '*len(fwd_sequence))
         for m in fwd_matches: matches[m] = '|'
         #calculate spacers
-        if fwd_matches0 > rev_matches0:
+        if dimer.offset > 0:
             duplex_string += "5' "+fwd_sequence+" 3'\n   "
             duplex_string += matches.tostring()+'\n'
-            duplex_string += ' '*(fwd_matches0-rev_matches0)+"3' "+rev_sequence[::-1]+" 5'\n"
+            duplex_string += ' '*dimer.offset+"3' "+rev_sequence[::-1]+" 5'\n"
         else:
-            if rev_matches0 > fwd_matches0:
-                duplex_string += ' '*(rev_matches0-fwd_matches0)
+            offset_str = ''
+            if dimer.offset < 0:
+                offset_str = ' '*abs(dimer.offset)
+                duplex_string += offset_str 
             duplex_string += "5' "+fwd_sequence+" 3'\n   "
-            duplex_string += matches.tostring()+'\n'
+            duplex_string += offset_str+matches.tostring()+'\n'
             duplex_string += "3' "+rev_sequence[::-1]+" 5'\n"
         #dG
         if dimer.dG is not None:
