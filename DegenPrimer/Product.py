@@ -23,10 +23,11 @@ Created on Mar 15, 2013
 
 from copy import deepcopy
 
+from BioUtils.Tools.JSON import JSONattrs
 from BioUtils.Tools.Text import hr
 from . import TD_Functions as tdf
 
-class Region(object):
+class Region(JSONattrs):
     '''Region of a sequence.'''
     __slots__ = ['name', 'start', 'end', 'forward']
     
@@ -40,6 +41,9 @@ class Region(object):
         self.end     = end
         self.forward = forward
     #end def
+    
+    @classmethod
+    def _default(cls): return cls('', 1, 1, True)
     
     def pretty_print(self, with_name=True):
         rep  = ''
@@ -113,6 +117,9 @@ class Product(Region):
         for primer in rev_primers:
             self.add_rev_primer(primer)
     #end def
+    
+    @classmethod
+    def _default(cls): return Product('', 1, 1)
     
     @staticmethod
     def _rep_primers(primers, tostr=repr):
