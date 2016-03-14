@@ -72,7 +72,11 @@ class iPCR(iPCR_Base):
         long_templates  = []
         with simple_timeit('PCR Simulation: sorting templates'):
             for t_id in seq_ids:
-                t_len = len(self._seq_db[t_id])
+                template = self._seq_db[t_id]
+                if template is None:
+                    print 'Sequence %s not found. Something is not right with the sequence database.' % t_id 
+                    continue
+                t_len = len(template)
                 seq_lengths[t_id] = t_len
                 if mp_better(t_len): long_templates.append(t_id)
                 else: short_templates.append(t_id)
@@ -96,9 +100,8 @@ class iPCR(iPCR_Base):
         print '\nPCR Simulation: searching for annealing sites in provided sequences...'
         #search short templates in batch
         if short_templates:
-            templates = self._seq_db if not long_templates else self._seq_db.subview(short_templates)
             results = self._find_products_in_templates(short_counter, 
-                                                       templates, 
+                                                       self._seq_db.subview(short_templates), 
                                                        P_Finder)
             if not results or self.aborted(): return False
             for t_id, m_path in results.iteritems():
@@ -121,6 +124,8 @@ class iPCR(iPCR_Base):
                 return False
             if self.aborted(): return False
         if not seq_ids: seq_ids = self._seq_db.keys()
+        else: seq_ids = [str(sid) for sid in seq_ids]
+        print 'Number of templates to process: %d' % len(seq_ids)
         return self._find_products_in_db(counter, seq_ids, PCR_Sim, P_Finder)
     #end def
     

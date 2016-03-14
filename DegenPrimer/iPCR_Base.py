@@ -45,7 +45,7 @@ class iPCR_Base(iPCR_Interface):
     #end def
     
     def _load_db(self, filenames):
-        self._seq_db = SeqView()
+        self._seq_db = SeqView(upper=True)
         if not self._seq_db.load(filenames):
             self._seq_db = None
             return False
