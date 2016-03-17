@@ -34,16 +34,15 @@ class SearchEngine(MultiprocessingBase):
     '''Fast search of a pattern sequence in a given set of template sequences 
     with parallelization using multiprocessing.'''
     
-    _w_3_0 = 1                        #trivial 3d root of unity 
-    _w_3_1 = (-1/2.0+np.sqrt(3)/2.0j) #3d root of unity in a power of 1
-    _w_3_2 = (-1/2.0-np.sqrt(3)/2.0j) #3d root of unity in a power of 2
+    _w_3_0 = 1                      #trivial 3d root of unity 
+    _w_3_1 = -1/2.0+np.sqrt(3)/2.0j #3d root of unity in a power of 1
+    _w_3_2 = -1/2.0-np.sqrt(3)/2.0j #3d root of unity in a power of 2
     
     _unambiguous = array('b','ATGC')  #ATGC characters as byte array
     
     #alphabet mappings to the 3d roots of unity for templates and patterns
-    _T_AT_mapping = tuple(zip(_unambiguous, (_w_3_1,_w_3_2,0,0))) 
-    
-    _T_GC_mapping = tuple(zip(_unambiguous, (0,0,_w_3_1,_w_3_2)))
+    _T_AT_mapping = tuple(zip(_unambiguous[:2], (_w_3_1,_w_3_2))) 
+    _T_GC_mapping = tuple(zip(_unambiguous[2:], (_w_3_1,_w_3_2)))
 
     _P_AT_mapping = {'A':_w_3_2,
                      'T':_w_3_1,
@@ -198,11 +197,12 @@ class SearchEngine(MultiprocessingBase):
         of unity chunk to build. It's a power of 2 integer for fft to work fast.
         c_stride -- a part of chunk for which matches are calculated 
         (it is less than map_len, so chunks overlap each other)'''
-        t_AT_map = np.fromiter(array('b',t_chunk), dtype=complex)
-        t_AT_map.resize(c_size)
-        t_GC_map = t_AT_map.copy()
-        for k,v in cls._T_AT_mapping: t_AT_map[t_AT_map == k] = v
-        for k,v in cls._T_GC_mapping: t_GC_map[t_GC_map == k] = v
+        chunk = np.fromiter(array('b',t_chunk), dtype=complex)
+        chunk.resize(c_size)
+        t_AT_map = np.zeros(len(chunk), dtype=complex)
+        t_GC_map = np.zeros(len(chunk), dtype=complex)
+        for k,v in cls._T_AT_mapping: t_AT_map[chunk == k] = v
+        for k,v in cls._T_GC_mapping: t_GC_map[chunk == k] = v
         AT_score = ifft(fft(t_AT_map[::-1])*p_fft[0])[::-1][:c_stride]
         GC_score = ifft(fft(t_GC_map[::-1])*p_fft[1])[::-1][:c_stride]
         score    = AT_score.real + GC_score.real
