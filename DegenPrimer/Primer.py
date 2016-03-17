@@ -29,7 +29,7 @@ from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from .SeqUtils import unambiguous_sequences
+from .SeqUtils import unambiguous_sequences, IUPAC_ambiguous
 from . import TD_Functions as tdf
 
 
@@ -257,7 +257,7 @@ class Primer(object):
     
     
     @classmethod
-    def from_sequences(cls, seq_records, concentration):
+    def from_sequences(cls, seq_records, concentration, _id=None, description=None):
         '''Generate new Primer object from a list of unambiguous sequences. 
         If no sequences are provided, or provided sequences deffer in length, 
         return None.'''
@@ -267,24 +267,23 @@ class Primer(object):
         for seq_rec in seq_records:
             if len(seq_rec.seq) != seq_len:
                 return None
-            if seq_rec.seq.alphabet != IUPAC.unambiguous_dna:
-                return None
         #compose degenerate sequence
         master_sequence = [set() for i in xrange(seq_len)]
         for seq_rec in seq_records:
             for i in xrange(seq_len):
-                master_sequence[i].add(seq_rec.seq[i])
+                for l in unambiguous_sequences(seq_rec.seq[i].upper()):
+                    master_sequence[i].add(l)
         for i in xrange(seq_len):
             if len(master_sequence[i]) == 1:
                 master_sequence[i] = master_sequence[i].pop()
                 continue
-            for letter in cls.IUPAC_ambiguous:
-                if master_sequence[i] == set(cls.IUPAC_ambiguous[letter]):
+            for letter in IUPAC_ambiguous:
+                if master_sequence[i] == set(IUPAC_ambiguous[letter]):
                     master_sequence[i] = letter
                     break
         master_record = SeqRecord(Seq(''.join(l for l in master_sequence), IUPAC.ambiguous_dna),
-                                  description=seq_records[0].description,
-                                  id=seq_records[0].id)
+                                  description=description if description else seq_records[0].description,
+                                  id=_id if _id else seq_records[0].id)
         return cls(master_record, concentration)
     #end def
 #end class
