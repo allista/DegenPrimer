@@ -103,9 +103,10 @@ class iPCR(iPCR_Base):
             results = self._find_products_in_templates(short_counter, 
                                                        self._seq_db.subview(short_templates), 
                                                        P_Finder)
-            if not results or self.aborted(): return False
-            for t_id, m_path in results.iteritems():
-                PCR_Sim.add_mixture(t_id, m_path)
+            if results is not None:
+                for t_id, m_path in results.iteritems():
+                    PCR_Sim.add_mixture(t_id, m_path)
+            elif self.aborted(): return False
         #if there're long templates, search sequentially
         for i, t_id in enumerate(long_templates):
             result = self._find_products_in_templates(long_counter[i], [self._seq_db[t_id]], P_Finder)
@@ -140,6 +141,7 @@ class iPCR(iPCR_Base):
             self._PCR_Simulation.run(counter[1])
             self._have_results = bool(self._PCR_Simulation)
             return self._have_results
+        print 'No products were found.'
         return False
     #end def
     
@@ -161,27 +163,26 @@ class iPCR(iPCR_Base):
     
     
     def _format_report_body(self):
-        body  = ''
-        body += self._PCR_Simulation.format_quantity_explanation()
+        body  = []
+        body.append(self._PCR_Simulation.format_quantity_explanation())
         #PCR products by hit
-        body += hr(' histogram of all possible PCR products ', symbol='=') 
+        body.append(hr(' histogram of all possible PCR products ', symbol='=')) 
         if len(self._PCR_Simulation.hits()) == 1:
             #all products histogram
             hit = self._PCR_Simulation.hits()[0]
-            body += self._PCR_Simulation.per_hit_header(hit)
-            body += self._PCR_Simulation.per_hit_histogram(hit)
-            body += '\n'
-            body += hr(' electrophorogram of all possible PCR products ', symbol='=')
-            body += self._PCR_Simulation.per_hit_electrophoresis(hit)
+            body.append(self._PCR_Simulation.per_hit_header(hit))
+            body.append(self._PCR_Simulation.per_hit_histogram(hit))
+            body.append('\n')
+            body.append(hr(' electrophorogram of all possible PCR products ', symbol='='))
+            body.append(self._PCR_Simulation.per_hit_electrophoresis(hit))
         else:
-            products = self._PCR_Simulation.products().items()
-            products.sort(key=lambda(d): max(p.quantity for p in d[1].values()), reverse=True)
+            products = self._PCR_Simulation.all_products_by_quantity()
             #all products histogram
-            body += self._PCR_Simulation.all_products_histogram(products)
-            body += '\n\n\n'
+            body.append(self._PCR_Simulation.all_products_histogram(products))
+            body.append('\n\n\n')
             #per hit histogram and phoresis
-            body += hr(' histograms and electrophorograms of PCR products of each hit ', symbol='=')
-            body += self._PCR_Simulation.all_graphs_grouped_by_hit(products)     
-        return body
+            body.append(hr(' histograms and electrophorograms of PCR products of each hit ', symbol='='))
+            body.append(self._PCR_Simulation.all_graphs_grouped_by_hit(products))
+        return '\n'.join(body)
     #end def
 #end class
