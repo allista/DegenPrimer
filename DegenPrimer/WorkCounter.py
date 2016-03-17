@@ -29,10 +29,10 @@ from time import time
 
 class ReturnProxy(type):
     '''A metaclass to work around http://bugs.python.org/issue20854'''
-    def __call__(cls, *args, **kwargs):
-        if not kwargs and args and isinstance(args[0], cls):
+    def __call__(self, *args, **kwargs):
+        if not kwargs and args and isinstance(args[0], self):
             return args[0]
-        return super(ReturnProxy, cls).__call__(*args, **kwargs)
+        return super(ReturnProxy, self).__call__(*args, **kwargs)
 #end metaclass
 
 class SequenceReturnProxy(ReturnProxy, ABCMeta): pass
