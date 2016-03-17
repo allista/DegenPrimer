@@ -3,7 +3,6 @@
 	<name>DegenPrimer</name>
 	<comment></comment>
 	<projects>
-		<project>BioUtils</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
