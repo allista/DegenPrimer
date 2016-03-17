@@ -232,7 +232,7 @@ class MixtureFactory(AbortableBase):
                 if rev_pi not in added_positons[0]:
                     mixture.add_annealing(rev_dups, rev_templ)
                     added_positons[0].add(rev_pi)
-                if not products_added: products_added = True
+                products_added |= True
         counter.count()
         if products_added: #if some products were found, set nonzero flag and save PCR mixture to the DB
             if self._include_side_annealings: #add side annealings if requested
