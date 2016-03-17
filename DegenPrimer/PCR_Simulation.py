@@ -135,6 +135,10 @@ class PCR_Simulation(PCR_Simulation_Interface):
 
     def hits(self): return list(self._reactions_ids)
     def products(self): return self._products
+    def all_products_by_quantity(self):
+        products = self._products.items()
+        products.sort(key=lambda(d): max(p.quantity for p in d[1].values()), reverse=True)
+        return products
     
     def add_side_concentrations(self, concentrations):
         if concentrations: self._side_concentrations.update(concentrations)
@@ -401,23 +405,19 @@ class PCR_Simulation(PCR_Simulation_Interface):
     #end def
     
     def format_quantity_explanation(self):
-        expl_string  = ''
-        expl_string += hr(' estimation of PCR products concentrations ')
-        expl_string += 'The value of the objective function of at the solution ' + \
-                       '(the lower the better):\n   %e\n' % \
-                        self._max_objective_value
-        expl_string += wrap_text('This value shows "distance" to the solution of '
-                           'the system of equilibrium equations which were used '
-                           'to calculate concentrations of PCR products.\n\n')
-        expl_string += wrap_text(('Products with concentration less than %.2f%% '
-                                  'of the concentration of the most abundant '
-                                  'product or less than initial DNA concentration '
-                                  'are not shown.'
-                                 '\n\n') % (self._min_quantity_factor*100))
-        expl_string += wrap_text('Boundaries of a product and it\'s length do '
-                                 'not include primers.\n\n')
-        expl_string += '\n'
-        return expl_string
+        return ''.join((hr(' estimation of PCR products concentrations '),
+                        ('The value of the objective function of at the solution '
+                         '(the lower the better):\n   %e\n' % self._max_objective_value),
+                        wrap_text('This value shows "distance" to the solution of '
+                                  'the system of equilibrium equations which were used '
+                                  'to calculate concentrations of PCR products.\n\n'),
+                        wrap_text(('Products with concentration less than %.2f%% '
+                                   'of the concentration of the most abundant '
+                                   'product or less than initial DNA concentration '
+                                   'are not shown.'
+                                   '\n\n') % (self._min_quantity_factor*100)),
+                        wrap_text('Boundaries of a product and it\'s length do '
+                                  'not include primers.\n\n\n')))
     #end def
     
     def format_products_report(self):
