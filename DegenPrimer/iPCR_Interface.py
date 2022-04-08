@@ -41,9 +41,9 @@ class iPCR_Interface(PCR_Simulation_Interface, ReporterInterface):
         ReporterInterface.__init__(self)
         PCR_Simulation_Interface.__init__(self, abort_event, *args, **kwargs)
         self._job_id              = job_id
-        self._PCR_report_filename = '%s-%s-report.txt' % (self._job_id, 
+        self._PCR_report_filename = '%s-%s-report.txt' % (self._job_id[-20:],
                                                           self._PCR_report_suffix)
-        self._PCR_products_filename = '%s-%s-products.txt' % (self._job_id, 
+        self._PCR_products_filename = '%s-%s-products.txt' % (self._job_id[-20:],
                                                               self._PCR_report_suffix)
     #end def
     

@@ -99,7 +99,7 @@ class UnifiedNN(object):
     _inited = False
     
     #paths to the thermodynamic tables
-    _possible_paths = ('./', '/usr/local/share/degen_primer/', '/usr/share/degen_primer/')
+    _possible_paths = ('./', '/usr/local/share/degen_primer/', '/usr/share/degen_primer/', '/home/npilshchikova/DegenPrimer/data')
      
     internal_NN_filename             = 'internal-NN.csv'
     _internal_NN_paths               = _install_paths(_possible_paths, internal_NN_filename)
