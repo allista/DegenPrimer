@@ -1,0 +1,6 @@
+-r ./BioUtils/requirements.txt
+./BioUtils
+numpy==1.16.6
+scipy==0.16.0
+biopython==1.66
+DendroPy==4.0.0
