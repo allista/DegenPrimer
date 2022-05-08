@@ -21,7 +21,7 @@ Created on Mar 2, 2014
 @author: Allis Tauri <allista@gmail.com>
 '''
 
-from tmpStorage import tmpDict, roDict
+from BioUtils.Tools.tmpStorage import tmpDict, roDict
 import shelve, os
 
 if __name__ == '__main__':
