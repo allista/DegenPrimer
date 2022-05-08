@@ -37,7 +37,7 @@ setup(name='degen-primer',
       license='GPL-3',
       author='Allis Tauri',
       author_email='allista@gmail.com',
-      url='https://launchpad.net/degenprimer',
+      url='https://github.com/allista/DegenPrimer',
       classifiers=[
         'Development Status :: 4 - Beta',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
