@@ -27,7 +27,7 @@ if __name__ == '__main__':
     from DegenPrimer.Primer import Primer
     from DegenPrimer.SeqUtils import load_sequence
     from DegenPrimer.WorkCounter import WorkCounterManager
-    from DegenPrimer.WaitingThread import WaitingThread
+    from BioUtils.Tools.WaitingThread import WaitingThread
     from DegenPrimer.TD_Functions import PCR_P
     from DegenPrimer.BlastPrimers import BlastPrimers
     from threading import Lock

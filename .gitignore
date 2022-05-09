@@ -4,3 +4,5 @@ Tests/results/**
 *~
 *.pyc
 MANIFEST
+.idea
+tmp/

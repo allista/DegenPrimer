@@ -667,7 +667,7 @@ class DegenPrimerConfig(object):
         if self._config_file:
             self._config = SafeConfigParser()
             if not self._config.read(self._config_file):
-                print '\nUnable to load configuration from', self._config_file
+                print '\nUnable to load configuration from %s' % self._config_file
                 self._config = None
             else: saved_hash = config_file.split('_')[-1].rstrip('.cfg')
         #fill in the configuration

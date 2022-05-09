@@ -31,7 +31,7 @@ def test():
     d2 = Duplex(rev_primer, reverse_complement(rev_primer))
     f = 'Product_test.json.gz'
     p = Product('test_template', 50, 150, (d1,), (d2,))
-    p.save(f)
+    f = p.save(f)
     p1 = Product.load(f)
     print p
     print '-'*80
@@ -39,5 +39,4 @@ def test():
     assert str(p) == str(p1)
 
 if __name__ == '__main__':
-    import nose
-    nose.main()
+    test()

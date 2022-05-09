@@ -79,7 +79,7 @@ class AllSecStructures(ReporterInterface, MultiprocessingBase):
         return structures,reactions
     #end def
     
-    @MultiprocessingBase.results_assembler_methd
+    @MultiprocessingBase.results_assembler_method
     def _structure_assembler(self, index, result, structures):
         structures[index] = result[0]
         self._reactions.update(result[1])

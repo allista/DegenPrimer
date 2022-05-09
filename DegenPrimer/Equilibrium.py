@@ -229,13 +229,11 @@ class EquilibriumSolver(EquilibriumBase, AbortableBase):
             warnings.simplefilter("ignore")
             try: sol = self._solve(sys_func, obj_func, r0, solver)
             except Exception, e: 
-                print '\n%d: failed to solve with %s' % (id(self), solver)
-                print e
+                print '\n%d: failed to solve with %s\n%s' % (id(self), solver, str(e))
                 print '\n%d: trying with %s' % (id(self), altsolv)
                 try: sol = self._solve(sys_func, obj_func, r0, altsolv)
                 except Exception, e:
-                    print '\nUnable to calculate equilibrium.'
-                    print e
+                    print '\nUnable to calculate equilibrium.\n%s' % str(e)
                     sol = None
         if sol is None: return False
         #calculate solution objective function and reactant consumptions

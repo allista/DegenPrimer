@@ -21,6 +21,7 @@ Created on Jun 23, 2012
 import numpy as np
 from array import array
 
+from BioUtils.Tools.JSON import JSONattrs
 from BioUtils.Tools.Text import hr
 
 from .Equilibrium import Reaction
@@ -54,7 +55,7 @@ def reverse_complement(seq): #this is much faster than the Bio.Seq.reverse_compl
 #end def
 
 
-class Dimer(object):
+class Dimer(JSONattrs):
     '''
     Structure of a dimer without bulges (i.e. asymmetrical loops):
     forward matches is a list of nucleotide indices of forward sequence 
@@ -190,7 +191,7 @@ class Dimer(object):
     #end def
 #end class
 
-class Hairpin(object):
+class Hairpin(JSONattrs):
     '''
     Structure of a hairpin:
     sequence directed 5'->3' 
@@ -213,11 +214,13 @@ class Hairpin(object):
         self.conversion_degree = None
         self.dG = None
         self.K  = None
-    #end def
+    
+    @classmethod
+    def _default(cls): return cls((), ())
 #end class
 
 
-class Duplex(object):
+class Duplex(JSONattrs):
     '''Representation of a particular DNA:DNA duplex'''
     __slots__ = ['_fwd_sequence', '_rev_sequence',
                  'fwd_len', 'rev_len', 'name',
@@ -247,6 +250,9 @@ class Duplex(object):
         self._nonzero        = False 
         self._recalculate()
     #end def
+    
+    @classmethod
+    def _default(cls): return cls('', '')
         
     def __nonzero__(self): return self._nonzero
     

@@ -241,21 +241,20 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
             hsp_duplex = self._duplex_from_hsp(hsp)
             if not hsp_duplex: continue
             #find id of the primer
-            hsp_id = ''
             for primer in self._primers:
-                hsp_id = primer.find_id(hsp_duplex.fwd_seq)
-                if hsp_id: break
+                hsp_duplex.name = primer.find_id(hsp_duplex.fwd_seq)
+                if hsp_duplex.name: break
             #add hsp_duplex to corresponding dictionary
             primer_dir = hsp.frame[0]
             target_dir = hsp.frame[1]
             #fwd hsp
             if primer_dir == 1 and target_dir == 1:
                 product_bound = hsp.sbjct_end + hsp_duplex.fwd_3_overhang
-                fwd_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
+                fwd_annealings.append((product_bound, [hsp_duplex]))
             #rev hsp
             elif primer_dir == 1 and target_dir == -1:
                 product_bound = hsp.sbjct_end - hsp_duplex.fwd_3_overhang
-                rev_annealings.append((product_bound, [(hsp_duplex, hsp_id),]))
+                rev_annealings.append((product_bound, [hsp_duplex]))
         #add primers' annealings to PCR simulation
         mixture = products_finder.create_PCR_mixture(WorkCounter(),
                                                      hit_title, 
@@ -327,27 +326,29 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
     
     
     def _format_report_body(self):
-        body = ''
+        body = []
         for record_name in self._PCR_Simulations:
-            body += hr(' query ID: %s ' % record_name, symbol='#')
-            if len(self._PCR_Simulations[record_name].hits()) == 1:
+            body.append(hr(' query ID: %s ' % record_name, symbol='#'))
+            PCR_Sim = self._PCR_Simulations[record_name] 
+            if len(PCR_Sim.hits()) == 1:
                 #all products histogram
-                hit = self._PCR_Simulations[record_name].hits()[0]
-                body += hr(' histogram of all possible PCR products ', symbol='=')
-                body += self._PCR_Simulations[record_name].per_hit_header(hit)
-                body += self._PCR_Simulations[record_name].per_hit_histogram(hit)
-                body += '\n'
-                body += hr(' electrophorogram of all possible PCR products ', symbol='=')
-                body += self._PCR_Simulations[record_name].per_hit_electrophoresis(hit)
+                hit = PCR_Sim.hits()[0]
+                body.append(hr(' histogram of all possible PCR products ', symbol='='))
+                body.append(PCR_Sim.per_hit_header(hit))
+                body.append(PCR_Sim.per_hit_histogram(hit))
+                body.append('\n')
+                body.append(hr(' electrophorogram of all possible PCR products ', symbol='='))
+                body.append(PCR_Sim.per_hit_electrophoresis(hit))
             else:
                 #all products histogram
-                body += hr(' histogram of all possible PCR products ', symbol='=')
-                body += self._PCR_Simulations[record_name].all_products_histogram()
-                body += '\n\n\n'
+                body.append(hr(' histogram of all possible PCR products ', symbol='='))
+                products = PCR_Sim.all_products_by_quantity()
+                body.append(PCR_Sim.all_products_histogram(products))
+                body.append('\n\n\n')
                 #per hit histogram and phoresis
-                body += hr(' histograms and electrophorograms of PCR products of each hit ', symbol='=')
-                body += self._PCR_Simulations[record_name].all_graphs_grouped_by_hit()
-        return body
+                body.append(hr(' histograms and electrophorograms of PCR products of each hit ', symbol='='))
+                body.append(PCR_Sim.all_graphs_grouped_by_hit(products))
+        return '\n'.join(body)
     #end def
     
     
@@ -360,7 +361,7 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
             ipcr_products.write(hr(' query ID: %s ' % record_name, symbol='#'))
             ipcr_products.write(self._PCR_Simulations[record_name].format_products_report())
         ipcr_products.close()
-        print '\nThe list of BLAST PCR products was written to:\n   ',self._PCR_products_filename
+        print '\nThe list of BLAST PCR products was written to:\n   %s' % self._PCR_products_filename
         self._add_report('BLAST PCR products', self._PCR_products_filename)
     #end def
     
@@ -468,8 +469,8 @@ class BlastPrimers(iPCR_Interface, MultiprocessingBase):
             blast_report.write(hr('', symbol='#'))
             if r < len(self._blast_results)-1: blast_report.write('\n\n')
         blast_report.close()
-        print '\nTop hits with top HSPs from BLAST results were written to:\n   ' + \
-            self._hits_report_filename
+        print ('\nTop hits with top HSPs from BLAST '
+               'results were written to:\n   %s' % self._hits_report_filename)
         self._add_report('BLAST hits', self._hits_report_filename)
     #end def
     
