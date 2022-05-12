@@ -6,3 +6,4 @@ Tests/results/**
 MANIFEST
 .idea
 tmp/
+*.egg-info

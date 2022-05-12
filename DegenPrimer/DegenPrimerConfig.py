@@ -652,7 +652,7 @@ class DegenPrimerConfig(object):
             if self.job_id: self.job_id += '-'
             if primer.id:
                 self.job_id += primer.id
-        self.job_id += '_%s' % str(hash(self))
+        self.job_id = '{}_{}'.format(self.job_id[:64], str(hash(self)))
         #set tmpdir if provided
         if self.tmp_dir:
             tmpStorage.TMPDIR = self.tmp_dir
