@@ -29,6 +29,7 @@ biomolecular structure, 33, 415-40. doi:10.1146/annurev.biophys.32.110601.141800
 import csv
 from math import log
 import os
+import sys
 
 from .SeqUtils import unambiguous_sequences
 
@@ -99,7 +100,13 @@ class UnifiedNN(object):
     _inited = False
     
     #paths to the thermodynamic tables
-    _possible_paths = ('./', '/usr/local/share/degen_primer/', '/usr/share/degen_primer/')
+    _possible_paths = (
+        './',
+        # for virtual environments
+        '{}/../share/degen_primer/'.format(os.path.dirname(sys.executable)),
+        '/usr/local/share/degen_primer/',
+        '/usr/share/degen_primer/'
+    )
      
     internal_NN_filename             = 'internal-NN.csv'
     _internal_NN_paths               = _install_paths(_possible_paths, internal_NN_filename)
