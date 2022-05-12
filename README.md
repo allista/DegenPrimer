@@ -13,10 +13,4 @@ The program has simple command line interface as well as a
 [separate GUI](https://github.com/allista/DegenPrimerGUI).
 PBS is also supported with [PBS-utils](https://github.com/allista/PBS-utils).
 
-Dependecies: 
 
-         python2 >= 2.7
-         SciPy >= 0.16
-         Biopython >= 1.66
-         DendroPy >= 4.0
-         BioUtils >= 1.4
